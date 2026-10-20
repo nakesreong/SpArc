@@ -802,6 +802,8 @@ end
 
 local ACTIVE_SLOTS = {
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+  13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+  49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
   61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
 }
 
@@ -2037,45 +2039,15 @@ local function BuildRotationQueue(maxSlots)
   end
   local simInsanity = trackedInsanity
 
-  local dpUsedInQueue = false
-
   for step = 1, maxSlots do
-    -- Strictly obey the real spellbook/Bartender4 usability of Devouring Plague (and only queue it once)!
-    if dpUsedInQueue then
-      simUsable["DEVOURING_PLAGUE"] = false
-    else
-      simUsable["DEVOURING_PLAGUE"] = (states["DEVOURING_PLAGUE"] and states["DEVOURING_PLAGUE"].isUsable) or false
-    end
-    simReady["DEVOURING_PLAGUE"] = simUsable["DEVOURING_PLAGUE"]
-    simReady["MIND_FLAY_INSANITY"] = simProcs["MIND_FLAY_INSANITY"]
-    simUsable["MIND_FLAY_INSANITY"] = simProcs["MIND_FLAY_INSANITY"]
-
+    -- Pure .md pseudocode evaluation: the queue order is 100% determined by parsed.rules!
     local pickedKey = nil
-
-    if step == 1 and assistedKey and states[assistedKey] and states[assistedKey].isReady and states[assistedKey].isUsable then
-      local isCoreRot = (
-        assistedKey == "TENTACLE_SLAM"
-        or (assistedKey == "VAMPIRIC_TOUCH" and not simHasDoTs and not simReady["TENTACLE_SLAM"])
-        or assistedKey == "VOID_BOLT"
-        or assistedKey == "VOID_TORRENT"
-        or assistedKey == "DEVOURING_PLAGUE"
-        or assistedKey == "MIND_FLAY_INSANITY"
-        or assistedKey == "SHADOW_WORD_DEATH"
-        or assistedKey == "MIND_BLAST"
-      )
-      if isCoreRot then
-        pickedKey = assistedKey
-      end
-    end
-
-    if not pickedKey then
-      for _, rule in ipairs(parsed.rules) do
-        local sp = rule.spell
-        if simReady[sp] and simUsable[sp] then
-          if EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs) then
-            pickedKey = sp
-            break
-          end
+    for _, rule in ipairs(parsed.rules) do
+      local sp = rule.spell
+      if simReady[sp] and simUsable[sp] then
+        if EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs) then
+          pickedKey = sp
+          break
         end
       end
     end
@@ -2090,29 +2062,19 @@ local function BuildRotationQueue(maxSlots)
         isProc = (step == 1 and st.isProc) or false,
       }
 
+      -- Advance simulated state generically using the .md SPELL definition attributes
+      simProcs[pickedKey] = false
       if def then
         if def.appliesDoTs then simHasDoTs = true end
         if def.insanityGain then simInsanity = math.min(100, simInsanity + def.insanityGain) end
         if def.insanityCost then simInsanity = math.max(0, simInsanity - def.insanityCost) end
-        if pickedKey == "MIND_FLAY_INSANITY" then
-          simProcs["MIND_FLAY_INSANITY"] = false
-        elseif pickedKey == "DEVOURING_PLAGUE" then
-          dpUsedInQueue = true
-          simProcs["DEVOURING_PLAGUE"] = false
-          simUsable["DEVOURING_PLAGUE"] = false
-          simReady["DEVOURING_PLAGUE"] = false
-        elseif pickedKey == "VOID_BOLT" then
-          simProcs["VOID_BOLT"] = false
-          simReady["VOID_BOLT"] = false
-        elseif pickedKey == "SHADOW_WORD_DEATH" then
-          simProcs["SHADOW_WORD_DEATH"] = false
-          simReady["SHADOW_WORD_DEATH"] = false
-          simUsable["SHADOW_WORD_DEATH"] = false
-        elseif pickedKey == "MIND_BLAST" then
-          simProcs["MIND_BLAST"] = false
-          simCharges["MIND_BLAST"] = (simCharges["MIND_BLAST"] or 1) - 1
-          if simCharges["MIND_BLAST"] <= 0 then
-            simReady["MIND_BLAST"] = false
+        if def.procOnly or def.isSpender or def.isExecute then
+          simReady[pickedKey] = false
+          simUsable[pickedKey] = false
+        elseif (def.liveMaxCharges or def.maxCharges or 1) > 1 then
+          simCharges[pickedKey] = (simCharges[pickedKey] or 1) - 1
+          if simCharges[pickedKey] <= 0 or (def.baseCD and def.baseCD > 1.6) then
+            simReady[pickedKey] = false
           end
         elseif def.baseCD and def.baseCD > 1.6 then
           simReady[pickedKey] = false

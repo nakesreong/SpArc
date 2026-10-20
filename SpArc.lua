@@ -878,10 +878,9 @@ end
 
 local function GetSlotKeybind(slot)
   if not slot or slot < 1 then return nil end
-  if SLOT_DEFAULT_KEYBIND[slot] then
-    return SLOT_DEFAULT_KEYBIND[slot]
-  end
   local cmd = SlotToBindingCommand(slot)
+
+  -- 1. CombatMode Click-Cast bindings (M1, M2, SM1, SM2, CM1, CM2, AM1, AM2)
   local cm = _G.CM
   if cmd and cm and cm.DB then
     local loc = (cm.GetBindingsLocation and cm.GetBindingsLocation()) or "char"
@@ -896,16 +895,50 @@ local function GetSlotKeybind(slot)
       end
     end
   end
+
+  -- 2. Bartender4 (LibActionButton-1.0 / LibKeyBound-1.0) live button keybind
+  local btBtn = _G["BT4Button" .. slot]
+  if btBtn then
+    if btBtn.GetHotkey then
+      local okHK, hk = pcall(btBtn.GetHotkey, btBtn)
+      if okHK and not IsSecret(hk) and type(hk) == "string" and hk ~= "" then
+        local c = CompactKey(hk)
+        if c and c ~= "" then return c end
+      end
+    end
+    if GetBindingKey then
+      local okB, k1, k2 = pcall(GetBindingKey, "CLICK BT4Button" .. slot .. ":LeftButton")
+      if okB then
+        local k = (not IsSecret(k1) and k1) or (not IsSecret(k2) and k2)
+        if k and k ~= "" then
+          local c = CompactKey(k)
+          if c and c ~= "" then return c end
+        end
+      end
+    end
+    if btBtn.HotKey and btBtn.HotKey.GetText then
+      local okT, txt = pcall(btBtn.HotKey.GetText, btBtn.HotKey)
+      if okT and not IsSecret(txt) and type(txt) == "string" and txt ~= "" and txt ~= _G.RANGE_INDICATOR then
+        local c = CompactKey(txt)
+        if c and c ~= "" then return c end
+      end
+    end
+  end
+
+  -- 3. Standard WoW Binding table for the action slot command
   if cmd and GetBindingKey then
     local ok, k1, k2 = pcall(GetBindingKey, cmd)
     if ok then
       local k = (not IsSecret(k1) and k1) or (not IsSecret(k2) and k2)
       if k and k ~= "" then
-        return CompactKey(k)
+        local c = CompactKey(k)
+        if c and c ~= "" then return c end
       end
     end
   end
-  return nil
+
+  -- 4. Fallback default slot map
+  return SLOT_DEFAULT_KEYBIND[slot]
 end
 
 -- Runtime state tracking
@@ -928,6 +961,45 @@ local castState = {
   endTime = 0,
 }
 
+local function BuildAssistedSlotSet()
+  local set = {}
+  if C_ActionBar and C_ActionBar.HasAssistedCombatActionButtons and C_ActionBar.FindAssistedCombatActionButtons then
+    local okH, has = pcall(C_ActionBar.HasAssistedCombatActionButtons)
+    if okH and not IsSecret(has) and has then
+      local ok, slots = pcall(C_ActionBar.FindAssistedCombatActionButtons)
+      if ok and type(slots) == "table" and not IsSecret(slots) then
+        for _, v in pairs(slots) do
+          if type(v) == "number" and v > 0 then
+            set[v] = true
+          end
+        end
+      end
+    end
+  end
+  return set
+end
+
+-- Extracts #showtooltip and /cast lines from a macro body while strictly ignoring /stopmacro and /cancelaura
+local function ExtractMacroCastLines(body)
+  local tooltipLines = {}
+  local castLines = {}
+  if type(body) ~= "string" or body == "" then
+    return tooltipLines, castLines
+  end
+  for rawLine in body:gmatch("[^\r\n]+") do
+    local line = Trim(rawLine)
+    local lower = line:lower()
+    if lower:match("^#showtooltip") then
+      tooltipLines[#tooltipLines + 1] = line
+    elseif not lower:match("^/stopmacro") and not lower:match("^/cancelaura") and not lower:match("^/stopcasting") then
+      if lower:match("^/cast") or lower:match("^/use") or lower:match("^/castrandom") or lower:match("^/castsequence") then
+        castLines[#castLines + 1] = line
+      end
+    end
+  end
+  return tooltipLines, castLines
+end
+
 local function ScanActionSlotsAndSpells(force)
   local now = GetTime()
   if not force and (now - lastSlotScanAt) < 1.5 then
@@ -935,15 +1007,34 @@ local function ScanActionSlotsAndSpells(force)
   end
   lastSlotScanAt = now
 
+  -- 1. Resolve all valid spellIDs and live icons for every spell definition
   for _, def in pairs(SPELL_DEFS) do
+    local idSet = {}
     local resolvedID, resolvedIcon
+    for _, id in ipairs(def.ids or {}) do
+      idSet[id] = true
+      if C_Spell and C_Spell.GetOverrideSpell then
+        local okO, over = pcall(C_Spell.GetOverrideSpell, id)
+        if okO and type(over) == "number" and not IsSecret(over) and over > 0 then
+          idSet[over] = true
+        end
+      end
+      if C_Spell and C_Spell.GetBaseSpell then
+        local okB, base = pcall(C_Spell.GetBaseSpell, id)
+        if okB and type(base) == "number" and not IsSecret(base) and base > 0 then
+          idSet[base] = true
+        end
+      end
+    end
     if C_Spell and C_Spell.GetSpellInfo then
       for _, nm in ipairs(def.names or {}) do
         local ok, info = pcall(C_Spell.GetSpellInfo, nm)
         if ok and type(info) == "table" and not IsSecret(info.spellID) and info.spellID then
-          resolvedID = info.spellID
-          resolvedIcon = not IsSecret(info.iconID) and info.iconID or nil
-          break
+          idSet[info.spellID] = true
+          if not resolvedID then
+            resolvedID = info.spellID
+            resolvedIcon = not IsSecret(info.iconID) and info.iconID or nil
+          end
         end
       end
       if not resolvedID then
@@ -964,77 +1055,187 @@ local function ScanActionSlotsAndSpells(force)
         end
       end
     end
+    def.idSet = idSet
     def.liveSpellID = resolvedID or (def.ids and def.ids[1])
     def.liveIcon = resolvedIcon or def.fallbackIcon
   end
 
-  local macroNameToSlot = {}
-  local macroBodyBySlot = {}
+  -- 2. Scan Bartender4 buttons & ActionSlots purely by spellID and macro tooltip/cast content (NEVER by macro name!)
+  local assistedSlots = BuildAssistedSlotSet()
   local spellIDToSlot = {}
+  local tooltipLinesBySlot = {}
+  local castLinesBySlot = {}
+  local GetMacroSpell = _G.GetMacroSpell
 
   for _, slot in ipairs(ACTIVE_SLOTS) do
-    if GetActionInfo then
-      local ok, aType, aID = pcall(GetActionInfo, slot)
-      if ok and not IsSecret(aType) and aType then
-        if aType == "spell" and not IsSecret(aID) and type(aID) == "number" then
-          if not spellIDToSlot[aID] then
-            spellIDToSlot[aID] = slot
+    if not assistedSlots[slot] then
+      -- A) Bartender4 LibActionButton-1.0 :GetSpellId()
+      local btBtn = _G["BT4Button" .. slot]
+      if btBtn and btBtn.GetSpellId then
+        local okS, btSpellID = pcall(btBtn.GetSpellId, btBtn)
+        if okS and not IsSecret(btSpellID) and type(btSpellID) == "number" and btSpellID > 0 then
+          if not spellIDToSlot[btSpellID] then
+            spellIDToSlot[btSpellID] = slot
           end
-        elseif aType == "macro" then
-          local okT, mName = pcall(GetActionText, slot)
-          if okT and not IsSecret(mName) and type(mName) == "string" and mName ~= "" then
-            if not macroNameToSlot[mName] then
-              macroNameToSlot[mName] = slot
+        end
+      end
+
+      -- B) WoW GetActionInfo(slot) + macro tooltip/cast lines
+      if GetActionInfo then
+        local ok, aType, aID, aSubType = pcall(GetActionInfo, slot)
+        if ok and not IsSecret(aType) and aType then
+          if aType == "spell" and not IsSecret(aID) and type(aID) == "number" and aID > 0 then
+            if not spellIDToSlot[aID] then
+              spellIDToSlot[aID] = slot
             end
-            if GetMacroBody then
-              local okB, body = pcall(GetMacroBody, mName)
-              if okB and not IsSecret(body) and type(body) == "string" then
-                macroBodyBySlot[slot] = body
+          elseif aType == "macro" then
+            if not IsSecret(aSubType) and aSubType == "spell" and not IsSecret(aID) and type(aID) == "number" and aID > 0 then
+              if not spellIDToSlot[aID] then
+                spellIDToSlot[aID] = slot
+              end
+            elseif GetMacroSpell and not IsSecret(aID) and type(aID) == "number" and aID > 0 then
+              local okMS, msID = pcall(GetMacroSpell, aID)
+              if okMS and not IsSecret(msID) and type(msID) == "number" and msID > 0 and not spellIDToSlot[msID] then
+                spellIDToSlot[msID] = slot
               end
             end
-          end
-          if not IsSecret(aID) and type(aID) == "number" and aID > 0 and not spellIDToSlot[aID] then
-            spellIDToSlot[aID] = slot
+
+            local body = nil
+            if GetActionText and GetMacroBody then
+              local okT, mName = pcall(GetActionText, slot)
+              if okT and not IsSecret(mName) and type(mName) == "string" and mName ~= "" then
+                local okB, b = pcall(GetMacroBody, mName)
+                if okB and not IsSecret(b) and type(b) == "string" then
+                  body = b
+                end
+              end
+            end
+            if not body and GetMacroBody and not IsSecret(aID) and type(aID) == "number" and aID > 0 then
+              local okB, b = pcall(GetMacroBody, aID)
+              if okB and not IsSecret(b) and type(b) == "string" then
+                body = b
+              end
+            end
+            if body then
+              local tLines, cLines = ExtractMacroCastLines(body)
+              tooltipLinesBySlot[slot] = tLines
+              castLinesBySlot[slot] = cLines
+            end
           end
         end
       end
     end
   end
 
+  -- 3. Match each spell definition to its live Bartender4 slot and keybind
   for _, def in pairs(SPELL_DEFS) do
     local foundSlot = nil
-    if def.macroNames then
-      for _, mName in ipairs(def.macroNames) do
-        if macroNameToSlot[mName] then
-          foundSlot = macroNameToSlot[mName]
+
+    -- Priority 1: Direct spellID match from BT4Button:GetSpellId() / GetActionInfo / GetMacroSpell
+    if def.liveSpellID and spellIDToSlot[def.liveSpellID] then
+      foundSlot = spellIDToSlot[def.liveSpellID]
+    end
+    if not foundSlot and def.idSet then
+      for sid, _ in pairs(def.idSet) do
+        if spellIDToSlot[sid] then
+          foundSlot = spellIDToSlot[sid]
           break
         end
       end
     end
-    if not foundSlot and def.liveSpellID and spellIDToSlot[def.liveSpellID] then
-      foundSlot = spellIDToSlot[def.liveSpellID]
-    end
-    if not foundSlot then
-      for _, slot in ipairs(ACTIVE_SLOTS) do
-        local body = macroBodyBySlot[slot]
-        if body then
-          for _, nm in ipairs(def.names or {}) do
-            if body:find(nm, 1, true) then
-              foundSlot = slot
-              break
+
+    -- Priority 2: C_ActionBar.FindSpellActionButtons(sid) (same API CombatMode uses for macro/spell slots)
+    if not foundSlot and C_ActionBar and C_ActionBar.FindSpellActionButtons and def.idSet then
+      for sid, _ in pairs(def.idSet) do
+        local okF, slots = pcall(C_ActionBar.FindSpellActionButtons, sid)
+        if okF and type(slots) == "table" and not IsSecret(slots) then
+          for _, s in pairs(slots) do
+            if type(s) == "number" and s > 0 and not assistedSlots[s] then
+              if not foundSlot or s < foundSlot then
+                foundSlot = s
+              end
             end
           end
         end
         if foundSlot then break end
       end
     end
-    def.slot = foundSlot or def.preferredSlot
-    local kb = def.slot and GetSlotKeybind(def.slot) or nil
-    def.keybind = (kb and kb ~= "" and kb) or def.fallbackKey
 
-    if foundSlot and GetActionTexture then
-      local okTex, tex = pcall(GetActionTexture, foundSlot)
-      if okTex and not IsSecret(tex) and tex and tex ~= 134400 and tex ~= 136200 then
+    -- Priority 3: Macro #showtooltip line (handles stance-conditional tooltips when out of Shadowform)
+    if not foundSlot then
+      for _, slot in ipairs(ACTIVE_SLOTS) do
+        local tLines = tooltipLinesBySlot[slot]
+        if tLines then
+          for _, line in ipairs(tLines) do
+            for _, nm in ipairs(def.names or {}) do
+              if line:find(nm, 1, true) then
+                foundSlot = slot
+                break
+              end
+            end
+            if not foundSlot and def.idSet then
+              for sid, _ in pairs(def.idSet) do
+                if line:find(tostring(sid), 1, true) then
+                  foundSlot = slot
+                  break
+                end
+              end
+            end
+            if foundSlot then break end
+          end
+        end
+        if foundSlot then break end
+      end
+    end
+
+    -- Priority 4: Macro /cast line (strictly excluding /stopmacro and /cancelaura)
+    if not foundSlot then
+      for _, slot in ipairs(ACTIVE_SLOTS) do
+        local cLines = castLinesBySlot[slot]
+        if cLines then
+          for _, line in ipairs(cLines) do
+            for _, nm in ipairs(def.names or {}) do
+              if line:find(nm, 1, true) then
+                foundSlot = slot
+                break
+              end
+            end
+            if not foundSlot and def.idSet then
+              for sid, _ in pairs(def.idSet) do
+                if line:find(tostring(sid), 1, true) then
+                  foundSlot = slot
+                  break
+                end
+              end
+            end
+            if foundSlot then break end
+          end
+        end
+        if foundSlot then break end
+      end
+    end
+
+    def.slot = foundSlot
+    local kb = foundSlot and GetSlotKeybind(foundSlot) or nil
+    def.keybind = (kb and kb ~= "" and kb) or ""
+
+    if foundSlot then
+      local btBtn = _G["BT4Button" .. foundSlot]
+      local tex = nil
+      if btBtn and btBtn.GetTexture then
+        local okBtTex, btTex = pcall(btBtn.GetTexture, btBtn)
+        if okBtTex and not IsSecret(btTex) and btTex then
+          tex = btTex
+        end
+      end
+      if not tex and GetActionTexture then
+        local okTex, aTex = pcall(GetActionTexture, foundSlot)
+        if okTex and not IsSecret(aTex) and aTex then
+          tex = aTex
+        end
+      end
+      -- Don't overwrite spell icon with Shadowform icon (136200) when out of Shadowform on a conditional macro
+      if tex and tex ~= 134400 and tex ~= 136200 then
         def.liveIcon = tex
       end
     end

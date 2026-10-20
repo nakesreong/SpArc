@@ -12,8 +12,8 @@ _G.SparkArcLoaded = true
 local SpArc = _G.SpArc or _G.SparkArc or {}
 _G.SpArc = SpArc
 _G.SparkArc = SpArc
-SpArc.VERSION = "2.2.0"
-SpArc.PROFILE_SCHEMA_VERSION = 4
+SpArc.VERSION = "2.3.0"
+SpArc.PROFILE_SCHEMA_VERSION = 5
 
 local CreateFrame = _G.CreateFrame
 local UIParent = _G.UIParent
@@ -620,15 +620,15 @@ local BASE_SPELL_DEFS = {
   },
   VOID_BOLT = {
     key = "VOID_BOLT",
-    names = { "Стрела Бездны", "Залп Бездны", "Void Bolt", "Void Volley" },
-    macroNames = { "Dps", "1_to_2", "M1" },
-    ids = { 205448 },
-    preferredSlot = 11,
+    names = { "Залп Бездны", "Стрела Бездны", "Void Volley", "Void Bolt" },
+    macroNames = { "M2", "1_to_2", "Dps", "M1" },
+    ids = { 1242173, 205448 },
+    preferredSlot = 2,
     baseCD = 6,
     maxCharges = 1,
-    insanityGain = 12,
+    insanityGain = 10,
     fallbackIcon = 1386548,
-    fallbackKey = "Q",
+    fallbackKey = "M2",
     procOnly = true,
   },
   SHADOW_WORD_DEATH = {
@@ -673,14 +673,14 @@ local BASE_SPELL_DEFS = {
   },
   VOID_ERUPTION = {
     key = "VOID_ERUPTION",
-    names = { "Облик Бездны", "Залп Бездны", "Вхождение в Бездну", "Извержение Бездны", "Темное вознесение", "Voidform", "Void Eruption", "Dark Ascension" },
-    macroNames = { "1_to_2", "Dps", "Healer" },
+    names = { "Облик Бездны", "Извержение Бездны", "Темное вознесение", "Voidform", "Void Eruption", "Dark Ascension" },
+    macroNames = { "M2", "1_to_2", "Dps" },
     ids = { 228260, 391109 },
-    preferredSlot = 11,
-    baseCD = 60,
+    preferredSlot = 2,
+    baseCD = 120,
     maxCharges = 1,
     fallbackIcon = 537079,
-    fallbackKey = "Q",
+    fallbackKey = "M2",
   },
   POWER_INFUSION = {
     key = "POWER_INFUSION",
@@ -802,9 +802,9 @@ end
 
 local ACTIVE_SLOTS = {
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-  13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-  49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
   61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
+  49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
+  13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
 }
 
 local SLOT_DEFAULT_KEYBIND = {
@@ -1073,6 +1073,19 @@ local function ScanActionSlotsAndSpells(force)
   local castLinesBySlot = {}
   local GetMacroSpell = _G.GetMacroSpell
 
+  local function HasKeybind(s)
+    local k = GetSlotKeybind(s)
+    return (k and k ~= "") and true or false
+  end
+
+  local function AssignSpellSlot(sid, s)
+    if not sid or not s then return end
+    local prev = spellIDToSlot[sid]
+    if not prev or (not HasKeybind(prev) and HasKeybind(s)) then
+      spellIDToSlot[sid] = s
+    end
+  end
+
   for _, slot in ipairs(ACTIVE_SLOTS) do
     if not assistedSlots[slot] then
       -- A) Bartender4 LibActionButton-1.0 :GetSpellId()
@@ -1080,9 +1093,7 @@ local function ScanActionSlotsAndSpells(force)
       if btBtn and btBtn.GetSpellId then
         local okS, btSpellID = pcall(btBtn.GetSpellId, btBtn)
         if okS and not IsSecret(btSpellID) and type(btSpellID) == "number" and btSpellID > 0 then
-          if not spellIDToSlot[btSpellID] then
-            spellIDToSlot[btSpellID] = slot
-          end
+          AssignSpellSlot(btSpellID, slot)
         end
       end
 
@@ -1091,18 +1102,14 @@ local function ScanActionSlotsAndSpells(force)
         local ok, aType, aID, aSubType = pcall(GetActionInfo, slot)
         if ok and not IsSecret(aType) and aType then
           if aType == "spell" and not IsSecret(aID) and type(aID) == "number" and aID > 0 then
-            if not spellIDToSlot[aID] then
-              spellIDToSlot[aID] = slot
-            end
+            AssignSpellSlot(aID, slot)
           elseif aType == "macro" then
             if not IsSecret(aSubType) and aSubType == "spell" and not IsSecret(aID) and type(aID) == "number" and aID > 0 then
-              if not spellIDToSlot[aID] then
-                spellIDToSlot[aID] = slot
-              end
+              AssignSpellSlot(aID, slot)
             elseif GetMacroSpell and not IsSecret(aID) and type(aID) == "number" and aID > 0 then
               local okMS, msID = pcall(GetMacroSpell, aID)
-              if okMS and not IsSecret(msID) and type(msID) == "number" and msID > 0 and not spellIDToSlot[msID] then
-                spellIDToSlot[msID] = slot
+              if okMS and not IsSecret(msID) and type(msID) == "number" and msID > 0 then
+                AssignSpellSlot(msID, slot)
               end
             end
 
@@ -1133,31 +1140,31 @@ local function ScanActionSlotsAndSpells(force)
     end
   end
 
-  -- 3. Match each spell definition to its live Bartender4 slot and keybind
+  -- 3. Match each spell definition to its live Bartender4 slot and keybind (always preferring slots with an active keybind!)
   for _, def in pairs(SPELL_DEFS) do
     local foundSlot = nil
 
     -- Priority 1: Direct spellID match from BT4Button:GetSpellId() / GetActionInfo / GetMacroSpell
-    if def.liveSpellID and spellIDToSlot[def.liveSpellID] then
+    if def.liveSpellID and spellIDToSlot[def.liveSpellID] and HasKeybind(spellIDToSlot[def.liveSpellID]) then
       foundSlot = spellIDToSlot[def.liveSpellID]
     end
     if not foundSlot and def.idSet then
       for sid, _ in pairs(def.idSet) do
-        if spellIDToSlot[sid] then
+        if spellIDToSlot[sid] and HasKeybind(spellIDToSlot[sid]) then
           foundSlot = spellIDToSlot[sid]
           break
         end
       end
     end
 
-    -- Priority 2: C_ActionBar.FindSpellActionButtons(sid) (same API CombatMode uses for macro/spell slots)
+    -- Priority 2: C_ActionBar.FindSpellActionButtons(sid) (strictly preferring bound slots)
     if not foundSlot and C_ActionBar and C_ActionBar.FindSpellActionButtons and def.idSet then
       for sid, _ in pairs(def.idSet) do
         local okF, slots = pcall(C_ActionBar.FindSpellActionButtons, sid)
         if okF and type(slots) == "table" and not IsSecret(slots) then
           for _, s in pairs(slots) do
-            if type(s) == "number" and s > 0 and not assistedSlots[s] then
-              if not foundSlot or s < foundSlot then
+            if type(s) == "number" and s > 0 and not assistedSlots[s] and HasKeybind(s) then
+              if not foundSlot or (HasKeybind(s) and not HasKeybind(foundSlot)) or s < foundSlot then
                 foundSlot = s
               end
             end
@@ -1707,6 +1714,11 @@ local function EvaluateSpellState(defKey, assistedKey)
     finalReady = false
     isUsable = false
     usableSource = "NotOnActionBar"
+  elseif slotActiveSpellID and (slotActiveSpellID == 528 or slotActiveSpellID == 130) and not (def.idSet and def.idSet[slotActiveSpellID]) then
+    -- Conditional [known:...] macro fell through to Dispel Magic (528) or Levitate (130) because the talent (e.g. Halo 120644) is NOT talented!
+    finalReady = false
+    isUsable = false
+    usableSource = "TalentNotKnown(MacroFallback:" .. tostring(slotActiveSpellID) .. ")"
   end
 
   lastSpellAudit[defKey] = {
@@ -2578,11 +2590,34 @@ rootFrame:SetScript("OnUpdate", function()
 end)
 
 ---------------------------------------------------------------------------------------
+--                SMART BOSS TAB-TARGETING (@boss1..5 PRIORITY)                      --
+---------------------------------------------------------------------------------------
+local smartTabBtn = CreateFrame("Button", "SpArcSmartTabButton", UIParent, "SecureActionButtonTemplate")
+smartTabBtn:RegisterForClicks("AnyDown", "AnyUp")
+smartTabBtn:SetAttribute("type", "macro")
+smartTabBtn:SetAttribute("macrotext", "/targetenemy\n/target [@boss1,harm,nodead][@boss2,harm,nodead][@boss3,harm,nodead][@boss4,harm,nodead][@boss5,harm,nodead]")
+
+function SpArc:ApplySmartBossTabBinding()
+  if _G.InCombatLockdown and _G.InCombatLockdown() then
+    return
+  end
+  local db = SpArc:EnsureDB()
+  local enabled = (not db.visual) or (db.visual.smartBossTab ~= false)
+  if _G.ClearOverrideBindings then
+    pcall(_G.ClearOverrideBindings, smartTabBtn)
+  end
+  if enabled and _G.SetOverrideBindingClick then
+    pcall(_G.SetOverrideBindingClick, smartTabBtn, true, "TAB", "SpArcSmartTabButton", "LeftButton")
+  end
+end
+
+---------------------------------------------------------------------------------------
 --                        EVENT HANDLER & CAST TRACKER                               --
 ---------------------------------------------------------------------------------------
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 eventFrame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
 eventFrame:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
@@ -2634,11 +2669,20 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
     SuppressLuaErrorPopups()
     SpArc:RebuildParsedProfiles()
     SpArc:ApplyVisualLayout()
+    SpArc:ApplySmartBossTabBinding()
     ScanActionSlotsAndSpells(true)
     return
   end
 
+  if event == "PLAYER_REGEN_ENABLED" then
+    SpArc:ApplySmartBossTabBinding()
+    return
+  end
+
   if event == "ACTIONBAR_SLOT_CHANGED" or event == "ACTIONBAR_PAGE_CHANGED" or event == "UPDATE_BONUS_ACTIONBAR" or event == "UPDATE_MACROS" or event == "UPDATE_BINDINGS" or event == "SPELLS_CHANGED" then
+    if event == "UPDATE_BINDINGS" then
+      SpArc:ApplySmartBossTabBinding()
+    end
     ScanActionSlotsAndSpells(true)
     return
   end
@@ -3554,11 +3598,13 @@ local function CreateSpArcMinimapButton()
 end
 
 CreateSpArcMinimapButton()
+SpArc:ApplySmartBossTabBinding()
 if _G.C_Timer and _G.C_Timer.After then
   _G.C_Timer.After(1.0, function()
     CreateSpArcMinimapButton()
     UpdateMinimapButtonPosition()
     SpArc:UpdateMinimapButtonVisibility()
+    SpArc:ApplySmartBossTabBinding()
   end)
 end
 

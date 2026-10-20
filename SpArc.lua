@@ -12,7 +12,7 @@ _G.SparkArcLoaded = true
 local SpArc = _G.SpArc or _G.SparkArc or {}
 _G.SpArc = SpArc
 _G.SparkArc = SpArc
-SpArc.VERSION = "2.0.0"
+SpArc.VERSION = "2.1.0"
 SpArc.PROFILE_SCHEMA_VERSION = 3
 
 local CreateFrame = _G.CreateFrame
@@ -1324,6 +1324,13 @@ local function GetTrackedMindBlastCharges(now)
   return math.max(0, 2 - mbChargesUsed)
 end
 
+local lastSpellAudit = {}
+
+local function FormatSecretOrVal(v)
+  if IsSecret(v) then return "SECRET" end
+  return tostring(v)
+end
+
 local function EvaluateSpellState(defKey, assistedKey)
   local def = SPELL_DEFS[defKey]
   if not def then
@@ -1334,18 +1341,29 @@ local function EvaluateSpellState(defKey, assistedKey)
   local slot = def.slot
 
   local isProc = false
+  local overlayRaw = "false"
   if C_Spell and C_Spell.IsSpellOverlayed then
     for _, id in ipairs(def.ids or {}) do
       local okP, over = pcall(C_Spell.IsSpellOverlayed, id)
-      if okP and not IsSecret(over) and over then
-        isProc = true
-        break
+      if okP then
+        if IsSecret(over) then
+          overlayRaw = "SECRET"
+        elseif over then
+          isProc = true
+          overlayRaw = "true(" .. tostring(id) .. ")"
+          break
+        end
       end
     end
     if not isProc and spellID then
       local okP, over = pcall(C_Spell.IsSpellOverlayed, spellID)
-      if okP and not IsSecret(over) and over then
-        isProc = true
+      if okP then
+        if IsSecret(over) then
+          overlayRaw = "SECRET"
+        elseif over then
+          isProc = true
+          overlayRaw = "true(" .. tostring(spellID) .. ")"
+        end
       end
     end
   end
@@ -1354,18 +1372,22 @@ local function EvaluateSpellState(defKey, assistedKey)
       local okO, over = pcall(C_Spell.GetOverrideSpell, 15407)
       if okO and not IsSecret(over) and over == 391403 then
         isProc = true
+        overlayRaw = "override(391403)"
       end
     end
     if assistedKey == "MIND_FLAY_INSANITY" then
       isProc = true
+      overlayRaw = "assisted(391403)"
     end
   elseif defKey == "MIND_BLAST" and C_Spell and C_Spell.GetOverrideSpell then
     local okO, over = pcall(C_Spell.GetOverrideSpell, 8092)
     if okO and not IsSecret(over) and over == 450983 then
       isProc = true
+      overlayRaw = "override(450983)"
     end
   elseif defKey == "VOID_BOLT" and assistedKey == "VOID_BOLT" then
     isProc = true
+    overlayRaw = "assisted(VOID_BOLT)"
   end
 
   local isOnCD = false
@@ -1374,20 +1396,28 @@ local function EvaluateSpellState(defKey, assistedKey)
   local startTime = 0
   local gotCleanCD = false
   local charges = def.maxCharges or 1
+  local cdRaw = "0s"
+  local chargesRaw = "-"
 
   if C_Spell and C_Spell.GetSpellCharges and spellID then
     local okC, ch = pcall(C_Spell.GetSpellCharges, spellID)
-    if okC and type(ch) == "table" and not IsSecret(ch.currentCharges) and ch.currentCharges then
-      gotCleanCD = true
-      charges = ch.currentCharges
-      if ch.currentCharges >= 1 then
-        isOnCD = false
-      else
-        isOnCD = true
-        if not IsSecret(ch.cooldownStartTime) and not IsSecret(ch.cooldownDuration) then
-          startTime = ch.cooldownStartTime or 0
-          durSec = ch.cooldownDuration or durSec
-          remSec = math.max(0, startTime + durSec - now)
+    if okC and type(ch) == "table" then
+      if IsSecret(ch.currentCharges) then
+        chargesRaw = "SECRET"
+      elseif ch.currentCharges then
+        gotCleanCD = true
+        charges = ch.currentCharges
+        chargesRaw = tostring(ch.currentCharges) .. "/" .. tostring((not IsSecret(ch.maxCharges) and ch.maxCharges) or def.maxCharges or 1)
+        if ch.currentCharges >= 1 then
+          isOnCD = false
+        else
+          isOnCD = true
+          if not IsSecret(ch.cooldownStartTime) and not IsSecret(ch.cooldownDuration) then
+            startTime = ch.cooldownStartTime or 0
+            durSec = ch.cooldownDuration or durSec
+            remSec = math.max(0, startTime + durSec - now)
+            cdRaw = string.format("%.1fs/%.1fs", remSec, durSec)
+          end
         end
       end
     end
@@ -1395,16 +1425,21 @@ local function EvaluateSpellState(defKey, assistedKey)
 
   if not gotCleanCD and C_Spell and C_Spell.GetSpellCooldown and spellID then
     local okCD, cd = pcall(C_Spell.GetSpellCooldown, spellID)
-    if okCD and type(cd) == "table" and not IsSecret(cd.duration) and not IsSecret(cd.startTime) then
-      gotCleanCD = true
-      if cd.duration and cd.duration > 1.6 and cd.startTime and cd.startTime > 0 then
-        local r = cd.startTime + cd.duration - now
-        if r > 0.15 then
-          isOnCD = true
-          remSec = r
-          durSec = cd.duration
-          startTime = cd.startTime
-          charges = 0
+    if okCD and type(cd) == "table" then
+      if IsSecret(cd.duration) or IsSecret(cd.startTime) then
+        cdRaw = "SECRET"
+      else
+        gotCleanCD = true
+        if cd.duration and cd.duration > 1.6 and cd.startTime and cd.startTime > 0 then
+          local r = cd.startTime + cd.duration - now
+          if r > 0.15 then
+            isOnCD = true
+            remSec = r
+            durSec = cd.duration
+            startTime = cd.startTime
+            charges = 0
+            cdRaw = string.format("%.1fs/%.1fs", remSec, durSec)
+          end
         end
       end
     end
@@ -1412,16 +1447,21 @@ local function EvaluateSpellState(defKey, assistedKey)
 
   if not gotCleanCD and slot and GetActionCooldown then
     local okA, s, d = pcall(GetActionCooldown, slot)
-    if okA and not IsSecret(s) and not IsSecret(d) and type(d) == "number" then
-      gotCleanCD = true
-      if d > 1.6 and s and s > 0 then
-        local r = s + d - now
-        if r > 0.15 then
-          isOnCD = true
-          remSec = r
-          durSec = d
-          startTime = s
-          charges = 0
+    if okA then
+      if IsSecret(s) or IsSecret(d) then
+        if cdRaw == "0s" then cdRaw = "ACT_SECRET" end
+      elseif type(d) == "number" then
+        gotCleanCD = true
+        if d > 1.6 and s and s > 0 then
+          local r = s + d - now
+          if r > 0.15 then
+            isOnCD = true
+            remSec = r
+            durSec = d
+            startTime = s
+            charges = 0
+            cdRaw = string.format("act:%.1fs/%.1fs", remSec, durSec)
+          end
         end
       end
     end
@@ -1429,11 +1469,13 @@ local function EvaluateSpellState(defKey, assistedKey)
 
   if defKey == "MIND_BLAST" and not gotCleanCD then
     charges = GetTrackedMindBlastCharges(now)
+    chargesRaw = "sim:" .. tostring(charges)
     if charges <= 0 then
       isOnCD = true
       startTime = mbChargeStart
       durSec = 7.5
       remSec = math.max(0, mbChargeStart + 7.5 - now)
+      cdRaw = string.format("sim:%.1fs", remSec)
     end
   else
     local last = lastCastAt[defKey]
@@ -1445,6 +1487,7 @@ local function EvaluateSpellState(defKey, assistedKey)
         durSec = def.baseCD
         startTime = last
         charges = 0
+        cdRaw = string.format("timer:%.1fs", remSec)
       end
     end
   end
@@ -1454,42 +1497,153 @@ local function EvaluateSpellState(defKey, assistedKey)
     if charges < 1 then charges = 1 end
   end
 
+  -- Detailed Spellbook & Bartender4 Usability Evaluation + Telemetry Audit
+  local bookUsableRaw = "n/a"
+  local actUsableRaw = "n/a"
+  local btColorRaw = "n/a"
+  local usableSource = "default(true)"
+
+  local bookUsableVal, bookNoPowerVal = nil, nil
+  if C_Spell and C_Spell.IsSpellUsable and spellID then
+    local okU, u, noP = pcall(C_Spell.IsSpellUsable, spellID)
+    if okU then
+      bookUsableRaw = FormatSecretOrVal(u) .. "/noP=" .. FormatSecretOrVal(noP)
+      if not IsSecret(u) and type(u) == "boolean" then
+        bookUsableVal = u
+        bookNoPowerVal = (not IsSecret(noP) and noP == true) or false
+      end
+    end
+  end
+
+  local actUsableVal, actNoManaVal = nil, nil
+  local slotActiveSpellID = nil
+  if slot then
+    if GetActionInfo then
+      local okAI, aType, aID, aSub = pcall(GetActionInfo, slot)
+      if okAI and not IsSecret(aID) and type(aID) == "number" then
+        slotActiveSpellID = aID
+      end
+    end
+    if IsUsableAction then
+      local okA, u, noM = pcall(IsUsableAction, slot)
+      if okA then
+        actUsableRaw = FormatSecretOrVal(u) .. "/noM=" .. FormatSecretOrVal(noM) .. (slotActiveSpellID and ("(id:" .. slotActiveSpellID .. ")") or "")
+        if not IsSecret(u) and type(u) == "boolean" then
+          actUsableVal = u
+          actNoManaVal = (not IsSecret(noM) and noM == true) or false
+        end
+      end
+    end
+    local btBtn = _G["BT4Button" .. slot]
+    if btBtn and btBtn.icon and btBtn.icon.GetVertexColor then
+      local okV, r, g, b = pcall(btBtn.icon.GetVertexColor, btBtn.icon)
+      if okV and not IsSecret(r) and type(r) == "number" then
+        btColorRaw = string.format("%.2f,%.2f,%.2f", r, g or 1, b or 1)
+      end
+    end
+  end
+
   local isUsable = true
   if def.requiresUsable then
     local gotCleanUsable = false
-    if C_Spell and C_Spell.IsSpellUsable and spellID then
-      local okU, u = pcall(C_Spell.IsSpellUsable, spellID)
-      if okU and not IsSecret(u) and type(u) == "boolean" then
-        isUsable = u
+
+    -- 1. Primary truth: Spellbook C_Spell.IsSpellUsable(spellID)
+    if bookUsableVal ~= nil then
+      isUsable = (bookUsableVal == true) and (not bookNoPowerVal)
+      gotCleanUsable = true
+      usableSource = "SpellBook(" .. tostring(spellID) .. ")"
+    end
+
+    -- 2. Secondary truth: ActionSlot IsUsableAction(slot), ONLY if the macro isn't currently evaluating Shadowform (15473) or Dispel Magic (528)
+    if not gotCleanUsable and actUsableVal ~= nil then
+      local isFallbackMacroSpell = (slotActiveSpellID == 15473 or slotActiveSpellID == 528)
+      if not isFallbackMacroSpell then
+        isUsable = (actUsableVal == true) and (not actNoManaVal)
         gotCleanUsable = true
+        usableSource = "ActionBar(slot:" .. tostring(slot) .. ")"
+      else
+        usableSource = "IgnoredMacroFallback(id:" .. tostring(slotActiveSpellID) .. ")"
       end
     end
-    if not gotCleanUsable and slot and IsUsableAction then
-      local okU, u = pcall(IsUsableAction, slot)
-      if okU and not IsSecret(u) and type(u) == "boolean" then
-        isUsable = u
-        gotCleanUsable = true
+
+    -- 3. Bartender4 icon vertex color check: when LibActionButton-1.0 tints the icon blue (0.5,0.5,1.0 for noInsanity/noMana) or grey (0.4,0.4,0.4 for unusable)
+    if slot then
+      local btBtn = _G["BT4Button" .. slot]
+      if btBtn and btBtn.icon and btBtn.icon.GetVertexColor then
+        local okV, r, g, b = pcall(btBtn.icon.GetVertexColor, btBtn.icon)
+        if okV and not IsSecret(r) and type(r) == "number" and r < 0.85 then
+          isUsable = false
+          gotCleanUsable = true
+          usableSource = "BT4VertexTint(" .. btColorRaw .. ")"
+        end
       end
     end
+
+    -- 4. Direct Insanity power check if UnitPower("player", 13) is not secret
+    if def.isSpender and UnitPower then
+      local okP, rawP = pcall(UnitPower, "player", 13)
+      if okP and not IsSecret(rawP) and type(rawP) == "number" then
+        if rawP < 45 and not isProc and assistedKey ~= defKey then
+          isUsable = false
+          gotCleanUsable = true
+          usableSource = "UnitPower(" .. tostring(rawP) .. "<45)"
+        elseif rawP >= 50 and not gotCleanUsable then
+          isUsable = true
+          gotCleanUsable = true
+          usableSource = "UnitPower(" .. tostring(rawP) .. ">=50)"
+        end
+      end
+    end
+
+    -- 5. Fallback if everything is secret in Midnight 12.1.5
     if not gotCleanUsable then
       if def.isSpender then
-        isUsable = (assistedKey == defKey) or isProc or (trackedInsanity >= 50)
+        isUsable = (assistedKey == defKey) or isProc
+        usableSource = "SecretFallback(AssistedOrProcOnly)"
       elseif def.isExecute then
         isUsable = (assistedKey == defKey) or isProc
+        usableSource = "SecretFallback(Execute)"
       else
         isUsable = false
+        usableSource = "SecretFallback(false)"
       end
     end
+
     if isProc or assistedKey == defKey then
       isUsable = true
+      usableSource = isProc and "ProcOverride" or "AssistedCombat"
     end
   end
+
+  local finalReady = (not isOnCD)
+  if def.procOnly and not isProc then
+    finalReady = false
+    isUsable = false
+    usableSource = "procOnly(false)"
+  end
+
+  lastSpellAudit[defKey] = {
+    key = defKey,
+    spellID = spellID,
+    slot = slot,
+    keybind = def.keybind or "",
+    bookUsableRaw = bookUsableRaw,
+    actUsableRaw = actUsableRaw,
+    btColorRaw = btColorRaw,
+    cdRaw = cdRaw,
+    chargesRaw = chargesRaw,
+    overlayRaw = overlayRaw,
+    isReady = finalReady,
+    isUsable = isUsable,
+    isProc = isProc,
+    usableSource = usableSource,
+  }
 
   if def.procOnly and not isProc then
     return false, remSec, durSec, startTime, false, false, def.liveIcon or def.fallbackIcon, def.keybind or def.fallbackKey, 0
   end
 
-  return (not isOnCD), remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or def.fallbackKey, charges
+  return finalReady, remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or def.fallbackKey, charges
 end
 
 local function CheckTargetHasDoTs(assistedKey)
@@ -1577,6 +1731,9 @@ local DEFAULT_VISUAL = {
   showInterruptAlert = true,
   showCastbar = true,
   alwaysShowCDs = false,
+  enableTelemetry = true,
+  showMinimapButton = true,
+  minimapAngle = 205,
 }
 
 function SpArc:EnsureDB()
@@ -1618,6 +1775,8 @@ function SpArc:EnsureDB()
     db.profileSchemaVersion = SpArc.PROFILE_SCHEMA_VERSION
   end
 
+  db.telemetryLog = db.telemetryLog or {}
+  db.lastSpellAudit = db.lastSpellAudit or {}
   return db
 end
 
@@ -1783,13 +1942,20 @@ local function BuildRotationQueue(maxSlots)
 
   local queue = {}
   local simHasDoTs = CheckTargetHasDoTs(assistedKey)
-  local simInsanity = trackedInsanity
-  if simUsable["DEVOURING_PLAGUE"] and simInsanity < 50 then
-    simInsanity = 50
+  if states["DEVOURING_PLAGUE"] and not states["DEVOURING_PLAGUE"].isUsable then
+    trackedInsanity = math.min(trackedInsanity, 25)
+  elseif states["DEVOURING_PLAGUE"] and states["DEVOURING_PLAGUE"].isUsable and trackedInsanity < 50 then
+    trackedInsanity = 50
   end
+  local simInsanity = trackedInsanity
 
   for step = 1, maxSlots do
-    simUsable["DEVOURING_PLAGUE"] = (simInsanity >= 50) or simProcs["DEVOURING_PLAGUE"] or (step == 1 and states["DEVOURING_PLAGUE"] and states["DEVOURING_PLAGUE"].isUsable)
+    if step == 1 then
+      -- Step 1 MUST strictly obey the real spellbook/actionbar usability of Devouring Plague!
+      simUsable["DEVOURING_PLAGUE"] = (states["DEVOURING_PLAGUE"] and states["DEVOURING_PLAGUE"].isUsable) or false
+    else
+      simUsable["DEVOURING_PLAGUE"] = (simInsanity >= 50) or simProcs["DEVOURING_PLAGUE"]
+    end
     simReady["DEVOURING_PLAGUE"] = simUsable["DEVOURING_PLAGUE"]
     simReady["MIND_FLAY_INSANITY"] = simProcs["MIND_FLAY_INSANITY"]
     simUsable["MIND_FLAY_INSANITY"] = simProcs["MIND_FLAY_INSANITY"]
@@ -2270,10 +2436,13 @@ rootFrame:SetScript("OnUpdate", function()
   local inCombat = SafeBool(UnitAffectingCombat, "player")
   local maxQueue = math.max(3, math.min(MAX_ARC_SLOTS, tonumber(v.queueLength) or 5))
 
-  local queue, states, parsed, _, shouldInterruptChannel, isProtectedChannel = BuildRotationQueue(maxQueue)
+    local queue, states, parsed, activeChannelKey, shouldInterruptChannel, isProtectedChannel = BuildRotationQueue(maxQueue)
   lastShouldInterrupt = shouldInterruptChannel and (v.showInterruptAlert ~= false)
   lastIsProtectedChannel = isProtectedChannel
   lastNextKeybind = (queue[1] and queue[1].keybind) or ""
+  if SpArc.RecordTelemetryTick then
+    SpArc:RecordTelemetryTick(queue, states, parsed, hasHostileTarget, inCombat, activeChannelKey, shouldInterruptChannel)
+  end
 
   -- 1. Update Top Semicircle Rotation Arc
   if hasHostileTarget then
@@ -2470,7 +2639,178 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
 end)
 
 ---------------------------------------------------------------------------------------
---      SPARC CONTROL CENTER UI (3 TABS: 55 PRESETS / .MD & AI PROMPT / VISUALS)     --
+--            TELEMETRY & SPELLBOOK AUDITOR (SAVEDVARIABLES + LIVE UI)               --
+---------------------------------------------------------------------------------------
+local lastLoggedTopKey = nil
+local lastTelemetrySampleAt = 0
+
+local CORE_AUDIT_ORDER = {
+  "TENTACLE_SLAM",
+  "VAMPIRIC_TOUCH",
+  "DEVOURING_PLAGUE",
+  "VOID_TORRENT",
+  "MIND_BLAST",
+  "VOID_BOLT",
+  "SHADOW_WORD_DEATH",
+  "MIND_FLAY_INSANITY",
+  "MIND_FLAY",
+  "HALO",
+  "POWER_INFUSION",
+  "VOID_ERUPTION",
+  "DISPERSION",
+}
+
+local function GetTimestampStr()
+  if _G.date then
+    local ok, s = pcall(_G.date, "%H:%M:%S")
+    if ok and type(s) == "string" then return s end
+  end
+  return string.format("%.1fs", GetTime())
+end
+
+function SpArc:CaptureTelemetrySnapshot(reasonTag, queue, states, parsed)
+  local db = SpArc:EnsureDB()
+  if not (db.visual and db.visual.enableTelemetry) and reasonTag ~= "MANUAL_SNAPSHOT" then
+    return
+  end
+
+  if not queue or not states then
+    queue, states, parsed = BuildRotationQueue((db.visual and db.visual.queueLength) or 5)
+  end
+
+  db.lastSpellAudit = {}
+  for k, v in pairs(lastSpellAudit) do
+    db.lastSpellAudit[k] = v
+  end
+
+  local qParts = {}
+  for i = 1, #(queue or {}) do
+    local it = queue[i]
+    if it then
+      qParts[#qParts + 1] = string.format("#%d:%s[%s]%s", i, it.key, it.keybind or "-", it.isProc and "(PROC)" or "")
+    end
+  end
+  local qStr = (#qParts > 0) and table.concat(qParts, " -> ") or "EMPTY"
+
+  local rawInsStr = "n/a"
+  if UnitPower then
+    local okP, p = pcall(UnitPower, "player", 13)
+    if okP then
+      rawInsStr = IsSecret(p) and "SECRET" or tostring(p)
+    end
+  end
+
+  local assistedKey, assistedID = GetAssistedSuggestedDefKey()
+  local hasDoTs = CheckTargetHasDoTs(assistedKey)
+
+  local bookDiffs = {}
+  for _, sKey in ipairs(CORE_AUDIT_ORDER) do
+    local a = lastSpellAudit[sKey]
+    if a then
+      bookDiffs[#bookDiffs + 1] = string.format(
+        "%s(id=%s,slot=%s,bind=%s): SpArc[R=%s,U=%s,P=%s,src=%s] | Книга[U=%s,CD=%s,Ch=%s,Ov=%s] | Бар[U=%s,RGB=%s]",
+        sKey,
+        tostring(a.spellID or "?"),
+        tostring(a.slot or "-"),
+        tostring(a.keybind or "-"),
+        tostring(a.isReady),
+        tostring(a.isUsable),
+        tostring(a.isProc),
+        tostring(a.usableSource or "-"),
+        tostring(a.bookUsableRaw or "-"),
+        tostring(a.cdRaw or "-"),
+        tostring(a.chargesRaw or "-"),
+        tostring(a.overlayRaw or "-"),
+        tostring(a.actUsableRaw or "-"),
+        tostring(a.btColorRaw or "-")
+      )
+    end
+  end
+
+  local entry = string.format(
+    "[%s | %s] Загорелось: %s | Безумие(книга=%s, трек=%d) | Доты=%s | БлиззАссист=%s(%s)\n  " .. table.concat(bookDiffs, "\n  "),
+    GetTimestampStr(),
+    reasonTag or "TICK",
+    qStr,
+    rawInsStr,
+    trackedInsanity or 0,
+    tostring(hasDoTs),
+    tostring(assistedKey or "nil"),
+    tostring(assistedID or "nil")
+  )
+
+  db.telemetryLog = db.telemetryLog or {}
+  db.telemetryLog[#db.telemetryLog + 1] = entry
+  while #db.telemetryLog > 60 do
+    table.remove(db.telemetryLog, 1)
+  end
+end
+
+function SpArc:RecordTelemetryTick(queue, states, parsed, hasHostileTarget, inCombat, activeChannelKey, shouldInterruptChannel)
+  local db = SpArc:EnsureDB()
+  if not (db.visual and db.visual.enableTelemetry) then return end
+  if not hasHostileTarget and not inCombat then return end
+
+  local now = GetTime()
+  local topKey = queue and queue[1] and queue[1].key or "NONE"
+  if topKey ~= lastLoggedTopKey then
+    lastLoggedTopKey = topKey
+    lastTelemetrySampleAt = now
+    SpArc:CaptureTelemetrySnapshot(shouldInterruptChannel and "INTERRUPT_ALERT" or "QUEUE_TOP_CHANGED", queue, states, parsed)
+  elseif (now - lastTelemetrySampleAt) >= 2.5 then
+    lastTelemetrySampleAt = now
+    SpArc:CaptureTelemetrySnapshot("PERIODIC_2.5S", queue, states, parsed)
+  end
+end
+
+function SpArc:BuildTelemetryReportText()
+  local db = SpArc:EnsureDB()
+  local lines = {}
+  lines[#lines + 1] = "=== SPARC v" .. SpArc.VERSION .. " — ТЕЛЕМЕТРИЯ И СВЕРКА С КНИГОЙ ЗАКЛИНАНИЙ ==="
+  lines[#lines + 1] = "Сбор телеметрии: " .. ((db.visual and db.visual.enableTelemetry) and "ВКЛЮЧЕН (пишется в WTF/.../SavedVariables/SpArc.lua)" or "ВЫКЛЮЧЕН")
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = "--- 1. ТЕКУЩЕЕ СОСТОЯНИЕ ПО КНИГЕ ЗАКЛИНАНИЙ И ПАНЕЛЯМ BARTENDER4 ---"
+  for _, sKey in ipairs(CORE_AUDIT_ORDER) do
+    local a = lastSpellAudit[sKey]
+    if a then
+      lines[#lines + 1] = string.format(
+        "• %-20s [ID:%-7s Слот:%-3s Бинд:%-4s] -> SpArc: Ready=%-5s Usable=%-5s Proc=%-5s (%s)",
+        sKey,
+        tostring(a.spellID or "?"),
+        tostring(a.slot or "-"),
+        tostring(a.keybind or "-"),
+        tostring(a.isReady),
+        tostring(a.isUsable),
+        tostring(a.isProc),
+        tostring(a.usableSource or "-")
+      )
+      lines[#lines + 1] = string.format(
+        "    Книга: IsSpellUsable=%s | CD=%s | Charges=%s | Overlay=%s || Бар: IsUsableAction=%s | BT4Color=%s",
+        tostring(a.bookUsableRaw),
+        tostring(a.cdRaw),
+        tostring(a.chargesRaw),
+        tostring(a.overlayRaw),
+        tostring(a.actUsableRaw),
+        tostring(a.btColorRaw)
+      )
+    end
+  end
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = "--- 2. ИСТОРИЯ СРАБАТЫВАНИЙ (ЧТО ЗАГОРАЛОСЬ vs ЧТО БЫЛО ДОСТУПНО В КНИГЕ) ---"
+  local log = db.telemetryLog or {}
+  if #log == 0 then
+    lines[#lines + 1] = "(Лог пока пуст — возьмите врага в таргет или нажмите кнопку 'Снять слепок сейчас')"
+  else
+    for i = #log, math.max(1, #log - 25), -1 do
+      lines[#lines + 1] = log[i]
+      lines[#lines + 1] = "-------------------------------------------------------------------------"
+    end
+  end
+  return table.concat(lines, "\n")
+end
+
+---------------------------------------------------------------------------------------
+--      SPARC CONTROL CENTER UI (4 TABS: PRESETS / .MD & AI / VISUALS / TELEMETRY)   --
 ---------------------------------------------------------------------------------------
 local controlFrame
 local selectedPresetForEdit = "PRIEST_01_SHADOW_PVE"
@@ -2492,7 +2832,7 @@ local function OpenControlCenter(initialTab)
 
   if not controlFrame then
     controlFrame = CreateFrame("Frame", "SpArcControlCenter", UIParent, "BackdropTemplate")
-    controlFrame:SetSize(760, 560)
+    controlFrame:SetSize(780, 580)
     controlFrame:SetPoint("CENTER")
     controlFrame:SetFrameStrata("DIALOG")
     controlFrame:SetMovable(true)
@@ -2510,26 +2850,31 @@ local function OpenControlCenter(initialTab)
       controlFrame:SetBackdropBorderColor(0.68, 0.24, 0.96, 1)
     end
 
-    -- Title & Authors Header
+    local headerIcon = controlFrame:CreateTexture(nil, "ARTWORK")
+    headerIcon:SetSize(28, 28)
+    headerIcon:SetPoint("TOPLEFT", 16, -12)
+    headerIcon:SetTexture(1386548)
+    headerIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
     local title = controlFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(title, 16)
-    title:SetPoint("TOPLEFT", 16, -14)
-    title:SetText("|cffa335eeSpArc v2.0|r — Визуализатор FSM-ротаций (.MD Псевдокод & ИИ)")
+    title:SetPoint("TOPLEFT", 50, -12)
+    title:SetText("|cffa335eeSpArc v2.1|r — Визуализатор FSM-ротаций (.MD Псевдокод, ИИ & Телеметрия)")
 
     local subTitle = controlFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(subTitle, 11)
-    subTitle:SetPoint("TOPLEFT", 16, -34)
+    subTitle:SetPoint("TOPLEFT", 50, -32)
     subTitle:SetTextColor(0.72, 0.72, 0.82, 1)
-    subTitle:SetText("Авторы: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r  •  100% Data-Driven Markdown FSM")
+    subTitle:SetText("Авторы: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r  •  SpellID + Bartender4 Keybind Resolver")
 
     local closeBtn = CreateFrame("Button", nil, controlFrame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", -4, -4)
 
-    -- Tab Buttons
     local tabNames = {
-      "1. Пресеты (55 / 10 класса)",
-      "2. Импорт .MD и ИИ (Gemini/ChatGPT)",
+      "1. Пресеты (55)",
+      "2. Импорт .MD и ИИ",
       "3. Визуал и HUD",
+      "4. Телеметрия / Дебаг",
     }
     local tabs = {}
     local pages = {}
@@ -2552,14 +2897,14 @@ local function OpenControlCenter(initialTab)
 
     for i, tName in ipairs(tabNames) do
       local btn = CreateFrame("Button", nil, controlFrame, "UIPanelButtonTemplate")
-      btn:SetSize(235, 26)
-      btn:SetPoint("TOPLEFT", 16 + (i - 1) * 242, -56)
+      btn:SetSize(182, 26)
+      btn:SetPoint("TOPLEFT", 16 + (i - 1) * 188, -54)
       btn:SetText(tName)
       btn:SetScript("OnClick", function() SelectTab(i) end)
       tabs[i] = btn
 
       local page = CreateFrame("Frame", nil, controlFrame)
-      page:SetPoint("TOPLEFT", 16, -90)
+      page:SetPoint("TOPLEFT", 16, -88)
       page:SetPoint("BOTTOMRIGHT", -16, 16)
       page:Hide()
       pages[i] = page
@@ -2609,10 +2954,9 @@ local function OpenControlCenter(initialTab)
       controlFrame:RefreshUI()
     end)
 
-    -- Left list scroll
     local listScroll = CreateFrame("ScrollFrame", "SpArcPresetListScroll", p1, "UIPanelScrollFrameTemplate")
     listScroll:SetPoint("TOPLEFT", 0, -58)
-    listScroll:SetSize(380, 380)
+    listScroll:SetSize(380, 395)
 
     local listContent = CreateFrame("Frame", nil, listScroll)
     listContent:SetSize(360, 1500)
@@ -2627,7 +2971,6 @@ local function OpenControlCenter(initialTab)
       rowButtons[idx] = rBtn
     end
 
-    -- Right details card on Tab 1
     local detailsBox = CreateFrame("Frame", nil, p1, "BackdropTemplate")
     detailsBox:SetPoint("TOPLEFT", 412, -58)
     detailsBox:SetPoint("BOTTOMRIGHT", 0, 0)
@@ -2698,7 +3041,7 @@ local function OpenControlCenter(initialTab)
     local aiText = aiBanner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(aiText, 12)
     aiText:SetPoint("TOPLEFT", 12, -10)
-    aiText:SetWidth(490)
+    aiText:SetWidth(500)
     aiText:SetJustifyH("LEFT")
     aiText:SetTextColor(1, 0.92, 0.60, 1)
     aiText:SetText("ИИ-Подсказка: " .. SpArc.AIPromptHeaderText)
@@ -2721,7 +3064,7 @@ local function OpenControlCenter(initialTab)
     editBox:SetMultiLine(true)
     editBox:SetFontObject("ChatFontNormal")
     ApplyCyrFont(editBox, 12)
-    editBox:SetWidth(680)
+    editBox:SetWidth(700)
     editBox:SetAutoFocus(false)
     editBox:SetScript("OnEscapePressed", function() editBox:ClearFocus() end)
     edScroll:SetScrollChild(editBox)
@@ -2773,17 +3116,17 @@ local function OpenControlCenter(initialTab)
     end)
 
     -----------------------------------------------------------------------------------
-    -- TAB 3: VISUAL & HUD CUSTOMIZATION
+    -- TAB 3: VISUAL, MINIMAP & TELEMETRY SETTINGS
     -----------------------------------------------------------------------------------
     local p3 = pages[3]
     local vHeader = p3:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(vHeader, 14)
     vHeader:SetPoint("TOPLEFT", 0, 0)
-    vHeader:SetText("Настройки внешнего вида полукруга ротации, кастбара и сейвов:")
+    vHeader:SetText("Настройки полукруга ротации, кастбара, кнопки у миникарты и телеметрии:")
 
     local function CreateVisualSlider(label, key, minV, maxV, stepV, x, y)
       local sFrame = CreateFrame("Frame", nil, p3)
-      sFrame:SetSize(320, 48)
+      sFrame:SetSize(320, 46)
       sFrame:SetPoint("TOPLEFT", x, y)
 
       local txt = sFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -2810,17 +3153,17 @@ local function OpenControlCenter(initialTab)
     end
 
     local sliders = {
-      CreateVisualSlider("Радиус полукруга ротации (px)", "arcRadius", 80, 220, 5, 0, -34),
-      CreateVisualSlider("Масштаб главной иконки #1", "primaryScale", 1.0, 2.0, 0.05, 0, -94),
-      CreateVisualSlider("Масштаб очереди (#2..#6)", "queueScale", 0.6, 1.4, 0.05, 0, -154),
-      CreateVisualSlider("Кол-во иконок в дуге (3..6)", "queueLength", 3, 6, 1, 0, -214),
-      CreateVisualSlider("Смещение дуги по Y (px)", "arcOffsetY", -80, 140, 5, 360, -34),
-      CreateVisualSlider("Ширина кастбара (px)", "castbarWidth", 180, 420, 4, 360, -94),
-      CreateVisualSlider("Смещение кастбара по Y (px)", "castbarOffsetY", -240, -40, 5, 360, -154),
-      CreateVisualSlider("Порог ХП для экстренного сейва (%)", "emergencyHP", 15, 50, 5, 360, -214),
+      CreateVisualSlider("Радиус полукруга ротации (px)", "arcRadius", 80, 220, 5, 0, -30),
+      CreateVisualSlider("Масштаб главной иконки #1", "primaryScale", 1.0, 2.0, 0.05, 0, -86),
+      CreateVisualSlider("Масштаб очереди (#2..#6)", "queueScale", 0.6, 1.4, 0.05, 0, -142),
+      CreateVisualSlider("Кол-во иконок в дуге (3..6)", "queueLength", 3, 6, 1, 0, -198),
+      CreateVisualSlider("Смещение дуги по Y (px)", "arcOffsetY", -80, 140, 5, 360, -30),
+      CreateVisualSlider("Ширина кастбара (px)", "castbarWidth", 180, 420, 4, 360, -86),
+      CreateVisualSlider("Смещение кастбара по Y (px)", "castbarOffsetY", -240, -40, 5, 360, -142),
+      CreateVisualSlider("Порог ХП для экстренного сейва (%)", "emergencyHP", 15, 50, 5, 360, -198),
     }
 
-    local function CreateVisualCheck(label, key, y, isTestToggle)
+    local function CreateVisualCheck(label, key, y, isTestToggle, onAfterClick)
       local cb = CreateFrame("CheckButton", nil, p3, "UICheckButtonTemplate")
       cb:SetPoint("TOPLEFT", 0, y)
       local txt = cb:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -2833,6 +3176,7 @@ local function OpenControlCenter(initialTab)
         else
           db.visual[key] = cb:GetChecked() and true or false
         end
+        if onAfterClick then onAfterClick() end
       end)
       cb.key = key
       cb.isTestToggle = isTestToggle
@@ -2840,11 +3184,76 @@ local function OpenControlCenter(initialTab)
     end
 
     local checks = {
-      CreateVisualCheck("Подсвечивать 'ПРЕРВИ КАСТ!', когда во время филлера (Пытка разума) откатился спелл", "showInterruptAlert", -284, false),
-      CreateVisualCheck("Показывать двойной кастбар SpArc (слева->направо каст / справа->налево потоковый)", "showCastbar", -318, false),
-      CreateVisualCheck("Всегда показывать крылья сейвов и боевых КД (даже вне боя и без цели)", "alwaysShowCDs", -352, false),
-      CreateVisualCheck("Тестовый режим (показать превью всей дуги, кастбара и сейвов прямо сейчас)", "testMode", -386, true),
+      CreateVisualCheck("Подсвечивать 'ПРЕРВИ КАСТ!', когда во время филлера (Пытка разума) откатился спелл", "showInterruptAlert", -262, false),
+      CreateVisualCheck("Показывать двойной кастбар SpArc (слева->направо каст / справа->налево потоковый)", "showCastbar", -292, false),
+      CreateVisualCheck("Всегда показывать крылья сейвов и боевых КД (даже вне боя и без цели)", "alwaysShowCDs", -322, false),
+      CreateVisualCheck("Включить сбор телеметрии / дебаг (что загоралось vs что доступно по книге заклинаний)", "enableTelemetry", -352, false),
+      CreateVisualCheck("Показывать иконку-кнопку SpArc у миникарты (ЛКМ — настройки, ПКМ — телеметрия)", "showMinimapButton", -382, false, function()
+        if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
+      end),
+      CreateVisualCheck("Тестовый режим (показать превью всей дуги, кастбара и сейвов прямо сейчас)", "testMode", -412, true),
     }
+
+    -----------------------------------------------------------------------------------
+    -- TAB 4: TELEMETRY & SPELLBOOK DEBUGGER
+    -----------------------------------------------------------------------------------
+    local p4 = pages[4]
+    local tHeader = p4:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(tHeader, 13)
+    tHeader:SetPoint("TOPLEFT", 0, 0)
+    tHeader:SetText("|cffffd100Телеметрия и Дебаг:|r сравнивает выбор SpArc с реальным ответом книги заклинаний и панелей Bartender4")
+
+    local snapBtn = CreateFrame("Button", nil, p4, "UIPanelButtonTemplate")
+    snapBtn:SetSize(200, 26)
+    snapBtn:SetPoint("TOPLEFT", 0, -26)
+    snapBtn:SetText("Снять слепок сейчас")
+
+    local copyTelBtn = CreateFrame("Button", nil, p4, "UIPanelButtonTemplate")
+    copyTelBtn:SetSize(180, 26)
+    copyTelBtn:SetPoint("LEFT", snapBtn, "RIGHT", 8, 0)
+    copyTelBtn:SetText("Выделить всё (Ctrl+C)")
+
+    local clearTelBtn = CreateFrame("Button", nil, p4, "UIPanelButtonTemplate")
+    clearTelBtn:SetSize(160, 26)
+    clearTelBtn:SetPoint("LEFT", copyTelBtn, "RIGHT", 8, 0)
+    clearTelBtn:SetText("Очистить лог")
+
+    local telToggleCheck = CreateFrame("CheckButton", nil, p4, "UICheckButtonTemplate")
+    telToggleCheck:SetPoint("LEFT", clearTelBtn, "RIGHT", 12, 0)
+    local telToggleTxt = telToggleCheck:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(telToggleTxt, 12)
+    telToggleTxt:SetPoint("LEFT", telToggleCheck, "RIGHT", 4, 0)
+    telToggleTxt:SetText("Сбор ВКЛ")
+    telToggleCheck:SetScript("OnClick", function()
+      db.visual.enableTelemetry = telToggleCheck:GetChecked() and true or false
+      controlFrame:RefreshUI()
+    end)
+
+    local telScroll = CreateFrame("ScrollFrame", "SpArcTelemetryScroll", p4, "UIPanelScrollFrameTemplate")
+    telScroll:SetPoint("TOPLEFT", 0, -60)
+    telScroll:SetPoint("BOTTOMRIGHT", -28, 6)
+
+    local telEditBox = CreateFrame("EditBox", nil, telScroll)
+    telEditBox:SetMultiLine(true)
+    telEditBox:SetFontObject("ChatFontNormal")
+    ApplyCyrFont(telEditBox, 11)
+    telEditBox:SetWidth(700)
+    telEditBox:SetAutoFocus(false)
+    telEditBox:SetScript("OnEscapePressed", function() telEditBox:ClearFocus() end)
+    telScroll:SetScrollChild(telEditBox)
+
+    snapBtn:SetScript("OnClick", function()
+      SpArc:CaptureTelemetrySnapshot("MANUAL_SNAPSHOT")
+      controlFrame:RefreshUI()
+    end)
+    copyTelBtn:SetScript("OnClick", function()
+      telEditBox:SetFocus()
+      telEditBox:HighlightText()
+    end)
+    clearTelBtn:SetScript("OnClick", function()
+      db.telemetryLog = {}
+      controlFrame:RefreshUI()
+    end)
 
     function controlFrame:RefreshUI()
       local pClass = GetPlayerClassTag()
@@ -2947,6 +3356,12 @@ local function OpenControlCenter(initialTab)
           c:SetChecked(db.visual[c.key] ~= false)
         end
       end
+
+      -- Tab 4 refresh
+      telToggleCheck:SetChecked(db.visual.enableTelemetry ~= false)
+      if pages[4]:IsShown() then
+        telEditBox:SetText(SpArc:BuildTelemetryReportText())
+      end
     end
 
     SelectTab(initialTab or 1)
@@ -2960,16 +3375,146 @@ local function OpenControlCenter(initialTab)
   end
 end
 
+---------------------------------------------------------------------------------------
+--                  MINIMAP BUTTON & ICON (SpArcMinimapButton)                       --
+---------------------------------------------------------------------------------------
+local minimapBtn = nil
+
+local function UpdateMinimapButtonPosition()
+  if not minimapBtn or not _G.Minimap then return end
+  local parent = minimapBtn:GetParent()
+  if parent and parent ~= _G.Minimap and parent:GetName() and parent:GetName():find("WTMinimap") then
+    return
+  end
+  local db = SpArc:EnsureDB()
+  local angle = math.rad(tonumber(db.visual and db.visual.minimapAngle) or 205)
+  local radius = (_G.Minimap:GetWidth() / 2) + 8
+  local x = math.cos(angle) * radius
+  local y = math.sin(angle) * radius
+  minimapBtn:ClearAllPoints()
+  minimapBtn:SetPoint("CENTER", _G.Minimap, "CENTER", x, y)
+end
+
+function SpArc:UpdateMinimapButtonVisibility()
+  if not minimapBtn then return end
+  local db = SpArc:EnsureDB()
+  if db.visual and db.visual.showMinimapButton == false then
+    minimapBtn:Hide()
+  else
+    minimapBtn:Show()
+  end
+end
+
+local function CreateSpArcMinimapButton()
+  if minimapBtn or not _G.Minimap then return end
+  local btn = CreateFrame("Button", "SpArcMinimapButton", _G.Minimap)
+  minimapBtn = btn
+  btn:SetSize(28, 28)
+  btn:SetFrameStrata("MEDIUM")
+  btn:SetFrameLevel(8)
+  btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  btn:RegisterForDrag("LeftButton")
+
+  local bg = btn:CreateTexture(nil, "BACKGROUND")
+  bg:SetAllPoints(btn)
+  bg:SetColorTexture(0.06, 0.04, 0.10, 0.95)
+
+  local border = btn:CreateTexture(nil, "BORDER")
+  border:SetPoint("TOPLEFT", btn, "TOPLEFT", -1, 1)
+  border:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 1, -1)
+  border:SetColorTexture(0.75, 0.30, 1.0, 0.90)
+  btn.border = border
+
+  local icon = btn:CreateTexture(nil, "ARTWORK")
+  icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 2, -2)
+  icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -2, 2)
+  icon:SetTexture(1386548)
+  icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  btn.icon = icon
+
+  local label = btn:CreateFontString(nil, "OVERLAY")
+  ApplyCyrFont(label, 9)
+  label:SetPoint("BOTTOM", btn, "BOTTOM", 0, 1)
+  label:SetTextColor(1, 0.85, 0.25, 1)
+  label:SetText("SpArc")
+
+  btn:SetScript("OnEnter", function(self)
+    self.border:SetColorTexture(1.0, 0.82, 0.20, 1.0)
+    if _G.GameTooltip then
+      _G.GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+      _G.GameTooltip:AddLine("|cffa335eeSpArc v" .. SpArc.VERSION .. "|r — Rotation & Cooldown HUD")
+      _G.GameTooltip:AddLine("|cffffd100ЛКМ:|r Открыть окно настроек и пресетов", 0.9, 0.9, 0.9)
+      _G.GameTooltip:AddLine("|cffffd100ПКМ:|r Открыть Телеметрию / Дебаг книги заклинаний", 0.9, 0.9, 0.9)
+      _G.GameTooltip:AddLine("|cffffd100Shift + ЛКМ:|r Тестовый режим HUD (ВКЛ/ВЫКЛ)", 0.9, 0.9, 0.9)
+      _G.GameTooltip:AddLine("|cffaaaaaaЗажать ЛКМ: Перетащить кнопку вокруг миникарты|r", 0.7, 0.7, 0.7)
+      _G.GameTooltip:Show()
+    end
+  end)
+  btn:SetScript("OnLeave", function(self)
+    self.border:SetColorTexture(0.75, 0.30, 1.0, 0.90)
+    if _G.GameTooltip then _G.GameTooltip:Hide() end
+  end)
+
+  btn:SetScript("OnDragStart", function(self)
+    self:SetScript("OnUpdate", function()
+      if not _G.Minimap or not _G.GetCursorPosition then return end
+      local mx, my = _G.Minimap:GetCenter()
+      local cx, cy = _G.GetCursorPosition()
+      local scale = _G.Minimap:GetEffectiveScale()
+      cx, cy = cx / scale, cy / scale
+      local db = SpArc:EnsureDB()
+      db.visual.minimapAngle = math.deg(math.atan2(cy - my, cx - mx))
+      UpdateMinimapButtonPosition()
+    end)
+  end)
+  btn:SetScript("OnDragStop", function(self)
+    self:SetScript("OnUpdate", nil)
+  end)
+
+  btn:SetScript("OnClick", function(_, mouseBtn)
+    if _G.IsShiftKeyDown and _G.IsShiftKeyDown() then
+      SpArc.testMode = not SpArc.testMode
+      print("|cffa335eeSpArc:|r Тестовый режим: " .. (SpArc.testMode and "|cff00ff00ВКЛ|r" or "|cffff4040ВЫКЛ|r"))
+      return
+    end
+    if mouseBtn == "RightButton" then
+      SpArc:CaptureTelemetrySnapshot("MANUAL_SNAPSHOT")
+      OpenControlCenter(4)
+    else
+      if controlFrame and controlFrame:IsShown() then
+        controlFrame:Hide()
+      else
+        OpenControlCenter(1)
+      end
+    end
+  end)
+
+  UpdateMinimapButtonPosition()
+  SpArc:UpdateMinimapButtonVisibility()
+end
+
+CreateSpArcMinimapButton()
+if _G.C_Timer and _G.C_Timer.After then
+  _G.C_Timer.After(1.0, function()
+    CreateSpArcMinimapButton()
+    UpdateMinimapButtonPosition()
+    SpArc:UpdateMinimapButtonVisibility()
+  end)
+end
+
 _G.SLASH_SPARC1 = "/sparc"
 _G.SLASH_SPARC2 = "/sa"
 _G.SLASH_SPARC3 = "/sparkarc"
 _G.SlashCmdList["SPARC"] = function(msg)
-  local cmd, arg = (msg or ""):match("^(%S*)%s*(.-)$")
+  local cmd = (msg or ""):match("^(%S*)")
   cmd = (cmd or ""):lower()
   local db = SpArc:EnsureDB()
   if cmd == "test" then
     SpArc.testMode = not SpArc.testMode
     print("|cffa335eeSpArc:|r Тестовый режим (показ всех элементов): " .. (SpArc.testMode and "|cff00ff00ВКЛ|r" or "|cffff4040ВЫКЛ|r"))
+  elseif cmd == "debug" or cmd == "tel" or cmd == "telemetry" then
+    SpArc:CaptureTelemetrySnapshot("MANUAL_SNAPSHOT")
+    OpenControlCenter(4)
   elseif cmd == "pve" or cmd == "boss" or cmd == "pvp" or cmd == "auto" then
     db.mode = cmd:upper()
     print("|cffa335eeSpArc:|r Активный режим ротации: |cffffd100" .. db.mode .. "|r")

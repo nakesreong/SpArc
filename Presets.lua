@@ -1,4 +1,402 @@
 ---------------------------------------------------------------------------------------
+--  SpArc/Locale.lua — Bilingual Localization System (EN / RU) & AI Prompt Templates
+--                     Automatically detects WoW client locale (GetLocale()), with
+--                     instant in-game language toggle in the Control Center header.
+--  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
+---------------------------------------------------------------------------------------
+local _G = _G
+local SpArc = _G.SpArc or _G.SparkArc or {}
+_G.SpArc = SpArc
+_G.SparkArc = SpArc
+
+local GetLocale = _G.GetLocale
+
+function SpArc:GetActiveLang()
+  local db = _G.SpArcDB
+  local pref = db and db.visual and db.visual.lang
+  if pref == "RU" or pref == "EN" then
+    return pref
+  end
+  local loc = (GetLocale and GetLocale()) or "enUS"
+  if loc == "ruRU" then
+    return "RU"
+  end
+  return "EN"
+end
+
+function SpArc:IsRU()
+  return SpArc:GetActiveLang() == "RU"
+end
+
+local STRINGS = {
+  EN = {
+    WINDOW_TITLE = "|cffa335eeSpArc v%s|r — Semicircle FSM Rotation & Cooldown HUD (.MD & AI)",
+    WINDOW_SUBTITLE = "Authors: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r  •  SpellID + Bartender4 Keybind Resolver",
+    LANG_BTN = "Lang: EN",
+
+    TAB_1 = "1. Presets (55)",
+    TAB_2 = "2. .MD Editor & AI",
+    TAB_3 = "3. Visual & HUD",
+    TAB_4 = "4. Telemetry / Debug",
+
+    P1_SUMMARY = "Total Presets: |cffffd100%d|r  |  Your Class (%s): |cff00ff00%d|r  |  Active: |cffa335ee%s|r (%s)",
+    FILTER_CLASS = "Filter: Only %s (%d)",
+    FILTER_ALL = "Filter: All Classes (%d)",
+    MODE_AUTO = "Mode: AUTO (PvE/Boss/PvP)",
+    MODE_MANUAL = "Mode: Manual Preset",
+    NEW_PRESET_BTN = "+ New Preset",
+    NEW_PRESET_TITLE = "%d. Custom %s #%d",
+    PREFIX_ACTIVE = "|cff00ff00[ACTIVE]|r ",
+    PREFIX_SELECTED = "|cffffd100[>]|r ",
+
+    DETAILS_BODY = "|cffffd100%s|r\n\n"
+      .. "• Class / Mode: |cff00ccff%s (%s)|r\n"
+      .. "• FSM Rotation Rules: |cff00ff00%d|r\n"
+      .. "• Left Wing Saves (TRACK_SAVES): |cff00ff00%s|r\n"
+      .. "• Right Wing CDs (TRACK_CDS): |cff00ff00%s|r\n"
+      .. "• Interruptible Filler: |cffff40a0%s|r\n"
+      .. "• Protected Channel: |cff40d0ff%s|r\n\n"
+      .. "|cffaaaaaaAll rotation logic, side wings, and emergency alerts are compiled live from editable .MD pseudocode with zero hardcoded class logic.|r",
+    NONE_STR = "none",
+
+    ACTIVATE_BTN = "Set as Active Preset",
+    OPEN_MD_BTN = "Edit .MD Pseudocode / AI ->",
+    TEST_HUD_BTN = "Preview HUD on Screen (ON/OFF)",
+    MSG_ACTIVATED = "|cffa335eeSpArc:|r Activated preset: |cffffd100%s|r",
+
+    AI_BANNER_PREFIX = "AI Helper: ",
+    AI_PROMPT_BTN = "AI Prompt (Ctrl+C)",
+    AI_BACK_BTN = "<- Back to .MD Code",
+    AI_STATUS_COPY = "|cff00ff00Copy this prompt (Ctrl+C), paste it into Gemini or ChatGPT with an Icy Veins / Wowhead guide, and paste the result back into the .MD editor:|r",
+    EDITOR_STATUS = "Preset: |cffffd100%s|r  |  FSM Rules: |cff00ff00%d|r  |  Left Saves: |cff00ff00%d|r  |  Right CDs: |cff00ff00%d|r",
+    SAVE_MD_BTN = "Save .MD to Preset",
+    RESET_MD_BTN = "Reset Preset to Default",
+    MSG_MD_SAVED = "|cffa335eeSpArc:|r .MD pseudocode saved and compiled for |cffffd100%s|r!",
+
+    V_HEADER = "Configure Semicircle Rotation Arc, Side Cooldown Wings, Castbar & Minimap Button:",
+    SL_ARC_RADIUS = "Semicircle Arc Radius (px)",
+    SL_ARC_SPREAD = "Semicircle Arc Spread Angle (°)",
+    SL_PRIMARY_SCALE = "Primary Slot #1 Scale",
+    SL_QUEUE_SCALE = "Queue Slots (#2..#6) Scale",
+    SL_QUEUE_LEN = "Number of Arc Icons (3..6)",
+    SL_ARC_OFFSET_Y = "Arc Vertical Offset Y (px)",
+    SL_CB_WIDTH = "Castbar Width (px)",
+    SL_CB_OFFSET_Y = "Castbar Vertical Offset Y (px)",
+    SL_EMERG_HP = "Emergency Save HP Threshold (%)",
+    SL_WINGS_Y = "Side Wings Vertical Offset Y (px)",
+
+    CK_SAVES_WING = "Show Left Defensive Saves Wing (defined by TRACK_SAVES in .MD)",
+    CK_CDS_WING = "Show Right Offensive Cooldowns Wing (defined by TRACK_CDS in .MD)",
+    CK_EMERG_SAVE = "Show Center Emergency Save Alert on Low HP (RETURN EMERGENCY in .MD)",
+    CK_ALWAYS_CDS = "Always show enabled Side Wings even out of combat & with no target",
+    CK_INTERRUPT = "Flash 'CLIP CHANNEL!' when a higher-priority spell comes ready during filler channel",
+    CK_CASTBAR = "Show Dual-Direction SpArc Castbar (Left->Right cast / Right->Left channel)",
+    CK_MINIMAP = "Show SpArc Minimap Button (Left-Click: Settings, Right-Click: Telemetry)",
+    CK_TEST_MODE = "Test / Preview Mode (display full rotation arc, wings, and castbar right now)",
+
+    TEL_HEADER = "|cffffd100Telemetry & Debugger:|r compares SpArc queue decisions against live SpellBook & Bartender4 state",
+    TEL_SNAP_BTN = "Capture Snapshot Now",
+    TEL_COPY_BTN = "Select All (Ctrl+C)",
+    TEL_CLEAR_BTN = "Clear Log & BugSack",
+    TEL_TOGGLE = "Log ON",
+
+    HUD_SAVE_ALERT = "SAVE!",
+    HUD_CLIP_BANNER = "CLIP CAST!",
+    HUD_CHANNEL_BANNER = "CHANNEL...",
+    HUD_CB_CLIP = "CLIP FILLER -> PRESS [%s]!",
+    HUD_CB_PROTECTED = " [DO NOT CLIP]",
+    HUD_TEST_CHANNEL = "Mind Flay (Filler Channel <-)",
+    HUD_TEST_CAST = "Vampiric Touch (Normal Cast ->)",
+
+    MM_TT_TITLE = "|cffa335eeSpArc v%s|r — Semicircle Rotation & Cooldown HUD",
+    MM_TT_LEFT = "|cffffd100Left-Click:|r Open Presets, .MD Editor & Settings",
+    MM_TT_RIGHT = "|cffffd100Right-Click:|r Open SpellBook Telemetry Debugger",
+    MM_TT_SHIFT = "|cffffd100Shift + Left-Click:|r Toggle HUD Test Preview (ON/OFF)",
+    MM_TT_DRAG = "|cffaaaaaaHold Left-Click: Drag button around Minimap|r",
+
+    MSG_TEST_TOGGLE = "|cffa335eeSpArc:|r HUD Test Preview: %s",
+    MSG_ON = "|cff00ff00ON|r",
+    MSG_OFF = "|cffff4040OFF|r",
+  },
+
+  RU = {
+    WINDOW_TITLE = "|cffa335eeSpArc v%s|r — Визуализатор FSM-ротаций (.MD Псевдокод, ИИ & Телеметрия)",
+    WINDOW_SUBTITLE = "Авторы: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r  •  SpellID + Bartender4 Keybind Resolver",
+    LANG_BTN = "Язык: RU",
+
+    TAB_1 = "1. Пресеты (55)",
+    TAB_2 = "2. Импорт .MD и ИИ",
+    TAB_3 = "3. Визуал и HUD",
+    TAB_4 = "4. Телеметрия / Дебаг",
+
+    P1_SUMMARY = "Всего пресетов: |cffffd100%d|r  |  Для вашего класса (%s): |cff00ff00%d|r  |  Активный: |cffa335ee%s|r (%s)",
+    FILTER_CLASS = "Фильтр: Только %s (%d)",
+    FILTER_ALL = "Фильтр: Все классы (%d)",
+    MODE_AUTO = "Режим: AUTO (ПвЕ/Босс/ПвП)",
+    MODE_MANUAL = "Режим: Ручной пресет",
+    NEW_PRESET_BTN = "+ Новый пресет",
+    NEW_PRESET_TITLE = "%d. Кастомный %s #%d",
+    PREFIX_ACTIVE = "|cff00ff00[АКТИВЕН]|r ",
+    PREFIX_SELECTED = "|cffffd100[>]|r ",
+
+    DETAILS_BODY = "|cffffd100%s|r\n\n"
+      .. "• Класс / Режим: |cff00ccff%s (%s)|r\n"
+      .. "• Правил ротации в автомате: |cff00ff00%d|r\n"
+      .. "• Крыло сейвов слева (TRACK_SAVES): |cff00ff00%s|r\n"
+      .. "• Крыло бурстов справа (TRACK_CDS): |cff00ff00%s|r\n"
+      .. "• Прерываемый филлер: |cffff40a0%s|r\n"
+      .. "• Защищённый канал: |cff40d0ff%s|r\n\n"
+      .. "|cffaaaaaaВся логика ротации, боковых крыльев КД и экстренного сейва компилируется напрямую из текстового .MD псевдокода без хардкода!|r",
+    NONE_STR = "нет",
+
+    ACTIVATE_BTN = "Сделать активным пресетом",
+    OPEN_MD_BTN = "Открыть псевдокод .MD / ИИ ->",
+    TEST_HUD_BTN = "Тест HUD на экране (ВКЛ/ВЫКЛ)",
+    MSG_ACTIVATED = "|cffa335eeSpArc:|r Активирован пресет: |cffffd100%s|r",
+
+    AI_BANNER_PREFIX = "ИИ-Подсказка: ",
+    AI_PROMPT_BTN = "Промпт для ИИ (Ctrl+C)",
+    AI_BACK_BTN = "<- Вернуться к .MD коду",
+    AI_STATUS_COPY = "|cff00ff00Скопируйте этот промпт (Ctrl+C), отправьте своему Gemini или ChatGPT вместе с гайдом с Icy Veins / Wowhead и вставьте ответ обратно в редактор .MD:|r",
+    EDITOR_STATUS = "Пресет: |cffffd100%s|r  |  Правил FSM: |cff00ff00%d|r  |  Сейвов слева: |cff00ff00%d|r  |  КД справа: |cff00ff00%d|r",
+    SAVE_MD_BTN = "Сохранить .MD в пресет",
+    RESET_MD_BTN = "Сброс пресета по умолч.",
+    MSG_MD_SAVED = "|cffa335eeSpArc:|r Псевдокод .MD сохранён и скомпилирован для |cffffd100%s|r!",
+
+    V_HEADER = "Настройки полукруга ротации, боковых крыльев сейвов/КД, кастбара и миникарты:",
+    SL_ARC_RADIUS = "Радиус полукруга ротации (px)",
+    SL_ARC_SPREAD = "Угол раскрытия полукруга (°)",
+    SL_PRIMARY_SCALE = "Масштаб главной иконки #1",
+    SL_QUEUE_SCALE = "Масштаб очереди (#2..#6)",
+    SL_QUEUE_LEN = "Кол-во иконок в дуге (3..6)",
+    SL_ARC_OFFSET_Y = "Смещение дуги по Y (px)",
+    SL_CB_WIDTH = "Ширина кастбара (px)",
+    SL_CB_OFFSET_Y = "Смещение кастбара по Y (px)",
+    SL_EMERG_HP = "Порог ХП экстренного сейва (%)",
+    SL_WINGS_Y = "Высота крыльев сейвов/КД по Y (px)",
+
+    CK_SAVES_WING = "Показывать левое крыло сейвов (строка TRACK_SAVES в .MD псевдокоде)",
+    CK_CDS_WING = "Показывать правое крыло бурстов и КД (строка TRACK_CDS в .MD псевдокоде)",
+    CK_EMERG_SAVE = "Показывать экстренный сейв в центре при низком ХП (RETURN EMERGENCY в .MD)",
+    CK_ALWAYS_CDS = "Всегда показывать включенные крылья сейвов/КД (даже вне боя и без цели)",
+    CK_INTERRUPT = "Подсвечивать 'ПРЕРВИ КАСТ!', когда во время филлера (Пытка разума) откатился спелл",
+    CK_CASTBAR = "Показывать двойной кастбар SpArc (слева->направо каст / справа->налево потоковый)",
+    CK_MINIMAP = "Показывать иконку-кнопку SpArc у миникарты (ЛКМ — настройки, ПКМ — телеметрия)",
+    CK_TEST_MODE = "Тестовый режим (показать превью всей дуги, кастбара и крыльев прямо сейчас)",
+
+    TEL_HEADER = "|cffffd100Телеметрия и Дебаг:|r сравнивает выбор SpArc с реальным ответом книги заклинаний и панелей Bartender4",
+    TEL_SNAP_BTN = "Снять слепок сейчас",
+    TEL_COPY_BTN = "Выделить всё (Ctrl+C)",
+    TEL_CLEAR_BTN = "Очистить лог и BugSack",
+    TEL_TOGGLE = "Сбор ВКЛ",
+
+    HUD_SAVE_ALERT = "СЕЙВ!",
+    HUD_CLIP_BANNER = "ПРЕРВИ КАСТ!",
+    HUD_CHANNEL_BANNER = "КАНАЛ...",
+    HUD_CB_CLIP = "ПРЕРВИ ФИЛЛЕР -> ЖМИ [%s]!",
+    HUD_CB_PROTECTED = " [НЕ ПРЕРЫВАЙ]",
+    HUD_TEST_CHANNEL = "Пытка разума (Филлер <-)",
+    HUD_TEST_CAST = "Прикосновение вампира (Каст ->)",
+
+    MM_TT_TITLE = "|cffa335eeSpArc v%s|r — Rotation & Cooldown HUD",
+    MM_TT_LEFT = "|cffffd100ЛКМ:|r Открыть окно настроек, .MD псевдокода и пресетов",
+    MM_TT_RIGHT = "|cffffd100ПКМ:|r Открыть Телеметрию / Дебаг книги заклинаний",
+    MM_TT_SHIFT = "|cffffd100Shift + ЛКМ:|r Тестовый режим HUD (ВКЛ/ВЫКЛ)",
+    MM_TT_DRAG = "|cffaaaaaaЗажать ЛКМ: Перетащить кнопку вокруг миникарты|r",
+
+    MSG_TEST_TOGGLE = "|cffa335eeSpArc:|r Тестовый режим: %s",
+    MSG_ON = "|cff00ff00ВКЛ|r",
+    MSG_OFF = "|cffff4040ВЫКЛ|r",
+  },
+}
+
+function SpArc:L(key)
+  local lang = SpArc:GetActiveLang()
+  local tbl = STRINGS[lang] or STRINGS.EN
+  return tbl[key] or STRINGS.EN[key] or key
+end
+
+SpArc.AIPromptHeader_EN =
+  "Ask Gemini or ChatGPT to convert any Icy Veins / Wowhead rotation guide "
+  .. "into SpArc .MD pseudocode and paste it straight into this editor!"
+
+SpArc.AIPromptHeader_RU =
+  "Попросите своего Gemini или ChatGPT написать вам ротацию с Icy Veins / Wowhead "
+  .. "на псевдокоде в формате SpArc .MD и засуньте её сюды!"
+
+SpArc.AIPromptTemplate_EN = [[Hello Gemini / ChatGPT! Please write a rotation profile from Icy Veins / Wowhead for the SpArc addon (World of Warcraft: Midnight 12.x) strictly following the SpArc .MD pseudocode format below.
+
+Class & Spec: [INSERT CLASS & SPEC, e.g., Shadow Priest]
+Content Mode: [PvE Mythic+ Cleave / Raid Boss Single Target / PvP Arena]
+
+Use strictly the following SpArc .MD syntax (output only the markdown code block):
+
+# PROFILE: Preset Title
+# CLASS: PRIEST (or MAGE, WARLOCK, PALADIN, HUNTER, ROGUE, WARRIOR, DRUID, SHAMAN, DEATHKNIGHT, MONK, DEMONHUNTER, EVOKER)
+# SPEC: Shadow
+# MODE: PVE (or BOSS, PVP)
+
+## SPELL_BOOK (Declare spells with SpellIDs, localized names, optional macro names, base CD, charges, resource gain/cost, and behavior flags)
+SPELL TENTACLE_SLAM = ID:1227280,205385,457042 | NAME:"Tentacle Slam","Shadow Crash" | CD:15 | CHARGES:2 | GAIN:15 | DOTS:true | ICON:136201
+SPELL VAMPIRIC_TOUCH = ID:34914 | NAME:"Vampiric Touch" | CD:0 | GAIN:6 | DOTS:true | ICON:135978
+SPELL VOID_TORRENT = ID:263165 | NAME:"Void Torrent" | CD:45 | GAIN:35 | GRANTS:MIND_FLAY_INSANITY | LOCK_CHANNEL:true | ICON:1386551
+SPELL DEVOURING_PLAGUE = ID:335467 | NAME:"Devouring Plague","Shadow Word: Madness" | COST:50 | GRANTS:MIND_FLAY_INSANITY | SPENDER:true | ICON:252997
+SPELL MIND_BLAST = ID:450983,8092 | NAME:"Mind Blast","Void Blast" | CD:7.5 | CHARGES:2 | GAIN:15 | ICON:136224
+SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Void Volley","Void Bolt" | CD:6 | GAIN:10 | PROC_ONLY:true | ICON:1386548
+SPELL SHADOW_WORD_DEATH = ID:32379 | NAME:"Shadow Word: Death" | CD:10 | GAIN:10 | EXECUTE:true | ICON:136149
+SPELL MIND_FLAY_INSANITY = ID:391403 | NAME:"Mind Flay: Insanity" | GAIN:16 | PROC_ONLY:true | ICON:136208
+SPELL MIND_FLAY = ID:15407 | NAME:"Mind Flay" | GAIN:12 | FILLER_INTERRUPTIBLE:true | ICON:136208
+SPELL POWER_INFUSION = ID:10060 | NAME:"Power Infusion" | CD:120 | ICON:135939
+SPELL VOID_ERUPTION = ID:228260,391109 | NAME:"Void Eruption","Dark Ascension" | CD:120 | ICON:537079
+SPELL PSYFIEND = ID:34433,451235 | NAME:"Shadowfiend","Voidwraith" | CD:60 | ICON:136199
+SPELL DISPERSION = ID:47585 | NAME:"Dispersion" | CD:90 | ICON:237563
+SPELL DESPERATE_PRAYER = ID:19236 | NAME:"Desperate Prayer" | CD:90 | ICON:237550
+SPELL VAMPIRIC_EMBRACE = ID:15286 | NAME:"Vampiric Embrace" | CD:120 | ICON:136230
+SPELL FADE = ID:586 | NAME:"Fade" | CD:30 | ICON:135994
+
+## CHANNEL_POLICY (Which channeled spells should flash 'CLIP CAST!' when a higher-priority spell comes ready, and which channels must never be clipped)
+INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: MIND_FLAY
+PROTECT_CHANNEL: VOID_TORRENT
+
+## TRACKERS (Optional Side Cooldown Wings: up to 4 Defensive Saves on the left via TRACK_SAVES, and up to 4 Offensive Burst CDs on the right via TRACK_CDS)
+TRACK_SAVES: DISPERSION, DESPERATE_PRAYER, VAMPIRIC_EMBRACE, FADE
+TRACK_CDS: POWER_INFUSION, VOID_ERUPTION, VOID_TORRENT, PSYFIEND
+
+## EMERGENCY_SAVE (Center Screen Alert when Player HP drops below threshold)
+IF player.hp_percent <= 25 AND READY(DISPERSION) THEN
+    RETURN EMERGENCY(DISPERSION)
+ELSE IF player.hp_percent <= 25 AND READY(DESPERATE_PRAYER) THEN
+    RETURN EMERGENCY(DESPERATE_PRAYER)
+END IF
+
+## ROTATION_QUEUE (FSM Priority Rules evaluated top-to-bottom; supported conditions: NOT target.has_dots, target.has_dots, READY(X), NOT READY(X), USABLE(X), PROC(X), AND)
+IF NOT target.has_dots AND READY(TENTACLE_SLAM) THEN
+    RETURN CAST(TENTACLE_SLAM)
+ELSE IF NOT target.has_dots AND NOT READY(TENTACLE_SLAM) THEN
+    RETURN CAST(VAMPIRIC_TOUCH)
+ELSE IF PROC(VOID_BOLT) AND READY(VOID_BOLT) THEN
+    RETURN CAST(VOID_BOLT)
+ELSE IF PROC(DEVOURING_PLAGUE) AND USABLE(DEVOURING_PLAGUE) THEN
+    RETURN CAST(DEVOURING_PLAGUE)
+ELSE IF PROC(MIND_FLAY_INSANITY) THEN
+    RETURN CAST(MIND_FLAY_INSANITY)
+ELSE IF PROC(SHADOW_WORD_DEATH) AND READY(SHADOW_WORD_DEATH) THEN
+    RETURN CAST(SHADOW_WORD_DEATH)
+ELSE IF READY(VOID_TORRENT) THEN
+    RETURN CAST(VOID_TORRENT)
+ELSE IF USABLE(DEVOURING_PLAGUE) THEN
+    RETURN CAST(DEVOURING_PLAGUE)
+ELSE IF READY(MIND_BLAST) THEN
+    RETURN CAST(MIND_BLAST)
+ELSE IF READY(TENTACLE_SLAM) THEN
+    RETURN CAST(TENTACLE_SLAM)
+ELSE IF READY(SHADOW_WORD_DEATH) AND USABLE(SHADOW_WORD_DEATH) THEN
+    RETURN CAST(SHADOW_WORD_DEATH)
+ELSE
+    RETURN CAST(MIND_FLAY)
+END IF]]
+
+function SpArc:GetAIPromptHeader()
+  if SpArc:IsRU() then
+    return SpArc.AIPromptHeader_RU
+  end
+  return SpArc.AIPromptHeader_EN
+end
+
+function SpArc:GetAIPromptTemplate()
+  if SpArc:IsRU() then
+    return SpArc.AIPromptTemplate or SpArc.AIPromptTemplate_EN
+  end
+  return SpArc.AIPromptTemplate_EN
+end
+
+local EN_PRESET_TITLES = {
+  PRIEST_01_SHADOW_PVE = "1. Priest: Shadow — PvE / Mythic+ (Icy Veins Cleave)",
+  PRIEST_02_SHADOW_BOSS = "2. Priest: Shadow — Raid Boss / Single Target",
+  PRIEST_03_SHADOW_PVP = "3. Priest: Shadow — PvP Arena / Battleground",
+  PRIEST_04_SHADOW_ARCHON = "4. Priest: Shadow — Archon Hero Talents (Halo)",
+  PRIEST_05_SHADOW_VOIDWEAVER = "5. Priest: Shadow — Voidweaver Hero Talents",
+  PRIEST_06_SHADOW_DELVES = "6. Priest: Shadow — Solo Delves & Labyrinth",
+  PRIEST_07_SHADOW_SPEEDRUN = "7. Priest: Shadow — Raid Speedrun (Instant Burst)",
+  PRIEST_08_DISC_PVE = "8. Priest: Discipline — PvE Atonement DPS",
+  PRIEST_09_DISC_PVP = "9. Priest: Discipline — PvP Arena (Assist & Execute)",
+  PRIEST_10_HOLY_PVE = "10. Priest: Holy — PvE Chastise & Holy Fire DPS",
+
+  MAGE_01_ARCANE_PVE = "11. Mage: Arcane — PvE (Icy Veins)",
+  MAGE_02_ARCANE_BOSS = "12. Mage: Arcane — Raid Boss ST",
+  MAGE_03_FIRE_PVE = "13. Mage: Fire — PvE / Mythic+",
+  MAGE_04_FROST_PVE = "14. Mage: Frost — PvE Cleave",
+  MAGE_05_FROST_PVP = "15. Mage: Frost — PvP Arena",
+
+  WARLOCK_01_AFF_PVE = "16. Warlock: Affliction — PvE",
+  WARLOCK_02_AFF_BOSS = "17. Warlock: Affliction — Raid Boss",
+  WARLOCK_03_DEMO_PVE = "18. Warlock: Demonology — PvE",
+  WARLOCK_04_DESTRO_PVE = "19. Warlock: Destruction — PvE",
+  WARLOCK_05_DESTRO_PVP = "20. Warlock: Destruction — PvP Arena",
+
+  PALADIN_01_RET_PVE = "21. Paladin: Retribution — PvE / Mythic+",
+  PALADIN_02_RET_BOSS = "22. Paladin: Retribution — Raid Boss ST",
+  PALADIN_03_RET_PVP = "23. Paladin: Retribution — PvP Arena",
+  PALADIN_04_PROT_PVE = "24. Paladin: Protection — Tank Mythic+",
+
+  HUNTER_01_BM_PVE = "25. Hunter: Beast Mastery — PvE",
+  HUNTER_02_BM_BOSS = "26. Hunter: Beast Mastery — Raid Boss",
+  HUNTER_03_MM_PVE = "27. Hunter: Marksmanship — PvE",
+  HUNTER_04_SURV_PVP = "28. Hunter: Survival — PvP Arena",
+
+  ROGUE_01_ASSA_PVE = "29. Rogue: Assassination — PvE",
+  ROGUE_02_OUTLAW_PVE = "30. Rogue: Outlaw — Mythic+",
+  ROGUE_03_SUB_BOSS = "31. Rogue: Subtlety — Raid Boss",
+  ROGUE_04_SUB_PVP = "32. Rogue: Subtlety — PvP Arena",
+
+  WARRIOR_01_FURY_PVE = "33. Warrior: Fury — PvE / Mythic+",
+  WARRIOR_02_ARGS_BOSS = "34. Warrior: Arms — Raid Boss ST",
+  WARRIOR_03_ARMS_PVP = "35. Warrior: Arms — PvP Arena",
+  WARRIOR_04_PROT_PVE = "36. Warrior: Protection — Tank",
+
+  DRUID_01_BAL_PVE = "37. Druid: Balance — PvE / Mythic+",
+  DRUID_02_BAL_BOSS = "38. Druid: Balance — Raid Boss ST",
+  DRUID_03_FERAL_PVE = "39. Druid: Feral — PvE",
+  DRUID_04_FERAL_PVP = "40. Druid: Feral — PvP Arena",
+
+  SHAMAN_01_ELE_PVE = "41. Shaman: Elemental — PvE / Mythic+",
+  SHAMAN_02_ELE_BOSS = "42. Shaman: Elemental — Raid Boss ST",
+  SHAMAN_03_ENH_PVE = "43. Shaman: Enhancement — PvE",
+  SHAMAN_04_ENH_PVP = "44. Shaman: Enhancement — PvP Arena",
+
+  DK_01_UNHOLY_PVE = "45. Death Knight: Unholy — PvE",
+  DK_02_FROST_PVE = "46. Death Knight: Frost — Mythic+",
+  DK_03_BLOOD_PVE = "47. Death Knight: Blood — Tank",
+
+  MONK_01_WW_PVE = "48. Monk: Windwalker — PvE",
+  MONK_02_WW_PVP = "49. Monk: Windwalker — PvP Arena",
+  MONK_03_BM_PVE = "50. Monk: Brewmaster — Tank",
+
+  DH_01_HAVOC_PVE = "51. Demon Hunter: Havoc — PvE",
+  DH_02_HAVOC_PVP = "52. Demon Hunter: Havoc — PvP Arena",
+  DH_03_VENG_PVE = "53. Demon Hunter: Vengeance — Tank",
+
+  EVOKER_01_DEV_PVE = "54. Evoker: Devastation — PvE",
+  EVOKER_02_AUG_PVE = "55. Evoker: Augmentation — Mythic+",
+}
+
+function SpArc:GetPresetDisplayTitle(pr)
+  if not pr then return "" end
+  if SpArc:IsRU() then
+    return pr.title or pr.id or ""
+  end
+  if pr.id and EN_PRESET_TITLES[pr.id] then
+    return EN_PRESET_TITLES[pr.id]
+  end
+  local t = pr.title or pr.id or ""
+  t = t:gsub("Кастомный", "Custom")
+  t = t:gsub("ПвЕ / Мифик%+", "PvE / Mythic+")
+  t = t:gsub("Босс / СТ", "Raid Boss / ST")
+  t = t:gsub("ПвП Арена", "PvP Arena")
+  return t
+end
+
+---------------------------------------------------------------------------------------
 --  SpArc/Presets.lua — 55 Built-in Markdown (.md) Presets (10 Priest + 45 Cross-Class)
 --                      & AI Prompt Generator (Gemini / ChatGPT -> SpArc .MD)
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
@@ -556,13 +954,11 @@ local OTHER_CLASS_PRESETS = {
 
 for _, info in ipairs(OTHER_CLASS_PRESETS) do
   local id, cls, title, mode = info[1], info[2], info[3], info[4]
-  local templateMD = string.format([[
-# PROFILE: %s
-# CLASS: %s
-# SPEC: %s
-# MODE: %s
-# Подсказка: вставьте сюда ротацию с Icy Veins, сгенерированную через Gemini / ChatGPT во вкладке "Импорт .MD и ИИ"!
-]] .. PRIEST_SHADOW_SPELLBOOK_MD .. [[
+  local headerMD = string.format(
+    "# PROFILE: %s\n# CLASS: %s\n# SPEC: %s\n# MODE: %s\n# Tip / Подсказка: paste an Icy Veins rotation generated via Gemini / ChatGPT in Tab 2!\n",
+    title, cls, mode, mode
+  )
+  local templateMD = headerMD .. PRIEST_SHADOW_SPELLBOOK_MD .. [[
 INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: MIND_FLAY
 PROTECT_CHANNEL: VOID_TORRENT
 TRACK_SAVES: DISPERSION, DESPERATE_PRAYER, VAMPIRIC_EMBRACE, FADE
@@ -580,7 +976,7 @@ ELSE IF READY(MIND_BLAST) THEN
 ELSE
     RETURN CAST(MIND_FLAY)
 END IF
-]], title, cls, mode, mode)
+]]
   RegisterPreset(id, cls, title, mode, templateMD)
 end
 

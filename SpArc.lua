@@ -1,5 +1,5 @@
 ---------------------------------------------------------------------------------------
---  SpArc/SpArc.lua — 4-Tab Control Center UI, Minimap Button & Slash Commands
+--  SpArc/SpArc.lua — Bilingual 4-Tab Control Center UI, Minimap Button & Slash Commands
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
 ---------------------------------------------------------------------------------------
 local _G = _G
@@ -25,6 +25,7 @@ local controlFrame
 local selectedPresetForEdit = "PRIEST_01_SHADOW_PVE"
 local filterClassOnly = true
 local showingAIPrompt = false
+local isRefreshingUI = false
 
 local function GetPlayerClassTag()
   if UnitClass then
@@ -68,23 +69,26 @@ local function OpenControlCenter(initialTab)
     local title = controlFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(title, 16)
     title:SetPoint("TOPLEFT", 50, -12)
-    title:SetText("|cffa335eeSpArc v" .. SpArc.VERSION .. "|r — Визуализатор FSM-ротаций (.MD Псевдокод, ИИ & Телеметрия)")
 
     local subTitle = controlFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(subTitle, 11)
     subTitle:SetPoint("TOPLEFT", 50, -32)
     subTitle:SetTextColor(0.72, 0.72, 0.82, 1)
-    subTitle:SetText("Авторы: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r  •  SpellID + Bartender4 Keybind Resolver")
 
     local closeBtn = CreateFrame("Button", nil, controlFrame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", -4, -4)
 
-    local tabNames = {
-      "1. Пресеты (55)",
-      "2. Импорт .MD и ИИ",
-      "3. Визуал и HUD",
-      "4. Телеметрия / Дебаг",
-    }
+    local langBtn = CreateFrame("Button", nil, controlFrame, "UIPanelButtonTemplate")
+    langBtn:SetSize(92, 22)
+    langBtn:SetPoint("TOPRIGHT", -36, -10)
+    langBtn:SetScript("OnClick", function()
+      local cur = SpArc:GetActiveLang()
+      db.visual.lang = (cur == "RU") and "EN" or "RU"
+      SpArc:ApplyVisualLayout()
+      controlFrame:RefreshUI()
+    end)
+
+    local tabKeys = { "TAB_1", "TAB_2", "TAB_3", "TAB_4" }
     local tabs = {}
     local pages = {}
 
@@ -104,12 +108,13 @@ local function OpenControlCenter(initialTab)
     end
     controlFrame.SelectTab = SelectTab
 
-    for i, tName in ipairs(tabNames) do
+    for i, tKey in ipairs(tabKeys) do
       local btn = CreateFrame("Button", nil, controlFrame, "UIPanelButtonTemplate")
       btn:SetSize(182, 26)
       btn:SetPoint("TOPLEFT", 16 + (i - 1) * 188, -54)
-      btn:SetText(tName)
+      btn:SetText(SpArc:L(tKey))
       btn:SetScript("OnClick", function() SelectTab(i) end)
+      btn.tKey = tKey
       tabs[i] = btn
 
       local page = CreateFrame("Frame", nil, controlFrame)
@@ -147,12 +152,11 @@ local function OpenControlCenter(initialTab)
     local newPresetBtn = CreateFrame("Button", nil, p1, "UIPanelButtonTemplate")
     newPresetBtn:SetSize(160, 24)
     newPresetBtn:SetPoint("LEFT", autoModeBtn, "RIGHT", 10, 0)
-    newPresetBtn:SetText("+ Новый пресет")
     newPresetBtn:SetScript("OnClick", function()
       local newIdx = #db.presetOrder + 1
       local cls = GetPlayerClassTag()
       local newID = string.format("%s_CUSTOM_%d", cls, newIdx)
-      local newTitle = string.format("%d. Кастомный %s #%d", newIdx, cls, newIdx)
+      local newTitle = string.format(SpArc:L("NEW_PRESET_TITLE"), newIdx, cls, newIdx)
       local baseMD = (db.presets[selectedPresetForEdit] and db.presets[selectedPresetForEdit].md) or SpArc.DefaultMarkdownProfiles["PVE"]
       db.presetOrder[#db.presetOrder + 1] = newID
       db.presets[newID] = { id = newID, class = cls, title = newTitle, mode = "PVE", md = baseMD }
@@ -203,18 +207,17 @@ local function OpenControlCenter(initialTab)
     local activateBtn = CreateFrame("Button", nil, detailsBox, "UIPanelButtonTemplate")
     activateBtn:SetSize(280, 28)
     activateBtn:SetPoint("BOTTOM", 0, 82)
-    activateBtn:SetText("Сделать активным пресетом")
     activateBtn:SetScript("OnClick", function()
       db.activePresetID = selectedPresetForEdit
       db.mode = "MANUAL"
       controlFrame:RefreshUI()
-      print("|cffa335eeSpArc:|r Активирован пресет: |cffffd100" .. ((db.presets[selectedPresetForEdit] and db.presets[selectedPresetForEdit].title) or selectedPresetForEdit) .. "|r")
+      local dispTitle = SpArc:GetPresetDisplayTitle(db.presets[selectedPresetForEdit])
+      print(string.format(SpArc:L("MSG_ACTIVATED"), dispTitle ~= "" and dispTitle or selectedPresetForEdit))
     end)
 
     local openMdBtn = CreateFrame("Button", nil, detailsBox, "UIPanelButtonTemplate")
     openMdBtn:SetSize(280, 28)
     openMdBtn:SetPoint("BOTTOM", 0, 48)
-    openMdBtn:SetText("Открыть псевдокод .MD / ИИ ->")
     openMdBtn:SetScript("OnClick", function()
       showingAIPrompt = false
       SelectTab(2)
@@ -223,7 +226,6 @@ local function OpenControlCenter(initialTab)
     local testModeBtn1 = CreateFrame("Button", nil, detailsBox, "UIPanelButtonTemplate")
     testModeBtn1:SetSize(280, 26)
     testModeBtn1:SetPoint("BOTTOM", 0, 14)
-    testModeBtn1:SetText("Тест HUD на экране (ВКЛ/ВЫКЛ)")
     testModeBtn1:SetScript("OnClick", function()
       SpArc.testMode = not SpArc.testMode
       controlFrame:RefreshUI()
@@ -253,12 +255,10 @@ local function OpenControlCenter(initialTab)
     aiText:SetWidth(500)
     aiText:SetJustifyH("LEFT")
     aiText:SetTextColor(1, 0.92, 0.60, 1)
-    aiText:SetText("ИИ-Подсказка: " .. (SpArc.AIPromptHeaderText or ""))
 
     local aiPromptBtn = CreateFrame("Button", nil, aiBanner, "UIPanelButtonTemplate")
     aiPromptBtn:SetSize(210, 36)
     aiPromptBtn:SetPoint("RIGHT", -12, 0)
-    aiPromptBtn:SetText("Промпт для ИИ (Ctrl+C)")
 
     local editorStatus = p2:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(editorStatus, 12)
@@ -290,7 +290,6 @@ local function OpenControlCenter(initialTab)
     local saveMdBtn = CreateFrame("Button", nil, p2, "UIPanelButtonTemplate")
     saveMdBtn:SetSize(220, 28)
     saveMdBtn:SetPoint("BOTTOMRIGHT", 0, 4)
-    saveMdBtn:SetText("Сохранить .MD в пресет")
     saveMdBtn:SetScript("OnClick", function()
       if showingAIPrompt then
         showingAIPrompt = false
@@ -306,14 +305,13 @@ local function OpenControlCenter(initialTab)
         end
         SpArc:RebuildParsedProfiles()
         controlFrame:RefreshUI()
-        print("|cffa335eeSpArc:|r Псевдокод .MD сохранён и скомпилирован для |cffffd100" .. pr.title .. "|r!")
+        print(string.format(SpArc:L("MSG_MD_SAVED"), SpArc:GetPresetDisplayTitle(pr)))
       end
     end)
 
     local resetMdBtn = CreateFrame("Button", nil, p2, "UIPanelButtonTemplate")
     resetMdBtn:SetSize(180, 28)
     resetMdBtn:SetPoint("BOTTOMLEFT", 0, 4)
-    resetMdBtn:SetText("Сброс пресета по умолч.")
     resetMdBtn:SetScript("OnClick", function()
       showingAIPrompt = false
       local bp = SpArc.BuiltInPresets and SpArc.BuiltInPresets[selectedPresetForEdit]
@@ -331,9 +329,8 @@ local function OpenControlCenter(initialTab)
     local vHeader = p3:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(vHeader, 14)
     vHeader:SetPoint("TOPLEFT", 0, 0)
-    vHeader:SetText("Настройки полукруга ротации, кастбара, кнопки у миникарты и телеметрии:")
 
-    local function CreateVisualSlider(label, key, minV, maxV, stepV, x, y)
+    local function CreateVisualSlider(labelKey, key, minV, maxV, stepV, x, y)
       local sFrame = CreateFrame("Frame", nil, p3)
       sFrame:SetSize(320, 46)
       sFrame:SetPoint("TOPLEFT", x, y)
@@ -351,36 +348,38 @@ local function OpenControlCenter(initialTab)
       slider:SetScript("OnValueChanged", function(_, val)
         local rounded = math.floor((val / stepV) + 0.5) * stepV
         db.visual[key] = rounded
-        txt:SetText(string.format("%s: |cffffd100%.2f|r", label, rounded))
-        SpArc:ApplyVisualLayout()
+        txt:SetText(string.format("%s: |cffffd100%.2f|r", SpArc:L(labelKey), rounded))
+        if not isRefreshingUI then
+          SpArc:ApplyVisualLayout()
+        end
       end)
       sFrame.slider = slider
       sFrame.txt = txt
-      sFrame.label = label
+      sFrame.labelKey = labelKey
       sFrame.key = key
       return sFrame
     end
 
     local sliders = {
-      CreateVisualSlider("Радиус полукруга ротации (px)", "arcRadius", 50, 260, 5, 0, -28),
-      CreateVisualSlider("Угол раскрытия полукруга (°)", "arcSpreadDeg", 60, 180, 5, 360, -28),
-      CreateVisualSlider("Масштаб главной иконки #1", "primaryScale", 1.0, 2.0, 0.05, 0, -78),
-      CreateVisualSlider("Масштаб очереди (#2..#6)", "queueScale", 0.6, 1.4, 0.05, 360, -78),
-      CreateVisualSlider("Кол-во иконок в дуге (3..6)", "queueLength", 3, 6, 1, 0, -128),
-      CreateVisualSlider("Смещение дуги по Y (px)", "arcOffsetY", -120, 180, 5, 360, -128),
-      CreateVisualSlider("Ширина кастбара (px)", "castbarWidth", 180, 420, 4, 0, -178),
-      CreateVisualSlider("Смещение кастбара по Y (px)", "castbarOffsetY", -240, -40, 5, 360, -178),
-      CreateVisualSlider("Порог ХП экстренного сейва (%)", "emergencyHP", 15, 50, 5, 0, -228),
-      CreateVisualSlider("Высота крыльев сейвов/КД по Y (px)", "wingsOffsetY", -200, 60, 5, 360, -228),
+      CreateVisualSlider("SL_ARC_RADIUS", "arcRadius", 50, 260, 5, 0, -28),
+      CreateVisualSlider("SL_ARC_SPREAD", "arcSpreadDeg", 60, 180, 5, 360, -28),
+      CreateVisualSlider("SL_PRIMARY_SCALE", "primaryScale", 1.0, 2.0, 0.05, 0, -78),
+      CreateVisualSlider("SL_QUEUE_SCALE", "queueScale", 0.6, 1.4, 0.05, 360, -78),
+      CreateVisualSlider("SL_QUEUE_LEN", "queueLength", 3, 6, 1, 0, -128),
+      CreateVisualSlider("SL_ARC_OFFSET_Y", "arcOffsetY", -120, 180, 5, 360, -128),
+      CreateVisualSlider("SL_CB_WIDTH", "castbarWidth", 180, 420, 4, 0, -178),
+      CreateVisualSlider("SL_CB_OFFSET_Y", "castbarOffsetY", -240, -40, 5, 360, -178),
+      CreateVisualSlider("SL_EMERG_HP", "emergencyHP", 15, 50, 5, 0, -228),
+      CreateVisualSlider("SL_WINGS_Y", "wingsOffsetY", -200, 60, 5, 360, -228),
     }
 
-    local function CreateVisualCheck(label, key, y, isTestToggle, onAfterClick)
+    local function CreateVisualCheck(labelKey, key, y, isTestToggle, onAfterClick)
       local cb = CreateFrame("CheckButton", nil, p3, "UICheckButtonTemplate")
       cb:SetPoint("TOPLEFT", 0, y)
       local txt = cb:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       ApplyCyrFont(txt, 13)
       txt:SetPoint("LEFT", cb, "RIGHT", 6, 0)
-      txt:SetText(label)
+      txt:SetText(SpArc:L(labelKey))
       cb:SetScript("OnClick", function()
         if isTestToggle then
           SpArc.testMode = cb:GetChecked() and true or false
@@ -390,21 +389,23 @@ local function OpenControlCenter(initialTab)
         if onAfterClick then onAfterClick() end
       end)
       cb.key = key
+      cb.labelKey = labelKey
+      cb.txt = txt
       cb.isTestToggle = isTestToggle
       return cb
     end
 
     local checks = {
-      CreateVisualCheck("Показывать левое крыло сейвов (строка TRACK_SAVES в .MD псевдокоде)", "showSavesWing", -280, false),
-      CreateVisualCheck("Показывать правое крыло бурстов и КД (строка TRACK_CDS в .MD псевдокоде)", "showCDsWing", -306, false),
-      CreateVisualCheck("Показывать экстренный сейв в центре при низком ХП (RETURN EMERGENCY в .MD)", "showEmergencySave", -332, false),
-      CreateVisualCheck("Всегда показывать включенные крылья сейвов/КД (даже вне боя и без цели)", "alwaysShowCDs", -358, false),
-      CreateVisualCheck("Подсвечивать 'ПРЕРВИ КАСТ!', когда во время филлера (Пытка разума) откатился спелл", "showInterruptAlert", -384, false),
-      CreateVisualCheck("Показывать двойной кастбар SpArc (слева->направо каст / справа->налево потоковый)", "showCastbar", -410, false),
-      CreateVisualCheck("Показывать иконку-кнопку SpArc у миникарты (ЛКМ — настройки, ПКМ — телеметрия)", "showMinimapButton", -436, false, function()
+      CreateVisualCheck("CK_SAVES_WING", "showSavesWing", -280, false),
+      CreateVisualCheck("CK_CDS_WING", "showCDsWing", -306, false),
+      CreateVisualCheck("CK_EMERG_SAVE", "showEmergencySave", -332, false),
+      CreateVisualCheck("CK_ALWAYS_CDS", "alwaysShowCDs", -358, false),
+      CreateVisualCheck("CK_INTERRUPT", "showInterruptAlert", -384, false),
+      CreateVisualCheck("CK_CASTBAR", "showCastbar", -410, false),
+      CreateVisualCheck("CK_MINIMAP", "showMinimapButton", -436, false, function()
         if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
       end),
-      CreateVisualCheck("Тестовый режим (показать превью всей дуги, кастбара и сейвов прямо сейчас)", "testMode", -462, true),
+      CreateVisualCheck("CK_TEST_MODE", "testMode", -462, true),
     }
 
     -----------------------------------------------------------------------------------
@@ -414,29 +415,24 @@ local function OpenControlCenter(initialTab)
     local tHeader = p4:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(tHeader, 13)
     tHeader:SetPoint("TOPLEFT", 0, 0)
-    tHeader:SetText("|cffffd100Телеметрия и Дебаг:|r сравнивает выбор SpArc с реальным ответом книги заклинаний и панелей Bartender4")
 
     local snapBtn = CreateFrame("Button", nil, p4, "UIPanelButtonTemplate")
-    snapBtn:SetSize(200, 26)
+    snapBtn:SetSize(195, 26)
     snapBtn:SetPoint("TOPLEFT", 0, -26)
-    snapBtn:SetText("Снять слепок сейчас")
 
     local copyTelBtn = CreateFrame("Button", nil, p4, "UIPanelButtonTemplate")
-    copyTelBtn:SetSize(180, 26)
+    copyTelBtn:SetSize(175, 26)
     copyTelBtn:SetPoint("LEFT", snapBtn, "RIGHT", 8, 0)
-    copyTelBtn:SetText("Выделить всё (Ctrl+C)")
 
     local clearTelBtn = CreateFrame("Button", nil, p4, "UIPanelButtonTemplate")
-    clearTelBtn:SetSize(160, 26)
+    clearTelBtn:SetSize(185, 26)
     clearTelBtn:SetPoint("LEFT", copyTelBtn, "RIGHT", 8, 0)
-    clearTelBtn:SetText("Очистить лог")
 
     local telToggleCheck = CreateFrame("CheckButton", nil, p4, "UICheckButtonTemplate")
-    telToggleCheck:SetPoint("LEFT", clearTelBtn, "RIGHT", 12, 0)
+    telToggleCheck:SetPoint("LEFT", clearTelBtn, "RIGHT", 10, 0)
     local telToggleTxt = telToggleCheck:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(telToggleTxt, 12)
     telToggleTxt:SetPoint("LEFT", telToggleCheck, "RIGHT", 4, 0)
-    telToggleTxt:SetText("Сбор ВКЛ")
     telToggleCheck:SetScript("OnClick", function()
       db.visual.enableTelemetry = telToggleCheck:GetChecked() and true or false
       controlFrame:RefreshUI()
@@ -456,7 +452,7 @@ local function OpenControlCenter(initialTab)
     telScroll:SetScrollChild(telEditBox)
 
     snapBtn:SetScript("OnClick", function()
-      SpArc:CaptureTelemetrySnapshot("MANUAL_SNAPSHOT")
+      pcall(SpArc.CaptureTelemetrySnapshot, SpArc, "MANUAL_SNAPSHOT")
       controlFrame:RefreshUI()
     end)
     copyTelBtn:SetScript("OnClick", function()
@@ -465,10 +461,25 @@ local function OpenControlCenter(initialTab)
     end)
     clearTelBtn:SetScript("OnClick", function()
       db.telemetryLog = {}
+      db.capturedLuaErrors = {}
+      if _G.BugSack and type(_G.BugSack.Reset) == "function" then
+        pcall(_G.BugSack.Reset, _G.BugSack)
+      elseif _G.BugGrabber and type(_G.BugGrabber.Reset) == "function" then
+        pcall(_G.BugGrabber.Reset, _G.BugGrabber)
+      end
       controlFrame:RefreshUI()
     end)
 
     function controlFrame:RefreshUI()
+      isRefreshingUI = true
+
+      title:SetText(string.format(SpArc:L("WINDOW_TITLE"), SpArc.VERSION))
+      subTitle:SetText(SpArc:L("WINDOW_SUBTITLE"))
+      langBtn:SetText(SpArc:L("LANG_BTN"))
+      for _, tb in ipairs(tabs) do
+        tb:SetText(SpArc:L(tb.tKey))
+      end
+
       local pClass = GetPlayerClassTag()
       local totalCount = #db.presetOrder
       local classCount = 0
@@ -485,21 +496,26 @@ local function OpenControlCenter(initialTab)
         end
       end
 
-      local activeTitle = (db.presets[db.activePresetID] and db.presets[db.activePresetID].title) or db.activePresetID
+      local activePr = db.presets[db.activePresetID]
+      local activeTitle = (activePr and SpArc:GetPresetDisplayTitle(activePr)) or db.activePresetID
       p1Summary:SetText(string.format(
-        "Всего пресетов в базе: |cffffd100%d|r  |  Для вашего класса (%s): |cff00ff00%d|r  |  Активный: |cffa335ee%s|r (%s)",
+        SpArc:L("P1_SUMMARY"),
         totalCount, pClass, classCount, activeTitle, db.mode
       ))
-      filterBtn:SetText(filterClassOnly and ("Фильтр: Только " .. pClass .. " (" .. classCount .. ")") or ("Фильтр: Все классы (" .. totalCount .. ")"))
-      autoModeBtn:SetText(db.mode == "AUTO" and "Режим: AUTO (ПвЕ/Босс/ПвП)" or "Режим: Ручной пресет")
+      filterBtn:SetText(filterClassOnly and string.format(SpArc:L("FILTER_CLASS"), pClass, classCount) or string.format(SpArc:L("FILTER_ALL"), totalCount))
+      autoModeBtn:SetText(db.mode == "AUTO" and SpArc:L("MODE_AUTO") or SpArc:L("MODE_MANUAL"))
+      newPresetBtn:SetText(SpArc:L("NEW_PRESET_BTN"))
+      activateBtn:SetText(SpArc:L("ACTIVATE_BTN"))
+      openMdBtn:SetText(SpArc:L("OPEN_MD_BTN"))
+      testModeBtn1:SetText(SpArc:L("TEST_HUD_BTN"))
 
       for idx = 1, #rowButtons do
         local rBtn = rowButtons[idx]
         local id = filteredIDs[idx]
         if id and db.presets[id] then
           local pr = db.presets[id]
-          local prefix = (id == db.activePresetID and "|cff00ff00[АКТИВЕН]|r ") or (id == selectedPresetForEdit and "|cffffd100[>]|r ") or ""
-          rBtn:SetText(prefix .. pr.title)
+          local prefix = (id == db.activePresetID and SpArc:L("PREFIX_ACTIVE")) or (id == selectedPresetForEdit and SpArc:L("PREFIX_SELECTED")) or ""
+          rBtn:SetText(prefix .. SpArc:GetPresetDisplayTitle(pr))
           rBtn:SetScript("OnClick", function()
             selectedPresetForEdit = id
             controlFrame:RefreshUI()
@@ -518,37 +534,34 @@ local function OpenControlCenter(initialTab)
         for k, _ in pairs(selParsed.interruptibleChannels or {}) do intList[#intList + 1] = k end
         local protList = {}
         for k, _ in pairs(selParsed.protectedChannels or {}) do protList[#protList + 1] = k end
+        local noneStr = SpArc:L("NONE_STR")
         detailsText:SetText(string.format(
-          "|cffffd100%s|r\n\n"
-          .. "• Класс / Режим: |cff00ccff%s (%s)|r\n"
-          .. "• Правил ротации в автомате: |cff00ff00%d|r\n"
-          .. "• Трекинг сейвов слева: |cff00ff00%s|r\n"
-          .. "• Трекинг бурстов справа: |cff00ff00%s|r\n"
-          .. "• Прерываемый филлер: |cffff40a0%s|r\n"
-          .. "• Защищённый канал: |cff40d0ff%s|r\n\n"
-          .. "|cffaaaaaaВся логика этого пресета читается напрямую из текстового .MD псевдокода без единой захардкоженной ветки!|r",
-          selPr.title,
+          SpArc:L("DETAILS_BODY"),
+          SpArc:GetPresetDisplayTitle(selPr),
           selPr.class or "ANY", selPr.mode or "PVE",
           #(selParsed.rules or {}),
-          table.concat(selParsed.saves or {}, ", "),
-          table.concat(selParsed.cds or {}, ", "),
-          (#intList > 0 and table.concat(intList, ", ") or "нет"),
-          (#protList > 0 and table.concat(protList, ", ") or "нет")
+          (#(selParsed.saves or {}) > 0 and table.concat(selParsed.saves, ", ") or noneStr),
+          (#(selParsed.cds or {}) > 0 and table.concat(selParsed.cds, ", ") or noneStr),
+          (#intList > 0 and table.concat(intList, ", ") or noneStr),
+          (#protList > 0 and table.concat(protList, ", ") or noneStr)
         ))
       end
 
       -- Tab 2 refresh
+      aiText:SetText(SpArc:L("AI_BANNER_PREFIX") .. SpArc:GetAIPromptHeader())
+      saveMdBtn:SetText(SpArc:L("SAVE_MD_BTN"))
+      resetMdBtn:SetText(SpArc:L("RESET_MD_BTN"))
       if showingAIPrompt then
-        aiPromptBtn:SetText("<- Вернуться к .MD коду")
-        editorStatus:SetText("|cff00ff00Скопируйте этот промпт (Ctrl+C) и отправьте своему Gemini или ChatGPT:|r")
-        editBox:SetText(SpArc.AIPromptTemplate or "")
+        aiPromptBtn:SetText(SpArc:L("AI_BACK_BTN"))
+        editorStatus:SetText(SpArc:L("AI_STATUS_COPY"))
+        editBox:SetText(SpArc:GetAIPromptTemplate())
       else
-        aiPromptBtn:SetText("Промпт для ИИ (Ctrl+C)")
+        aiPromptBtn:SetText(SpArc:L("AI_PROMPT_BTN"))
         local pr = db.presets[selectedPresetForEdit]
         local cp = SpArc.ParsedPresets and SpArc.ParsedPresets[selectedPresetForEdit]
         editorStatus:SetText(string.format(
-          "Пресет: |cffffd100%s|r  |  Правил FSM: |cff00ff00%d|r  |  Сейвов: |cff00ff00%d|r  |  КД: |cff00ff00%d|r",
-          (pr and pr.title) or selectedPresetForEdit,
+          SpArc:L("EDITOR_STATUS"),
+          (pr and SpArc:GetPresetDisplayTitle(pr)) or selectedPresetForEdit,
           (cp and cp.rules and #cp.rules) or 0,
           (cp and cp.saves and #cp.saves) or 0,
           (cp and cp.cds and #cp.cds) or 0
@@ -557,12 +570,14 @@ local function OpenControlCenter(initialTab)
       end
 
       -- Tab 3 refresh
+      vHeader:SetText(SpArc:L("V_HEADER"))
       for _, s in ipairs(sliders) do
         local val = tonumber(db.visual[s.key]) or DEFAULT_VISUAL[s.key]
         s.slider:SetValue(val)
-        s.txt:SetText(string.format("%s: |cffffd100%.2f|r", s.label, val))
+        s.txt:SetText(string.format("%s: |cffffd100%.2f|r", SpArc:L(s.labelKey), val))
       end
       for _, c in ipairs(checks) do
+        c.txt:SetText(SpArc:L(c.labelKey))
         if c.isTestToggle then
           c:SetChecked(SpArc.testMode and true or false)
         else
@@ -571,10 +586,18 @@ local function OpenControlCenter(initialTab)
       end
 
       -- Tab 4 refresh
+      tHeader:SetText(SpArc:L("TEL_HEADER"))
+      snapBtn:SetText(SpArc:L("TEL_SNAP_BTN"))
+      copyTelBtn:SetText(SpArc:L("TEL_COPY_BTN"))
+      clearTelBtn:SetText(SpArc:L("TEL_CLEAR_BTN"))
+      telToggleTxt:SetText(SpArc:L("TEL_TOGGLE"))
       telToggleCheck:SetChecked(db.visual.enableTelemetry ~= false)
       if pages[4]:IsShown() then
-        telEditBox:SetText(SpArc:BuildTelemetryReportText())
+        local okRep, repText = pcall(SpArc.BuildTelemetryReportText, SpArc)
+        telEditBox:SetText((okRep and repText) or "")
       end
+
+      isRefreshingUI = false
     end
 
     SelectTab(initialTab or 1)
@@ -603,7 +626,9 @@ local function UpdateMinimapButtonPosition()
   end
   local db = SpArc:EnsureDB()
   local angle = math.rad(tonumber(db.visual and db.visual.minimapAngle) or 205)
-  local radius = (_G.Minimap:GetWidth() / 2) + 8
+  local okW, rawW = pcall(_G.Minimap.GetWidth, _G.Minimap)
+  local mmW = (okW and type(rawW) == "number" and not IsSecret(rawW) and rawW > 0) and rawW or 140
+  local radius = (mmW / 2) + 8
   local x = math.cos(angle) * radius
   local y = math.sin(angle) * radius
   minimapBtn:ClearAllPoints()
@@ -657,11 +682,11 @@ local function CreateSpArcMinimapButton()
     self.border:SetColorTexture(1.0, 0.82, 0.20, 1.0)
     if _G.GameTooltip then
       _G.GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-      _G.GameTooltip:AddLine("|cffa335eeSpArc v" .. SpArc.VERSION .. "|r — Rotation & Cooldown HUD")
-      _G.GameTooltip:AddLine("|cffffd100ЛКМ:|r Открыть окно настроек и пресетов", 0.9, 0.9, 0.9)
-      _G.GameTooltip:AddLine("|cffffd100ПКМ:|r Открыть Телеметрию / Дебаг книги заклинаний", 0.9, 0.9, 0.9)
-      _G.GameTooltip:AddLine("|cffffd100Shift + ЛКМ:|r Тестовый режим HUD (ВКЛ/ВЫКЛ)", 0.9, 0.9, 0.9)
-      _G.GameTooltip:AddLine("|cffaaaaaaЗажать ЛКМ: Перетащить кнопку вокруг миникарты|r", 0.7, 0.7, 0.7)
+      _G.GameTooltip:AddLine(string.format(SpArc:L("MM_TT_TITLE"), SpArc.VERSION))
+      _G.GameTooltip:AddLine(SpArc:L("MM_TT_LEFT"), 0.9, 0.9, 0.9)
+      _G.GameTooltip:AddLine(SpArc:L("MM_TT_RIGHT"), 0.9, 0.9, 0.9)
+      _G.GameTooltip:AddLine(SpArc:L("MM_TT_SHIFT"), 0.9, 0.9, 0.9)
+      _G.GameTooltip:AddLine(SpArc:L("MM_TT_DRAG"), 0.7, 0.7, 0.7)
       _G.GameTooltip:Show()
     end
   end)
@@ -673,9 +698,12 @@ local function CreateSpArcMinimapButton()
   btn:SetScript("OnDragStart", function(self)
     self:SetScript("OnUpdate", function()
       if not _G.Minimap or not _G.GetCursorPosition then return end
-      local mx, my = _G.Minimap:GetCenter()
-      local cx, cy = _G.GetCursorPosition()
-      local scale = _G.Minimap:GetEffectiveScale()
+      local okC, mx, my = pcall(_G.Minimap.GetCenter, _G.Minimap)
+      local okP, cx, cy = pcall(_G.GetCursorPosition)
+      local okS, scale = pcall(_G.Minimap.GetEffectiveScale, _G.Minimap)
+      if not okC or not okP or not okS or IsSecret(mx) or IsSecret(my) or IsSecret(cx) or IsSecret(cy) or IsSecret(scale) or not scale or scale <= 0 then
+        return
+      end
       cx, cy = cx / scale, cy / scale
       local db = SpArc:EnsureDB()
       db.visual.minimapAngle = math.deg(math.atan2(cy - my, cx - mx))
@@ -689,11 +717,11 @@ local function CreateSpArcMinimapButton()
   btn:SetScript("OnClick", function(_, mouseBtn)
     if _G.IsShiftKeyDown and _G.IsShiftKeyDown() then
       SpArc.testMode = not SpArc.testMode
-      print("|cffa335eeSpArc:|r Тестовый режим: " .. (SpArc.testMode and "|cff00ff00ВКЛ|r" or "|cffff4040ВЫКЛ|r"))
+      print(string.format(SpArc:L("MSG_TEST_TOGGLE"), SpArc.testMode and SpArc:L("MSG_ON") or SpArc:L("MSG_OFF")))
       return
     end
     if mouseBtn == "RightButton" then
-      SpArc:CaptureTelemetrySnapshot("MANUAL_SNAPSHOT")
+      pcall(SpArc.CaptureTelemetrySnapshot, SpArc, "MANUAL_SNAPSHOT")
       OpenControlCenter(4)
     else
       if controlFrame and controlFrame:IsShown() then
@@ -728,13 +756,16 @@ _G.SlashCmdList["SPARC"] = function(msg)
   local db = SpArc:EnsureDB()
   if cmd == "test" then
     SpArc.testMode = not SpArc.testMode
-    print("|cffa335eeSpArc:|r Тестовый режим (показ всех элементов): " .. (SpArc.testMode and "|cff00ff00ВКЛ|r" or "|cffff4040ВЫКЛ|r"))
+    print(string.format(SpArc:L("MSG_TEST_TOGGLE"), SpArc.testMode and SpArc:L("MSG_ON") or SpArc:L("MSG_OFF")))
   elseif cmd == "debug" or cmd == "tel" or cmd == "telemetry" then
-    SpArc:CaptureTelemetrySnapshot("MANUAL_SNAPSHOT")
+    pcall(SpArc.CaptureTelemetrySnapshot, SpArc, "MANUAL_SNAPSHOT")
     OpenControlCenter(4)
+  elseif cmd == "en" or cmd == "ru" then
+    db.visual.lang = cmd:upper()
+    SpArc:ApplyVisualLayout()
+    if controlFrame and controlFrame:IsShown() then controlFrame:RefreshUI() end
   elseif cmd == "pve" or cmd == "boss" or cmd == "pvp" or cmd == "auto" then
     db.mode = cmd:upper()
-    print("|cffa335eeSpArc:|r Активный режим ротации: |cffffd100" .. db.mode .. "|r")
   elseif cmd == "import" or cmd == "edit" or cmd == "md" or cmd == "ai" then
     showingAIPrompt = (cmd == "ai")
     OpenControlCenter(2)
@@ -742,7 +773,6 @@ _G.SlashCmdList["SPARC"] = function(msg)
     OpenControlCenter(3)
   elseif cmd == "always" then
     db.visual.alwaysShowCDs = not db.visual.alwaysShowCDs
-    print("|cffa335eeSpArc:|r Постоянный показ сейвов и КД вне боя: " .. (db.visual.alwaysShowCDs and "|cff00ff00ВКЛ|r" or "|cffff4040ВЫКЛ|r"))
   else
     OpenControlCenter(1)
   end

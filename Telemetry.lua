@@ -130,8 +130,10 @@ function SpArc:CaptureTelemetrySnapshot(reasonTag, queue, states, parsed)
     end
   end
 
-  local entry = string.format(
-    "[%s | %s] Загорелось: %s | Безумие(книга=%s, трек=%d) | Доты=%s | БлиззАссист=%s(%s)\n  " .. table.concat(bookDiffs, "\n  "),
+  local headerLine = string.format(
+    SpArc:IsRU()
+      and "[%s | %s] Загорелось: %s | Безумие(книга=%s, трек=%d) | Доты=%s | БлиззАссист=%s(%s)"
+      or "[%s | %s] Queue: %s | Insanity(book=%s, sim=%d) | DoTs=%s | BlizzAssist=%s(%s)",
     GetTimestampStr(),
     reasonTag or "TICK",
     qStr,
@@ -141,6 +143,7 @@ function SpArc:CaptureTelemetrySnapshot(reasonTag, queue, states, parsed)
     tostring(assistedKey or "nil"),
     tostring(assistedID or "nil")
   )
+  local entry = headerLine .. "\n  " .. table.concat(bookDiffs, "\n  ")
 
   db.telemetryLog = db.telemetryLog or {}
   db.telemetryLog[#db.telemetryLog + 1] = entry
@@ -168,26 +171,44 @@ end
 
 function SpArc:BuildTelemetryReportText()
   local db = SpArc:EnsureDB()
+  local isRU = SpArc:IsRU()
   local errs = CaptureBugGrabberErrors(db)
   local lines = {}
-  lines[#lines + 1] = "=== SPARC v" .. SpArc.VERSION .. " — ТЕЛЕМЕТРИЯ И СВЕРКА С КНИГОЙ ЗАКЛИНАНИЙ ==="
-  lines[#lines + 1] = "Сбор телеметрии: " .. ((db.visual and db.visual.enableTelemetry) and "ВКЛЮЧЕН (пишется в WTF/.../SavedVariables/SpArc.lua)" or "ВЫКЛЮЧЕН")
-  lines[#lines + 1] = ""
-  lines[#lines + 1] = "--- 0. ПЕРЕХВАЧЕННЫЕ ОШИБКИ LUA (!BugGrabber / BugSack) ---"
-  if #errs == 0 then
-    lines[#lines + 1] = "(Ошибок Lua не зафиксировано)"
-  else
-    for _, msg in ipairs(errs) do
-      lines[#lines + 1] = "• " .. msg
+  if isRU then
+    lines[#lines + 1] = "=== SPARC v" .. SpArc.VERSION .. " — ТЕЛЕМЕТРИЯ И СВЕРКА С КНИГОЙ ЗАКЛИНАНИЙ ==="
+    lines[#lines + 1] = "Сбор телеметрии: " .. ((db.visual and db.visual.enableTelemetry) and "ВКЛЮЧЕН (пишется в WTF/.../SavedVariables/SpArc.lua)" or "ВЫКЛЮЧЕН")
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "--- 0. ПЕРЕХВАЧЕННЫЕ ОШИБКИ LUA (!BugGrabber / BugSack) ---"
+    if #errs == 0 then
+      lines[#lines + 1] = "(Ошибок Lua не зафиксировано)"
+    else
+      for _, msg in ipairs(errs) do
+        lines[#lines + 1] = "• " .. msg
+      end
     end
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "--- 1. ТЕКУЩЕЕ СОСТОЯНИЕ ПО КНИГЕ ЗАКЛИНАНИЙ И ПАНЕЛЯМ BARTENDER4 ---"
+  else
+    lines[#lines + 1] = "=== SPARC v" .. SpArc.VERSION .. " — TELEMETRY & SPELLBOOK AUDITOR ==="
+    lines[#lines + 1] = "Telemetry Logging: " .. ((db.visual and db.visual.enableTelemetry) and "ENABLED (saved to WTF/.../SavedVariables/SpArc.lua)" or "DISABLED")
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "--- 0. CAPTURED LUA ERRORS (!BugGrabber / BugSack) ---"
+    if #errs == 0 then
+      lines[#lines + 1] = "(No Lua errors recorded)"
+    else
+      for _, msg in ipairs(errs) do
+        lines[#lines + 1] = "• " .. msg
+      end
+    end
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "--- 1. CURRENT SPELLBOOK & BARTENDER4 STATE ---"
   end
-  lines[#lines + 1] = ""
-  lines[#lines + 1] = "--- 1. ТЕКУЩЕЕ СОСТОЯНИЕ ПО КНИГЕ ЗАКЛИНАНИЙ И ПАНЕЛЯМ BARTENDER4 ---"
+
   for _, sKey in ipairs(CORE_AUDIT_ORDER) do
     local a = st.lastSpellAudit[sKey]
     if a then
       lines[#lines + 1] = string.format(
-        "• %-20s [ID:%-7s Слот:%-3s Бинд:%-4s] -> SpArc: Ready=%-5s Usable=%-5s Proc=%-5s (%s)",
+        "• %-20s [ID:%-7s Slot:%-3s Bind:%-4s] -> SpArc: Ready=%-5s Usable=%-5s Proc=%-5s (%s)",
         sKey,
         tostring(a.spellID or "?"),
         tostring(a.slot or "-"),
@@ -198,7 +219,7 @@ function SpArc:BuildTelemetryReportText()
         tostring(a.usableSource or "-")
       )
       lines[#lines + 1] = string.format(
-        "    Книга: IsSpellUsable=%s | CD=%s | Charges=%s | Overlay=%s || Бар: IsUsableAction=%s | BT4Color=%s",
+        "    Book: IsSpellUsable=%s | CD=%s | Charges=%s | Overlay=%s || Bar: IsUsableAction=%s | BT4Color=%s",
         tostring(a.bookUsableRaw),
         tostring(a.cdRaw),
         tostring(a.chargesRaw),
@@ -209,10 +230,16 @@ function SpArc:BuildTelemetryReportText()
     end
   end
   lines[#lines + 1] = ""
-  lines[#lines + 1] = "--- 2. ИСТОРИЯ СРАБАТЫВАНИЙ (ЧТО ЗАГОРАЛОСЬ vs ЧТО БЫЛО ДОСТУПНО В КНИГЕ) ---"
+  if isRU then
+    lines[#lines + 1] = "--- 2. ИСТОРИЯ СРАБАТЫВАНИЙ (ЧТО ЗАГОРАЛОСЬ vs ЧТО БЫЛО ДОСТУПНО В КНИГЕ) ---"
+  else
+    lines[#lines + 1] = "--- 2. TRIGGER HISTORY (SPARC QUEUE vs SPELLBOOK AVAILABILITY) ---"
+  end
   local log = db.telemetryLog or {}
   if #log == 0 then
-    lines[#lines + 1] = "(Лог пока пуст — возьмите врага в таргет или нажмите кнопку 'Снять слепок сейчас')"
+    lines[#lines + 1] = isRU
+      and "(Лог пока пуст — возьмите врага в таргет или нажмите кнопку 'Снять слепок сейчас')"
+      or "(Log is empty — target an enemy or click 'Capture Snapshot Now')"
   else
     for i = #log, math.max(1, #log - 25), -1 do
       lines[#lines + 1] = log[i]

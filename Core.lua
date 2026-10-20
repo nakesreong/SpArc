@@ -9,7 +9,7 @@ _G.SparkArc = SpArc
 _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
-SpArc.VERSION = "2.5.0"
+SpArc.VERSION = "2.6.0"
 SpArc.PROFILE_SCHEMA_VERSION = 6
 
 local C_AddOns = _G.C_AddOns
@@ -448,6 +448,7 @@ SpArc.DEFAULT_VISUAL = {
   enableTelemetry = true,
   showMinimapButton = true,
   minimapAngle = 205,
+  lang = "AUTO",
 }
 
 SpArc.state = {

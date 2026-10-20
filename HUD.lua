@@ -128,7 +128,7 @@ local emLabel = emergencyBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 ApplyCyrFont(emLabel, 12)
 emLabel:SetPoint("TOP", emergencyBox, "TOP", 0, 14)
 emLabel:SetTextColor(0.25, 1.0, 0.45, 1)
-emLabel:SetText("СЕЙВ!")
+emLabel:SetText(SpArc:L("HUD_SAVE_ALERT"))
 
 local savesBoxes = {}
 for i = 1, 4 do
@@ -243,6 +243,9 @@ function SpArc:ApplyVisualLayout()
   castbarFrame:SetSize(cbW, 26)
   castbarFrame:ClearAllPoints()
   castbarFrame:SetPoint("CENTER", UIParent, "CENTER", 0, cbY)
+  if emLabel then
+    emLabel:SetText(SpArc:L("HUD_SAVE_ALERT"))
+  end
 end
 
 SpArc:RebuildParsedProfiles()
@@ -340,7 +343,7 @@ local function UpdateCastbar(now)
     local cycle = now % 6
     isChannel = (cycle >= 3)
     isCasting = not isChannel
-    name = isChannel and "Пытка разума (Филлер <-)" or "Прикосновение вампира (Каст ->)"
+    name = isChannel and SpArc:L("HUD_TEST_CHANNEL") or SpArc:L("HUD_TEST_CAST")
     icon = isChannel and 136208 or 135978
     startSec = now - (cycle % 3)
     endSec = startSec + 3.0
@@ -357,11 +360,11 @@ local function UpdateCastbar(now)
       if st.lastShouldInterrupt and (not db.visual or db.visual.showInterruptAlert ~= false) then
         cbFill:SetColorTexture(1.0, 0.18, 0.52, 0.96)
         cbBorder:SetColorTexture(1.0, 0.25, 0.60, 1.0)
-        name = "ПРЕРВИ ФИЛЛЕР -> ЖМИ [" .. (st.lastNextKeybind or "") .. "]!"
+        name = string.format(SpArc:L("HUD_CB_CLIP"), st.lastNextKeybind or "")
       elseif st.lastIsProtectedChannel then
         cbFill:SetColorTexture(0.12, 0.72, 0.98, 0.96)
         cbBorder:SetColorTexture(0.20, 0.85, 1.0, 1.0)
-        name = (name or "Поток бездны") .. " [НЕ ПРЕРЫВАЙ]"
+        name = (name or "Void Torrent") .. SpArc:L("HUD_CB_PROTECTED")
       else
         cbFill:SetColorTexture(0.20, 0.58, 0.96, 0.95)
         cbBorder:SetColorTexture(0.06, 0.06, 0.09, 0.96)
@@ -456,14 +459,14 @@ rootFrame:SetScript("OnUpdate", function()
             box.glow:SetColorTexture(1.0, 0.18, 0.56, 0.78)
             if box.banner then
               box.banner:SetTextColor(1.0, 0.30, 0.68, 1)
-              box.banner:SetText("ПРЕРВИ КАСТ!")
+              box.banner:SetText(SpArc:L("HUD_CLIP_BANNER"))
             end
           elseif isProtectedChannel then
             box.border:SetColorTexture(0.20, 0.85, 1.0, 1.0)
             box.glow:SetColorTexture(0.20, 0.85, 1.0, 0.55)
             if box.banner then
               box.banner:SetTextColor(0.35, 0.90, 1.0, 1)
-              box.banner:SetText("КАНАЛ...")
+              box.banner:SetText(SpArc:L("HUD_CHANNEL_BANNER"))
             end
           elseif item.isProc then
             box.border:SetColorTexture(0.35, 0.92, 1.0, 1.0)

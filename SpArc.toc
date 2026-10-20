@@ -1,11 +1,18 @@
-## Interface: 120001, 120105, 110207
+## Interface: 120105, 120100, 120001, 110207
 ## Title: |cffa335eeSpArc|r — Semicircle FSM Rotation & Cooldown HUD
 ## Notes: Data-driven Markdown (.md) Pseudocode Rotation Queue, Dual-Direction Castbar & Cooldown Tracker. AI-Ready (Gemini / ChatGPT).
-## Author: Gemini (Tiger) & Anya (5cr3am1ng5oul)
-## Version: 2.4.0
+## Notes-ruRU: Полукруг очереди ротации на базе .MD псевдокода (FSM), двунаправленный кастбар, трекер КД/сейвов и генератор промптов для ИИ (Gemini / ChatGPT).
+## Author: 5cr3am1ng5oul (Anya) & Gemini (Tiger)
+## Version: @project-version@
 ## IconTexture: 1386548
+## DefaultState: enabled
 ## SavedVariables: SpArcDB, SparkArcDB
 ## OptionalDeps: Bartender4, CombatMode, ElvUI
+## X-Category: Combat
+## X-Website: https://github.com/nakesreong/SpArc
+## X-Github: github.com/nakesreong/SpArc
+## X-Curse-Project-ID: 000000
+## X-Wago-ID: 000000
 
 Presets.lua
 Parser.lua

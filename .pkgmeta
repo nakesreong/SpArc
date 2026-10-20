@@ -5,7 +5,3 @@ ignore:
   - .github
   - .gitignore
   - README.md
-
-manual-changelog:
-  filename: README.md
-  markup-type: markdown

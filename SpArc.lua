@@ -12,8 +12,8 @@ _G.SparkArcLoaded = true
 local SpArc = _G.SpArc or _G.SparkArc or {}
 _G.SpArc = SpArc
 _G.SparkArc = SpArc
-SpArc.VERSION = "2.1.0"
-SpArc.PROFILE_SCHEMA_VERSION = 3
+SpArc.VERSION = "2.2.0"
+SpArc.PROFILE_SCHEMA_VERSION = 4
 
 local CreateFrame = _G.CreateFrame
 local UIParent = _G.UIParent
@@ -378,6 +378,8 @@ ELSE IF USABLE(DEVOURING_PLAGUE) THEN
     RETURN CAST(DEVOURING_PLAGUE)
 ELSE IF READY(MIND_BLAST) THEN
     RETURN CAST(MIND_BLAST)
+ELSE IF READY(TENTACLE_SLAM) THEN
+    RETURN CAST(TENTACLE_SLAM)
 ELSE IF READY(SHADOW_WORD_DEATH) AND USABLE(SHADOW_WORD_DEATH) THEN
     RETURN CAST(SHADOW_WORD_DEATH)
 ELSE IF READY(HALO) THEN
@@ -430,6 +432,8 @@ ELSE IF USABLE(DEVOURING_PLAGUE) THEN
     RETURN CAST(DEVOURING_PLAGUE)
 ELSE IF READY(MIND_BLAST) THEN
     RETURN CAST(MIND_BLAST)
+ELSE IF READY(TENTACLE_SLAM) THEN
+    RETURN CAST(TENTACLE_SLAM)
 ELSE IF READY(SHADOW_WORD_DEATH) AND USABLE(SHADOW_WORD_DEATH) THEN
     RETURN CAST(SHADOW_WORD_DEATH)
 ELSE IF READY(HALO) THEN
@@ -550,14 +554,14 @@ local BASE_SPELL_DEFS = {
   TENTACLE_SLAM = {
     key = "TENTACLE_SLAM",
     names = { "Мощный удар щупальцем", "Темное сокрушение", "Shadow Crash", "Tentacle Slam" },
-    macroNames = { "M2", "sp3" },
-    ids = { 205385, 457042, 1234796 },
-    preferredSlot = 2,
+    macroNames = { "M1", "M2", "sp3" },
+    ids = { 1227280, 205385, 457042, 1234796 },
+    preferredSlot = 1,
     baseCD = 15,
-    maxCharges = 1,
+    maxCharges = 2,
     insanityGain = 15,
     fallbackIcon = 136201,
-    fallbackKey = "M2",
+    fallbackKey = "M1",
     appliesDoTs = true,
   },
   VAMPIRIC_TOUCH = {
@@ -576,16 +580,16 @@ local BASE_SPELL_DEFS = {
   VOID_TORRENT = {
     key = "VOID_TORRENT",
     names = { "Поток бездны", "Поток Бездны", "Void Torrent" },
-    macroNames = { "SM2" },
+    macroNames = { "SM1", "SM2" },
     ids = { 263165 },
-    preferredSlot = 4,
+    preferredSlot = 3,
     baseCD = 45,
     maxCharges = 1,
     insanityGain = 35,
     grantsMFI = true,
     lockChannel = true,
     fallbackIcon = 1386551,
-    fallbackKey = "SM2",
+    fallbackKey = "SM1",
   },
   DEVOURING_PLAGUE = {
     key = "DEVOURING_PLAGUE",
@@ -605,39 +609,39 @@ local BASE_SPELL_DEFS = {
   MIND_BLAST = {
     key = "MIND_BLAST",
     names = { "Выброс Бездны", "Взрыв разума", "Void Blast", "Mind Blast" },
-    macroNames = { "M1", "M1_2" },
+    macroNames = { "M2", "M1", "M1_2" },
     ids = { 450983, 8092 },
-    preferredSlot = 1,
+    preferredSlot = 2,
     baseCD = 7.5,
-    maxCharges = 2,
+    maxCharges = 1,
     insanityGain = 15,
     fallbackIcon = 136224,
-    fallbackKey = "M1",
+    fallbackKey = "M2",
   },
   VOID_BOLT = {
     key = "VOID_BOLT",
-    names = { "Стрела Бездны", "Void Bolt" },
-    macroNames = { "Dps", "M1" },
+    names = { "Стрела Бездны", "Залп Бездны", "Void Bolt", "Void Volley" },
+    macroNames = { "Dps", "1_to_2", "M1" },
     ids = { 205448 },
-    preferredSlot = 68,
+    preferredSlot = 11,
     baseCD = 6,
     maxCharges = 1,
     insanityGain = 12,
     fallbackIcon = 1386548,
-    fallbackKey = "ST",
+    fallbackKey = "Q",
     procOnly = true,
   },
   SHADOW_WORD_DEATH = {
     key = "SHADOW_WORD_DEATH",
     names = { "Слово Тьмы: Смерть", "Shadow Word: Death" },
-    macroNames = { "SM1" },
+    macroNames = { "SM2", "SM1" },
     ids = { 32379 },
-    preferredSlot = 3,
+    preferredSlot = 4,
     baseCD = 10,
     maxCharges = 1,
     insanityGain = 10,
     fallbackIcon = 136149,
-    fallbackKey = "SM1",
+    fallbackKey = "SM2",
     requiresUsable = true,
     isExecute = true,
   },
@@ -669,14 +673,14 @@ local BASE_SPELL_DEFS = {
   },
   VOID_ERUPTION = {
     key = "VOID_ERUPTION",
-    names = { "Вхождение в Бездну", "Извержение Бездны", "Темное вознесение", "Void Eruption", "Dark Ascension" },
-    macroNames = { "Dps", "Healer" },
+    names = { "Облик Бездны", "Залп Бездны", "Вхождение в Бездну", "Извержение Бездны", "Темное вознесение", "Voidform", "Void Eruption", "Dark Ascension" },
+    macroNames = { "1_to_2", "Dps", "Healer" },
     ids = { 228260, 391109 },
-    preferredSlot = 68,
+    preferredSlot = 11,
     baseCD = 60,
     maxCharges = 1,
     fallbackIcon = 537079,
-    fallbackKey = "ST",
+    fallbackKey = "Q",
   },
   POWER_INFUSION = {
     key = "POWER_INFUSION",
@@ -947,8 +951,8 @@ local lastSlotScanAt = 0
 local targetDoTsUntil = 0
 local lastTargetGUID = nil
 local trackedInsanity = 0
-local mbChargesUsed = 0
-local mbChargeStart = 0
+local spellChargesUsed = {}
+local spellChargeStart = {}
 local mfiProcUntil = 0
 
 local castState = {
@@ -1312,16 +1316,34 @@ local function GetAssistedSuggestedDefKey()
   return defKey, spellID
 end
 
-local function GetTrackedMindBlastCharges(now)
-  if mbChargesUsed > 0 and mbChargeStart > 0 then
-    local elapsed = now - mbChargeStart
-    local recovered = math.floor(elapsed / 7.5)
+local function GetTrackedSpellCharges(defKey, now)
+  local def = SPELL_DEFS[defKey]
+  local maxCh = (def and (def.liveMaxCharges or def.maxCharges)) or 1
+  local cdDur = (def and (def.liveChargeCD or def.baseCD)) or 7.5
+  if cdDur <= 0 then cdDur = 7.5 end
+  local used = spellChargesUsed[defKey] or 0
+  local chStart = spellChargeStart[defKey] or 0
+  if used > 0 and chStart > 0 then
+    local elapsed = now - chStart
+    local recovered = math.floor(elapsed / cdDur)
     if recovered > 0 then
-      mbChargesUsed = math.max(0, mbChargesUsed - recovered)
-      mbChargeStart = mbChargesUsed > 0 and (mbChargeStart + recovered * 7.5) or 0
+      used = math.max(0, used - recovered)
+      spellChargesUsed[defKey] = used
+      spellChargeStart[defKey] = used > 0 and (chStart + recovered * cdDur) or 0
     end
   end
-  return math.max(0, 2 - mbChargesUsed)
+  return math.max(0, maxCh - used), maxCh, cdDur, (spellChargeStart[defKey] or 0)
+end
+
+local function GetTargetHPPercent()
+  if UnitHealth and UnitHealthMax then
+    local ok1, hp = pcall(UnitHealth, "target")
+    local ok2, maxHp = pcall(UnitHealthMax, "target")
+    if ok1 and ok2 and not IsSecret(hp) and not IsSecret(maxHp) and type(hp) == "number" and type(maxHp) == "number" and maxHp > 0 then
+      return (hp / maxHp) * 100
+    end
+  end
+  return nil
 end
 
 local lastSpellAudit = {}
@@ -1341,6 +1363,7 @@ local function EvaluateSpellState(defKey, assistedKey)
   local slot = def.slot
 
   local isProc = false
+  local isVoidBlastOverride = false
   local overlayRaw = "false"
   if C_Spell and C_Spell.IsSpellOverlayed then
     for _, id in ipairs(def.ids or {}) do
@@ -1382,7 +1405,8 @@ local function EvaluateSpellState(defKey, assistedKey)
   elseif defKey == "MIND_BLAST" and C_Spell and C_Spell.GetOverrideSpell then
     local okO, over = pcall(C_Spell.GetOverrideSpell, 8092)
     if okO and not IsSecret(over) and over == 450983 then
-      isProc = true
+      isVoidBlastOverride = true
+      spellID = 450983
       overlayRaw = "override(450983)"
     end
   elseif defKey == "VOID_BOLT" then
@@ -1405,19 +1429,32 @@ local function EvaluateSpellState(defKey, assistedKey)
   local durSec = def.baseCD or 0
   local startTime = 0
   local gotCleanCD = false
-  local charges = def.maxCharges or 1
+  local charges = def.liveMaxCharges or def.maxCharges or 1
   local cdRaw = "0s"
   local chargesRaw = "-"
 
   if C_Spell and C_Spell.GetSpellCharges and spellID then
     local okC, ch = pcall(C_Spell.GetSpellCharges, spellID)
     if okC and type(ch) == "table" then
+      if not IsSecret(ch.maxCharges) and type(ch.maxCharges) == "number" and ch.maxCharges >= 1 then
+        def.liveMaxCharges = ch.maxCharges
+      end
+      if not IsSecret(ch.cooldownDuration) and type(ch.cooldownDuration) == "number" and ch.cooldownDuration > 1.5 then
+        def.liveChargeCD = ch.cooldownDuration
+      end
       if IsSecret(ch.currentCharges) then
         chargesRaw = "SECRET"
       elseif ch.currentCharges then
         gotCleanCD = true
         charges = ch.currentCharges
-        chargesRaw = tostring(ch.currentCharges) .. "/" .. tostring((not IsSecret(ch.maxCharges) and ch.maxCharges) or def.maxCharges or 1)
+        local maxCh = def.liveMaxCharges or def.maxCharges or 1
+        chargesRaw = tostring(ch.currentCharges) .. "/" .. tostring(maxCh)
+        spellChargesUsed[defKey] = math.max(0, maxCh - ch.currentCharges)
+        if spellChargesUsed[defKey] == 0 then
+          spellChargeStart[defKey] = 0
+        elseif not IsSecret(ch.cooldownStartTime) and type(ch.cooldownStartTime) == "number" and ch.cooldownStartTime > 0 then
+          spellChargeStart[defKey] = ch.cooldownStartTime
+        end
         if ch.currentCharges >= 1 then
           isOnCD = false
         else
@@ -1477,34 +1514,51 @@ local function EvaluateSpellState(defKey, assistedKey)
     end
   end
 
-  if defKey == "MIND_BLAST" and not gotCleanCD then
-    charges = GetTrackedMindBlastCharges(now)
-    chargesRaw = "sim:" .. tostring(charges)
-    if charges <= 0 then
-      isOnCD = true
-      startTime = mbChargeStart
-      durSec = 7.5
-      remSec = math.max(0, mbChargeStart + 7.5 - now)
-      cdRaw = string.format("sim:%.1fs", remSec)
-    end
-  else
-    local last = lastCastAt[defKey]
-    if last and def.baseCD and def.baseCD > 1.6 then
-      local elapsed = now - last
-      if elapsed < (def.baseCD - 0.15) then
+  -- Software cooldown / charge fallback ONLY when WoW API returned SECRET (not gotCleanCD)!
+  if not gotCleanCD then
+    local maxCh = def.liveMaxCharges or def.maxCharges or 1
+    if maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" then
+      local simCh, simMax, simDur, simStart = GetTrackedSpellCharges(defKey, now)
+      charges = simCh
+      chargesRaw = "sim:" .. tostring(simCh) .. "/" .. tostring(simMax)
+      if simCh <= 0 then
         isOnCD = true
-        remSec = def.baseCD - elapsed
-        durSec = def.baseCD
-        startTime = last
-        charges = 0
-        cdRaw = string.format("timer:%.1fs", remSec)
+        startTime = simStart
+        durSec = simDur
+        remSec = math.max(0, simStart + simDur - now)
+        cdRaw = string.format("sim:%.1fs", remSec)
       end
+    else
+      local last = lastCastAt[defKey]
+      if last and def.baseCD and def.baseCD > 1.6 then
+        local elapsed = now - last
+        if elapsed < (def.baseCD - 0.15) then
+          isOnCD = true
+          remSec = def.baseCD - elapsed
+          durSec = def.baseCD
+          startTime = last
+          charges = 0
+          cdRaw = string.format("timer:%.1fs", remSec)
+        end
+      end
+    end
+
+    -- C_AssistedCombat C++ Cooldown Truth: when Blizzard suggests Mind Flay filler (15407),
+    -- all higher-priority rotational cooldown generators are guaranteed to be on cooldown!
+    if assistedKey == "MIND_FLAY" and (defKey == "MIND_BLAST" or defKey == "VOID_TORRENT" or defKey == "TENTACLE_SLAM") then
+      isOnCD = true
+      charges = 0
+      cdRaw = "AssistSaysOnCD(MF)"
     end
   end
 
   if assistedKey == defKey then
     isOnCD = false
     if charges < 1 then charges = 1 end
+  end
+
+  if isVoidBlastOverride and not isOnCD then
+    isProc = true
   end
 
   -- Detailed Spellbook & Bartender4 Usability Evaluation + Telemetry Audit
@@ -1554,7 +1608,24 @@ local function EvaluateSpellState(defKey, assistedKey)
   end
 
   local isUsable = true
-  if def.requiresUsable then
+  if def.isExecute then
+    -- In WoW, Shadow Word: Death (32379) is always IsSpellUsable=true even at 100% Target HP!
+    -- Only mark it usable in rotation during Execute range (<=20% HP), Deathspeaker overlay proc, or AssistedCombat recommendation!
+    local tgtHP = GetTargetHPPercent()
+    if isProc then
+      isUsable = true
+      usableSource = "ExecuteProcOverlay"
+    elseif assistedKey == defKey then
+      isUsable = true
+      usableSource = "ExecuteAssistedCombat"
+    elseif tgtHP and tgtHP <= 20 then
+      isUsable = true
+      usableSource = string.format("ExecuteHP(%.1f%%<=20%%)", tgtHP)
+    else
+      isUsable = false
+      usableSource = "ExecuteWait(>20%HP)"
+    end
+  elseif def.requiresUsable then
     local gotCleanUsable = false
 
     -- 1. Primary truth: Spellbook C_Spell.IsSpellUsable(spellID)
@@ -1610,9 +1681,6 @@ local function EvaluateSpellState(defKey, assistedKey)
       if def.isSpender then
         isUsable = (assistedKey == defKey) or isProc
         usableSource = "SecretFallback(AssistedOrProcOnly)"
-      elseif def.isExecute then
-        isUsable = (assistedKey == defKey) or isProc
-        usableSource = "SecretFallback(Execute)"
       else
         isUsable = false
         usableSource = "SecretFallback(false)"
@@ -1632,6 +1700,13 @@ local function EvaluateSpellState(defKey, assistedKey)
     usableSource = "procOnly(false)"
   end
 
+  -- Never recommend a spell in the rotation queue if it is NOT placed on any action bar slot with a keybind!
+  if (not slot or not def.keybind or def.keybind == "") and not SpArc.testMode then
+    finalReady = false
+    isUsable = false
+    usableSource = "NotOnActionBar"
+  end
+
   lastSpellAudit[defKey] = {
     key = defKey,
     spellID = spellID,
@@ -1649,16 +1724,22 @@ local function EvaluateSpellState(defKey, assistedKey)
     usableSource = usableSource,
   }
 
-  if def.procOnly and not isProc then
-    return false, remSec, durSec, startTime, false, false, def.liveIcon or def.fallbackIcon, def.keybind or def.fallbackKey, 0
+  if not finalReady and def.procOnly and not isProc then
+    return false, remSec, durSec, startTime, false, false, def.liveIcon or def.fallbackIcon, def.keybind or "", 0
   end
 
-  return finalReady, remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or def.fallbackKey, charges
+  return finalReady, remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or "", charges
 end
 
 local function CheckTargetHasDoTs(assistedKey)
   local now = GetTime()
-  if assistedKey == "TENTACLE_SLAM" or assistedKey == "VAMPIRIC_TOUCH" then
+  if assistedKey == "VAMPIRIC_TOUCH" then
+    return false
+  end
+  if targetDoTsUntil and now < targetDoTsUntil then
+    return true
+  end
+  if assistedKey == "TENTACLE_SLAM" then
     return false
   end
   if assistedKey and assistedKey ~= "TENTACLE_SLAM" and assistedKey ~= "VAMPIRIC_TOUCH" then
@@ -1694,9 +1775,6 @@ local function CheckTargetHasDoTs(assistedKey)
     end
   end
 
-  if targetDoTsUntil and now < targetDoTsUntil then
-    return true
-  end
   return false
 end
 
@@ -1959,12 +2037,14 @@ local function BuildRotationQueue(maxSlots)
   end
   local simInsanity = trackedInsanity
 
+  local dpUsedInQueue = false
+
   for step = 1, maxSlots do
-    if step == 1 then
-      -- Step 1 MUST strictly obey the real spellbook/actionbar usability of Devouring Plague!
-      simUsable["DEVOURING_PLAGUE"] = (states["DEVOURING_PLAGUE"] and states["DEVOURING_PLAGUE"].isUsable) or false
+    -- Strictly obey the real spellbook/Bartender4 usability of Devouring Plague (and only queue it once)!
+    if dpUsedInQueue then
+      simUsable["DEVOURING_PLAGUE"] = false
     else
-      simUsable["DEVOURING_PLAGUE"] = (simInsanity >= 50) or simProcs["DEVOURING_PLAGUE"]
+      simUsable["DEVOURING_PLAGUE"] = (states["DEVOURING_PLAGUE"] and states["DEVOURING_PLAGUE"].isUsable) or false
     end
     simReady["DEVOURING_PLAGUE"] = simUsable["DEVOURING_PLAGUE"]
     simReady["MIND_FLAY_INSANITY"] = simProcs["MIND_FLAY_INSANITY"]
@@ -1972,7 +2052,7 @@ local function BuildRotationQueue(maxSlots)
 
     local pickedKey = nil
 
-    if step == 1 and assistedKey and states[assistedKey] then
+    if step == 1 and assistedKey and states[assistedKey] and states[assistedKey].isReady and states[assistedKey].isUsable then
       local isCoreRot = (
         assistedKey == "TENTACLE_SLAM"
         or (assistedKey == "VAMPIRIC_TOUCH" and not simHasDoTs and not simReady["TENTACLE_SLAM"])
@@ -2017,7 +2097,10 @@ local function BuildRotationQueue(maxSlots)
         if pickedKey == "MIND_FLAY_INSANITY" then
           simProcs["MIND_FLAY_INSANITY"] = false
         elseif pickedKey == "DEVOURING_PLAGUE" then
+          dpUsedInQueue = true
           simProcs["DEVOURING_PLAGUE"] = false
+          simUsable["DEVOURING_PLAGUE"] = false
+          simReady["DEVOURING_PLAGUE"] = false
         elseif pickedKey == "VOID_BOLT" then
           simProcs["VOID_BOLT"] = false
           simReady["VOID_BOLT"] = false
@@ -2572,12 +2655,15 @@ local function RecordSpellCastSuccess(defKey, now)
   end
   if defKey == "MIND_FLAY_INSANITY" then
     mfiProcUntil = 0
-  elseif defKey == "MIND_BLAST" then
-    GetTrackedMindBlastCharges(now)
-    if mbChargesUsed == 0 then
-      mbChargeStart = now
+  end
+  local maxCh = def.liveMaxCharges or def.maxCharges or 1
+  if maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" then
+    GetTrackedSpellCharges(defKey, now)
+    local used = spellChargesUsed[defKey] or 0
+    if used == 0 then
+      spellChargeStart[defKey] = now
     end
-    mbChargesUsed = math.min(2, mbChargesUsed + 1)
+    spellChargesUsed[defKey] = math.min(maxCh, used + 1)
   end
 end
 

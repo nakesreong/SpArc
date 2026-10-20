@@ -1235,10 +1235,18 @@ local function ScanActionSlotsAndSpells(force)
         end
       end
       -- Don't overwrite spell icon with Shadowform icon (136200) when out of Shadowform on a conditional macro
-      if tex and tex ~= 134400 and tex ~= 136200 then
+      if tex and tex ~= 134400 and tex ~= 136200 and def.key ~= "MIND_FLAY_INSANITY" then
         def.liveIcon = tex
       end
     end
+  end
+
+  -- MIND_FLAY_INSANITY is an override of MIND_FLAY (15407 -> 391403) on the exact same button (e.g. SE)
+  local mfDef = SPELL_DEFS["MIND_FLAY"]
+  local mfiDef = SPELL_DEFS["MIND_FLAY_INSANITY"]
+  if mfDef and mfiDef and not mfiDef.slot and mfDef.slot then
+    mfiDef.slot = mfDef.slot
+    mfiDef.keybind = mfDef.keybind
   end
 end
 
@@ -1348,7 +1356,7 @@ local function EvaluateSpellState(defKey, assistedKey)
         isProc = true
       end
     end
-    if now < mfiProcUntil or assistedKey == "MIND_FLAY_INSANITY" then
+    if assistedKey == "MIND_FLAY_INSANITY" then
       isProc = true
     end
   elseif defKey == "MIND_BLAST" and C_Spell and C_Spell.GetOverrideSpell then
@@ -1823,14 +1831,13 @@ local function BuildRotationQueue(maxSlots)
         key = pickedKey,
         icon = st.icon,
         keybind = st.keybind,
-        isProc = (step == 1 and st.isProc) or simProcs[pickedKey],
+        isProc = (step == 1 and st.isProc) or false,
       }
 
       if def then
         if def.appliesDoTs then simHasDoTs = true end
         if def.insanityGain then simInsanity = math.min(100, simInsanity + def.insanityGain) end
         if def.insanityCost then simInsanity = math.max(0, simInsanity - def.insanityCost) end
-        if def.grantsMFI then simProcs["MIND_FLAY_INSANITY"] = true end
         if pickedKey == "MIND_FLAY_INSANITY" then
           simProcs["MIND_FLAY_INSANITY"] = false
         elseif pickedKey == "DEVOURING_PLAGUE" then

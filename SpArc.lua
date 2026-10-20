@@ -1385,9 +1385,19 @@ local function EvaluateSpellState(defKey, assistedKey)
       isProc = true
       overlayRaw = "override(450983)"
     end
-  elseif defKey == "VOID_BOLT" and assistedKey == "VOID_BOLT" then
-    isProc = true
-    overlayRaw = "assisted(VOID_BOLT)"
+  elseif defKey == "VOID_BOLT" then
+    if C_Spell and C_Spell.GetOverrideSpell then
+      local okO, over = pcall(C_Spell.GetOverrideSpell, 228260)
+      if okO and not IsSecret(over) and type(over) == "number" and over > 0 and over ~= 228260 then
+        isProc = true
+        spellID = over
+        overlayRaw = "override(" .. tostring(over) .. ")"
+      end
+    end
+    if assistedKey == "VOID_BOLT" then
+      isProc = true
+      overlayRaw = "assisted(VOID_BOLT)"
+    end
   end
 
   local isOnCD = false
@@ -2530,6 +2540,8 @@ eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 eventFrame:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
+eventFrame:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
+eventFrame:RegisterEvent("UPDATE_BONUS_ACTIONBAR")
 eventFrame:RegisterEvent("UPDATE_MACROS")
 eventFrame:RegisterEvent("UPDATE_BINDINGS")
 eventFrame:RegisterEvent("SPELLS_CHANGED")
@@ -2578,7 +2590,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
     return
   end
 
-  if event == "ACTIONBAR_SLOT_CHANGED" or event == "UPDATE_MACROS" or event == "UPDATE_BINDINGS" or event == "SPELLS_CHANGED" then
+  if event == "ACTIONBAR_SLOT_CHANGED" or event == "ACTIONBAR_PAGE_CHANGED" or event == "UPDATE_BONUS_ACTIONBAR" or event == "UPDATE_MACROS" or event == "UPDATE_BINDINGS" or event == "SPELLS_CHANGED" then
     ScanActionSlotsAndSpells(true)
     return
   end

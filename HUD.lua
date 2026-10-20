@@ -97,10 +97,16 @@ local MAX_ARC_SLOTS = 6
 local arcAnchors = {}
 local arcSlots = {}
 for i = 1, MAX_ARC_SLOTS do
+  local slotLevel = 60 - (i * 5)
   local anchor = CreateFrame("Frame", nil, rootFrame)
   anchor:SetSize(1, 1)
+  anchor:SetFrameLevel(slotLevel)
   anchor:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
   local box = CreateStyledIconBox(anchor, 40, i == 1)
+  box:SetFrameLevel(slotLevel + 1)
+  if box.cd then
+    box.cd:SetFrameLevel(slotLevel + 2)
+  end
   box:SetPoint("CENTER", anchor, "CENTER", 0, 0)
   arcAnchors[i] = anchor
   arcSlots[i] = box
@@ -108,8 +114,13 @@ end
 
 local emAnchor = CreateFrame("Frame", nil, rootFrame)
 emAnchor:SetSize(1, 1)
+emAnchor:SetFrameLevel(65)
 emAnchor:SetPoint("CENTER", UIParent, "CENTER", 0, -35)
 local emergencyBox = CreateStyledIconBox(emAnchor, 62, true)
+emergencyBox:SetFrameLevel(66)
+if emergencyBox.cd then
+  emergencyBox.cd:SetFrameLevel(67)
+end
 emergencyBox:SetPoint("CENTER", emAnchor, "CENTER", 0, 0)
 emergencyBox.border:SetColorTexture(0.15, 1.0, 0.35, 1.0)
 emergencyBox.glow:SetColorTexture(0.15, 1.0, 0.35, 0.65)
@@ -121,7 +132,10 @@ emLabel:SetText("СЕЙВ!")
 
 local savesBoxes = {}
 for i = 1, 4 do
+  local wLevel = 45 - (i * 3)
   local box = CreateStyledIconBox(rootFrame, 40, false)
+  box:SetFrameLevel(wLevel)
+  if box.cd then box.cd:SetFrameLevel(wLevel + 1) end
   local x = -315 + (i - 1) * 46
   box:SetPoint("CENTER", UIParent, "CENTER", x, -75)
   savesBoxes[i] = box
@@ -129,7 +143,10 @@ end
 
 local cdsBoxes = {}
 for i = 1, 4 do
+  local wLevel = 45 - (i * 3)
   local box = CreateStyledIconBox(rootFrame, 40, false)
+  box:SetFrameLevel(wLevel)
+  if box.cd then box.cd:SetFrameLevel(wLevel + 1) end
   local x = 177 + (i - 1) * 46
   box:SetPoint("CENTER", UIParent, "CENTER", x, -75)
   cdsBoxes[i] = box
@@ -187,20 +204,38 @@ function SpArc:ApplyVisualLayout()
   local db = SpArc:EnsureDB()
   local v = db.visual or DEFAULT_VISUAL
   local radius = tonumber(v.arcRadius) or 135
+  local spreadDeg = tonumber(v.arcSpreadDeg) or 120
+  local startDeg = 90 + (spreadDeg / 2)
   local offsetY = tonumber(v.arcOffsetY) or 0
   local count = math.max(3, math.min(MAX_ARC_SLOTS, tonumber(v.queueLength) or 5))
   local pScale = tonumber(v.primaryScale) or 1.50
   local qScale = tonumber(v.queueScale) or 1.00
 
   for i = 1, MAX_ARC_SLOTS do
+    local slotLevel = 60 - (i * 5)
     local frac = (count > 1) and ((i - 1) / (count - 1)) or 0
-    local angleDeg = 150 - frac * 120
+    local angleDeg = startDeg - frac * spreadDeg
     local rad = math.rad(angleDeg)
     local x = math.cos(rad) * radius
     local y = math.sin(rad) * radius + offsetY
+    arcAnchors[i]:SetFrameLevel(slotLevel)
+    arcSlots[i]:SetFrameLevel(slotLevel + 1)
+    if arcSlots[i].cd then
+      arcSlots[i].cd:SetFrameLevel(slotLevel + 2)
+    end
     arcAnchors[i]:ClearAllPoints()
     arcAnchors[i]:SetPoint("CENTER", UIParent, "CENTER", x, y)
     arcSlots[i]:SetScale(i == 1 and pScale or qScale)
+  end
+
+  local wingsY = tonumber(v.wingsOffsetY) or -75
+  for i = 1, 4 do
+    local sx = -315 + (i - 1) * 46
+    savesBoxes[i]:ClearAllPoints()
+    savesBoxes[i]:SetPoint("CENTER", UIParent, "CENTER", sx, wingsY)
+    local cx = 177 + (i - 1) * 46
+    cdsBoxes[i]:ClearAllPoints()
+    cdsBoxes[i]:SetPoint("CENTER", UIParent, "CENTER", cx, wingsY)
   end
 
   local cbW = tonumber(v.castbarWidth) or 276
@@ -452,18 +487,23 @@ rootFrame:SetScript("OnUpdate", function()
   end
 
   -- 2. Update Left Saves Row & Right Offensive CDs Row
-  if hasHostileTarget or inCombat or v.alwaysShowCDs then
+  local showWingsNow = hasHostileTarget or inCombat or v.alwaysShowCDs
+  if showWingsNow and v.showSavesWing ~= false then
     UpdateCooldownRow(savesBoxes, parsed and parsed.saves, states)
-    UpdateCooldownRow(cdsBoxes, parsed and parsed.cds, states)
   else
     for i = 1, #savesBoxes do savesBoxes[i]:Hide() end
+  end
+
+  if showWingsNow and v.showCDsWing ~= false then
+    UpdateCooldownRow(cdsBoxes, parsed and parsed.cds, states)
+  else
     for i = 1, #cdsBoxes do cdsBoxes[i]:Hide() end
   end
 
   -- 3. Update Center Emergency Save
   local hpPct = SpArc:GetPlayerHPPercent()
   local emThreshold = tonumber(v.emergencyHP) or 25
-  if hpPct <= emThreshold and (inCombat or hasHostileTarget or SpArc.testMode) then
+  if v.showEmergencySave ~= false and hpPct <= emThreshold and (inCombat or hasHostileTarget or SpArc.testMode) then
     local pickedEm = nil
     for _, emKey in ipairs((parsed and parsed.emergency) or { "DISPERSION", "DESPERATE_PRAYER", "VAMPIRIC_EMBRACE" }) do
       local s = states[emKey]

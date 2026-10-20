@@ -362,14 +362,16 @@ local function OpenControlCenter(initialTab)
     end
 
     local sliders = {
-      CreateVisualSlider("Радиус полукруга ротации (px)", "arcRadius", 80, 220, 5, 0, -30),
-      CreateVisualSlider("Масштаб главной иконки #1", "primaryScale", 1.0, 2.0, 0.05, 0, -86),
-      CreateVisualSlider("Масштаб очереди (#2..#6)", "queueScale", 0.6, 1.4, 0.05, 0, -142),
-      CreateVisualSlider("Кол-во иконок в дуге (3..6)", "queueLength", 3, 6, 1, 0, -198),
-      CreateVisualSlider("Смещение дуги по Y (px)", "arcOffsetY", -80, 140, 5, 360, -30),
-      CreateVisualSlider("Ширина кастбара (px)", "castbarWidth", 180, 420, 4, 360, -86),
-      CreateVisualSlider("Смещение кастбара по Y (px)", "castbarOffsetY", -240, -40, 5, 360, -142),
-      CreateVisualSlider("Порог ХП для экстренного сейва (%)", "emergencyHP", 15, 50, 5, 360, -198),
+      CreateVisualSlider("Радиус полукруга ротации (px)", "arcRadius", 50, 260, 5, 0, -28),
+      CreateVisualSlider("Угол раскрытия полукруга (°)", "arcSpreadDeg", 60, 180, 5, 360, -28),
+      CreateVisualSlider("Масштаб главной иконки #1", "primaryScale", 1.0, 2.0, 0.05, 0, -78),
+      CreateVisualSlider("Масштаб очереди (#2..#6)", "queueScale", 0.6, 1.4, 0.05, 360, -78),
+      CreateVisualSlider("Кол-во иконок в дуге (3..6)", "queueLength", 3, 6, 1, 0, -128),
+      CreateVisualSlider("Смещение дуги по Y (px)", "arcOffsetY", -120, 180, 5, 360, -128),
+      CreateVisualSlider("Ширина кастбара (px)", "castbarWidth", 180, 420, 4, 0, -178),
+      CreateVisualSlider("Смещение кастбара по Y (px)", "castbarOffsetY", -240, -40, 5, 360, -178),
+      CreateVisualSlider("Порог ХП экстренного сейва (%)", "emergencyHP", 15, 50, 5, 0, -228),
+      CreateVisualSlider("Высота крыльев сейвов/КД по Y (px)", "wingsOffsetY", -200, 60, 5, 360, -228),
     }
 
     local function CreateVisualCheck(label, key, y, isTestToggle, onAfterClick)
@@ -393,14 +395,16 @@ local function OpenControlCenter(initialTab)
     end
 
     local checks = {
-      CreateVisualCheck("Подсвечивать 'ПРЕРВИ КАСТ!', когда во время филлера (Пытка разума) откатился спелл", "showInterruptAlert", -262, false),
-      CreateVisualCheck("Показывать двойной кастбар SpArc (слева->направо каст / справа->налево потоковый)", "showCastbar", -292, false),
-      CreateVisualCheck("Всегда показывать крылья сейвов и боевых КД (даже вне боя и без цели)", "alwaysShowCDs", -322, false),
-      CreateVisualCheck("Включить сбор телеметрии / дебаг (что загоралось vs что доступно по книге заклинаний)", "enableTelemetry", -352, false),
-      CreateVisualCheck("Показывать иконку-кнопку SpArc у миникарты (ЛКМ — настройки, ПКМ — телеметрия)", "showMinimapButton", -382, false, function()
+      CreateVisualCheck("Показывать левое крыло сейвов (строка TRACK_SAVES в .MD псевдокоде)", "showSavesWing", -280, false),
+      CreateVisualCheck("Показывать правое крыло бурстов и КД (строка TRACK_CDS в .MD псевдокоде)", "showCDsWing", -306, false),
+      CreateVisualCheck("Показывать экстренный сейв в центре при низком ХП (RETURN EMERGENCY в .MD)", "showEmergencySave", -332, false),
+      CreateVisualCheck("Всегда показывать включенные крылья сейвов/КД (даже вне боя и без цели)", "alwaysShowCDs", -358, false),
+      CreateVisualCheck("Подсвечивать 'ПРЕРВИ КАСТ!', когда во время филлера (Пытка разума) откатился спелл", "showInterruptAlert", -384, false),
+      CreateVisualCheck("Показывать двойной кастбар SpArc (слева->направо каст / справа->налево потоковый)", "showCastbar", -410, false),
+      CreateVisualCheck("Показывать иконку-кнопку SpArc у миникарты (ЛКМ — настройки, ПКМ — телеметрия)", "showMinimapButton", -436, false, function()
         if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
       end),
-      CreateVisualCheck("Тестовый режим (показать превью всей дуги, кастбара и сейвов прямо сейчас)", "testMode", -412, true),
+      CreateVisualCheck("Тестовый режим (показать превью всей дуги, кастбара и сейвов прямо сейчас)", "testMode", -462, true),
     }
 
     -----------------------------------------------------------------------------------

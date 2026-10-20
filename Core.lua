@@ -9,8 +9,8 @@ _G.SparkArc = SpArc
 _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
-SpArc.VERSION = "2.4.0"
-SpArc.PROFILE_SCHEMA_VERSION = 5
+SpArc.VERSION = "2.5.0"
+SpArc.PROFILE_SCHEMA_VERSION = 6
 
 local C_AddOns = _G.C_AddOns
 local C_CVar = _G.C_CVar
@@ -430,13 +430,18 @@ SpArc.CLICKCAST_SHORT = {
 
 SpArc.DEFAULT_VISUAL = {
   arcRadius = 135,
+  arcSpreadDeg = 120,
   arcOffsetY = 0,
   primaryScale = 1.50,
   queueScale = 1.00,
   queueLength = 5,
   castbarWidth = 276,
   castbarOffsetY = -135,
+  wingsOffsetY = -75,
   emergencyHP = 25,
+  showSavesWing = true,
+  showCDsWing = true,
+  showEmergencySave = true,
   showInterruptAlert = true,
   showCastbar = true,
   alwaysShowCDs = false,

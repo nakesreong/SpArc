@@ -8,7 +8,7 @@ local SpArc = _G.SpArc or _G.SparkArc or {}
 _G.SpArc = SpArc
 _G.SparkArc = SpArc
 
-SpArc.PROFILE_SCHEMA_VERSION = 5
+SpArc.PROFILE_SCHEMA_VERSION = 6
 
 ---------------------------------------------------------------------------------------
 --                  AI PROMPT TEMPLATE (FOR GEMINI / CHATGPT)                        --
@@ -42,11 +42,11 @@ SPELL MIND_FLAY = ID:15407 | NAME:"Пытка разума" | MACRO:"sp8" | GAIN
 INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: MIND_FLAY
 PROTECT_CHANNEL: VOID_TORRENT
 
-## TRACKERS (левое крыло сейвов и правое крыло бурстов)
+## TRACKERS (Боковые крылья по 4 иконки: слева защитные сейвы TRACK_SAVES, справа бурсты и КД TRACK_CDS; каждый ключ должен быть объявлен выше в SPELL_BOOK)
 TRACK_SAVES: DISPERSION, DESPERATE_PRAYER, VAMPIRIC_EMBRACE, FADE
 TRACK_CDS: POWER_INFUSION, VOID_ERUPTION, VOID_TORRENT, PSYFIEND
 
-## EMERGENCY_SAVE (экстренный сейв по центру при низком ХП)
+## EMERGENCY_SAVE (Экстренный сейв в центре экрана, когда ХП падает ниже порога)
 IF player.hp_percent <= 25 AND READY(DISPERSION) THEN
     RETURN EMERGENCY(DISPERSION)
 ELSE IF player.hp_percent <= 25 AND READY(DESPERATE_PRAYER) THEN
@@ -98,7 +98,7 @@ SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела
 SPELL SHADOW_WORD_DEATH = ID:32379 | NAME:"Слово Тьмы: Смерть","Shadow Word: Death" | MACRO:"SM2","SM1" | SLOT:4 | KEY:"SM2" | CD:10 | GAIN:10 | EXECUTE:true | ICON:136149
 SPELL MIND_FLAY_INSANITY = ID:391403 | NAME:"Пытка разума: безумие","Mind Flay: Insanity" | MACRO:"sp8" | SLOT:10 | KEY:"SE" | CD:0 | GAIN:16 | PROC_ONLY:true | ICON:136208
 SPELL MIND_FLAY = ID:15407,391403 | NAME:"Пытка разума","Mind Flay" | MACRO:"sp8" | SLOT:10 | KEY:"SE" | CD:0 | GAIN:12 | FILLER_INTERRUPTIBLE:true | ICON:136208
-SPELL VOID_ERUPTION = ID:228260,391109 | NAME:"Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | MACRO:"M2","1_to_2" | SLOT:2 | KEY:"M2" | CD:120 | ICON:537079
+SPELL VOID_ERUPTION = ID:228260,391109 | NAME:"Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | MACRO:"1_to_2" | SLOT:61 | KEY:"B3" | CD:120 | ICON:537079
 SPELL POWER_INFUSION = ID:10060 | NAME:"Придание сил","Power Infusion" | MACRO:"1_to_2" | SLOT:11 | KEY:"Q" | CD:120 | ICON:135939
 SPELL HALO = ID:120644,122121,120517 | NAME:"Сияние","Божественная звезда","Halo","Divine Star" | MACRO:"S1" | SLOT:53 | KEY:"S1" | CD:60 | GAIN:10 | ICON:632352
 SPELL PSYFIEND = ID:34433,211522,375901,451235,200174 | NAME:"Исчадие Тьмы","Ментальный демон","Игры разума","Призрак Бездны","Shadowfiend","Psyfiend" | MACRO:"pvptal" | SLOT:67 | KEY:"T" | CD:60 | ICON:136199

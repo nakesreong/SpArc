@@ -46,8 +46,33 @@ local function GetTimestampStr()
   return string.format("%.1fs", GetTime())
 end
 
+local function CaptureBugGrabberErrors(db)
+  local errs = {}
+  local bg = _G.BugGrabber
+  local list = nil
+  if bg and type(bg.GetDB) == "function" then
+    local ok, res = pcall(bg.GetDB, bg)
+    if ok and type(res) == "table" then list = res end
+  end
+  if not list and _G.BugGrabberDB and type(_G.BugGrabberDB.errors) == "table" then
+    list = _G.BugGrabberDB.errors
+  end
+  if type(list) == "table" then
+    local startIdx = math.max(1, #list - 14)
+    for i = #list, startIdx, -1 do
+      local e = list[i]
+      if type(e) == "table" and e.message then
+        errs[#errs + 1] = string.format("[%dx | %s] %s", tonumber(e.counter) or 1, tostring(e.time or "-"), tostring(e.message))
+      end
+    end
+  end
+  db.capturedLuaErrors = errs
+  return errs
+end
+
 function SpArc:CaptureTelemetrySnapshot(reasonTag, queue, states, parsed)
   local db = SpArc:EnsureDB()
+  CaptureBugGrabberErrors(db)
   if not (db.visual and db.visual.enableTelemetry) and reasonTag ~= "MANUAL_SNAPSHOT" then
     return
   end
@@ -143,9 +168,19 @@ end
 
 function SpArc:BuildTelemetryReportText()
   local db = SpArc:EnsureDB()
+  local errs = CaptureBugGrabberErrors(db)
   local lines = {}
-  lines[#lines + 1] = "=== SPARC v" .. SpArc.VERSION .. " — ТЕЛЕМЕТРИЯ И СВЕРКА С КНИГЕ ЗАКЛИНАНИЙ ==="
+  lines[#lines + 1] = "=== SPARC v" .. SpArc.VERSION .. " — ТЕЛЕМЕТРИЯ И СВЕРКА С КНИГОЙ ЗАКЛИНАНИЙ ==="
   lines[#lines + 1] = "Сбор телеметрии: " .. ((db.visual and db.visual.enableTelemetry) and "ВКЛЮЧЕН (пишется в WTF/.../SavedVariables/SpArc.lua)" or "ВЫКЛЮЧЕН")
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = "--- 0. ПЕРЕХВАЧЕННЫЕ ОШИБКИ LUA (!BugGrabber / BugSack) ---"
+  if #errs == 0 then
+    lines[#lines + 1] = "(Ошибок Lua не зафиксировано)"
+  else
+    for _, msg in ipairs(errs) do
+      lines[#lines + 1] = "• " .. msg
+    end
+  end
   lines[#lines + 1] = ""
   lines[#lines + 1] = "--- 1. ТЕКУЩЕЕ СОСТОЯНИЕ ПО КНИГЕ ЗАКЛИНАНИЙ И ПАНЕЛЯМ BARTENDER4 ---"
   for _, sKey in ipairs(CORE_AUDIT_ORDER) do

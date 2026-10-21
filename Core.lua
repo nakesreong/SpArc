@@ -50,77 +50,13 @@ function SpArc.Trim(s)
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
-function SpArc.ForceElvUIChatAlwaysVisible()
-  local E = _G.ElvUI and _G.ElvUI[1]
-  if E and E.db then
-    E.db.LeftChatPanelFaded = nil
-    E.db.RightChatPanelFaded = nil
-    if E.db.chat then
-      E.db.chat.fade = false
-      E.db.chat.hideChatToggles = true
-      E.db.chat.inactivityTimer = 120
-    end
-  end
-  if _G.LeftChatPanel then
-    if E and E.UIFrameFadeRemoveFrame then
-      pcall(E.UIFrameFadeRemoveFrame, E, _G.LeftChatPanel)
-    end
-    pcall(_G.LeftChatPanel.SetAlpha, _G.LeftChatPanel, 1)
-    pcall(_G.LeftChatPanel.Show, _G.LeftChatPanel)
-  end
-  if _G.RightChatPanel then
-    if E and E.UIFrameFadeRemoveFrame then
-      pcall(E.UIFrameFadeRemoveFrame, E, _G.RightChatPanel)
-    end
-    pcall(_G.RightChatPanel.SetAlpha, _G.RightChatPanel, 1)
-    pcall(_G.RightChatPanel.Show, _G.RightChatPanel)
-  end
-  if _G.LeftChatToggleButton then
-    pcall(_G.LeftChatToggleButton.SetAlpha, _G.LeftChatToggleButton, 0)
-    pcall(_G.LeftChatToggleButton.EnableMouse, _G.LeftChatToggleButton, false)
-  end
-  if _G.RightChatToggleButton then
-    pcall(_G.RightChatToggleButton.SetAlpha, _G.RightChatToggleButton, 0)
-    pcall(_G.RightChatToggleButton.EnableMouse, _G.RightChatToggleButton, false)
-  end
-  for i = 1, 10 do
-    local cf = _G["ChatFrame" .. i]
-    if cf and cf.SetFading then
-      pcall(cf.SetFading, cf, false)
-    end
-  end
-end
-
-function SpArc.SuppressLuaErrorPopups()
+function SpArc.EnableAssistedCombatEngine()
   if C_CVar and C_CVar.SetCVar then
     pcall(C_CVar.SetCVar, "assistedCombatHighlight", "1")
   end
-  if C_AddOns and C_AddOns.EnableAddOn then
-    pcall(C_AddOns.EnableAddOn, "!BugGrabber")
-    pcall(C_AddOns.EnableAddOn, "BugSack")
-  end
-  if C_AddOns and C_AddOns.DisableAddOn then
-    pcall(C_AddOns.DisableAddOn, "WeakAuras")
-    pcall(C_AddOns.DisableAddOn, "WeakAurasOptions")
-    pcall(C_AddOns.DisableAddOn, "WeakAurasArchive")
-    pcall(C_AddOns.DisableAddOn, "WeakAurasCompanion")
-  end
-  if UIParent and UIParent.UnregisterEvent then
-    pcall(UIParent.UnregisterEvent, UIParent, "LUA_WARNING")
-    pcall(UIParent.UnregisterEvent, UIParent, "ADDON_ACTION_FORBIDDEN")
-    pcall(UIParent.UnregisterEvent, UIParent, "ADDON_ACTION_BLOCKED")
-  end
-  if _G.StaticPopupDialogs then
-    _G.StaticPopupDialogs["TOO_MANY_LUA_ERRORS"] = nil
-  end
-  if _G.StaticPopup_Hide then
-    pcall(_G.StaticPopup_Hide, "TOO_MANY_LUA_ERRORS")
-    pcall(_G.StaticPopup_Hide, "ADDON_ACTION_FORBIDDEN")
-  end
-  SpArc.ForceElvUIChatAlwaysVisible()
 end
 
-SpArc.SuppressLuaErrorPopups()
+SpArc.EnableAssistedCombatEngine()
 
 ---------------------------------------------------------------------------------------
 --                  DEFAULT SPELL CATALOG (MERGED WITH .MD SPELL_BOOK)               --

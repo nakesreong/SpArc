@@ -387,7 +387,6 @@ local function UpdateCastbar(now)
 end
 
 local lastLogicTick = 0
-local lastChatCheck = 0
 rootFrame:SetScript("OnUpdate", function()
   local now = GetTime()
   local db = SpArc:EnsureDB()
@@ -408,13 +407,6 @@ rootFrame:SetScript("OnUpdate", function()
     return
   end
   lastLogicTick = now
-
-  if (now - lastChatCheck) > 2.0 then
-    lastChatCheck = now
-    if _G.LeftChatPanel and (not SafeBool(_G.LeftChatPanel.IsShown, _G.LeftChatPanel) or (_G.LeftChatPanel.GetAlpha and _G.LeftChatPanel:GetAlpha() < 0.9)) then
-      SpArc.ForceElvUIChatAlwaysVisible()
-    end
-  end
 
   SpArc:ScanActionSlotsAndSpells(false)
 

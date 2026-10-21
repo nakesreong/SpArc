@@ -301,7 +301,7 @@ eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
 
 eventFrame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
   if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
-    SpArc.SuppressLuaErrorPopups()
+    if SpArc.EnableAssistedCombatEngine then SpArc.EnableAssistedCombatEngine() end
     SpArc:RebuildParsedProfiles()
     if SpArc.ApplyVisualLayout then SpArc:ApplyVisualLayout() end
     if SpArc.ApplySmartBossTabBinding then SpArc:ApplySmartBossTabBinding() end

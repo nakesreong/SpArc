@@ -48,22 +48,50 @@ function SpArc:SelectActiveParsedProfile()
   local db = SpArc:EnsureDB()
   local mode = db.mode or "AUTO"
   local presetID = db.activePresetID or "PRIEST_01_SHADOW_PVE"
+  local targetMode = "PVE"
 
   if mode == "AUTO" then
     if SafeBool(UnitIsPlayer, "target") then
+      targetMode = "PVP"
       presetID = (db.autoPresets and db.autoPresets.PVP) or "PRIEST_03_SHADOW_PVP"
     else
       local okC, classif = pcall(UnitClassification, "target")
       local okL, lvl = pcall(UnitLevel, "target")
       if (okC and not IsSecret(classif) and (classif == "worldboss" or classif == "rareelite" or classif == "elite"))
         or (okL and not IsSecret(lvl) and lvl == -1) then
+        targetMode = "BOSS"
         presetID = (db.autoPresets and db.autoPresets.BOSS) or "PRIEST_02_SHADOW_BOSS"
       else
+        targetMode = "PVE"
         presetID = (db.autoPresets and db.autoPresets.PVE) or "PRIEST_01_SHADOW_PVE"
       end
     end
   elseif mode == "PVE" or mode == "BOSS" or mode == "PVP" then
+    targetMode = mode
     presetID = (db.autoPresets and db.autoPresets[mode]) or presetID
+  end
+
+  if _G.UnitClass then
+    local okCls, _, playerClass = pcall(_G.UnitClass, "player")
+    if okCls and not IsSecret(playerClass) and type(playerClass) == "string" then
+      local curPreset = db.presets and db.presets[presetID]
+      if not curPreset or curPreset.class ~= playerClass then
+        local fallbackID = nil
+        for _, id in ipairs(db.presetOrder or {}) do
+          local p = db.presets and db.presets[id]
+          if p and p.class == playerClass then
+            if not fallbackID then fallbackID = id end
+            if p.mode == targetMode then
+              fallbackID = id
+              break
+            end
+          end
+        end
+        if fallbackID then
+          presetID = fallbackID
+        end
+      end
+    end
   end
 
   local parsed = (SpArc.ParsedPresets and SpArc.ParsedPresets[presetID])

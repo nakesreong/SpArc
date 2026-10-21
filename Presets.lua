@@ -952,13 +952,63 @@ local OTHER_CLASS_PRESETS = {
   { "EVOKER_02_AUG_PVE", "EVOKER", "55. Пробудитель: Насыщатель — Мифик+", "PVE" },
 }
 
+local WARRIOR_ARMS_SPELLBOOK_MD = [[
+## SPELL_BOOK (Arms Warrior — Slayer / Colossus)
+SPELL COLOSSUS_SMASH = ID:167105,262161,436358 | NAME:"Удар колосса","Миротворец","Сокрушение","Colossus Smash","Warbreaker","Demolish" | MACRO:"M1" | SLOT:1 | KEY:"M1" | CD:45 | CHARGES:1 | ICON:132355
+SPELL BLADESTORM = ID:227847,389774,228920 | NAME:"Вихрь клинков","Опустошитель","Bladestorm","Ravager" | MACRO:"M2" | SLOT:2 | KEY:"M2" | CD:90 | CHARGES:1 | ICON:236303
+SPELL EXECUTE = ID:163201,5308,281000 | NAME:"Казнь","Execute" | MACRO:"SM1" | SLOT:3 | KEY:"SM1" | CD:0 | CHARGES:1 | EXECUTE:true | ICON:135358
+SPELL SWEEPING_STRIKES = ID:260708 | NAME:"Размашистые удары","Sweeping Strikes" | MACRO:"SM2","R" | SLOT:4 | KEY:"SM2" | CD:30 | CHARGES:1 | ICON:132366
+SPELL AVATAR = ID:107574 | NAME:"Аватара","Avatar" | MACRO:"3","SM2" | SLOT:27 | KEY:"3" | CD:90 | CHARGES:1 | ICON:613534
+SPELL MORTAL_STRIKE = ID:12294 | NAME:"Смертельный удар","Mortal Strike" | MACRO:"E" | SLOT:9 | KEY:"E" | CD:6 | CHARGES:1 | ICON:132355
+SPELL OVERPOWER = ID:7384 | NAME:"Превосходство","Overpower" | MACRO:"Q" | SLOT:11 | KEY:"Q" | CD:12 | CHARGES:2 | ICON:132223
+SPELL CLEAVE = ID:845,1680 | NAME:"Рассекающий удар","Вихрь","Cleave","Whirlwind" | MACRO:"1" | SLOT:25 | KEY:"1" | CD:4.5 | CHARGES:1 | ICON:132338
+SPELL SLAM = ID:1464,6343 | NAME:"Мощный удар","Удар грома","Slam","Thunder Clap" | MACRO:"SQ" | SLOT:12 | KEY:"SQ" | CD:0 | CHARGES:1 | FILLER_INTERRUPTIBLE:true | ICON:132340
+SPELL DIE_BY_THE_SWORD = ID:118038 | NAME:"Бой насмерть","Die by the Sword" | MACRO:"CM1" | SLOT:5 | KEY:"CM1" | CD:120 | CHARGES:1 | ICON:132336
+SPELL RALLYING_CRY = ID:97462,383762 | NAME:"Ободряющий клич","Горестная невосприимчивость","Rallying Cry","Bitter Immunity" | MACRO:"CM2","C" | SLOT:6 | KEY:"CM2" | CD:180 | CHARGES:1 | ICON:132351
+SPELL SPELL_REFLECTION = ID:23920 | NAME:"Отражение заклинаний","Spell Reflection" | MACRO:"AM1" | SLOT:7 | KEY:"AM1" | CD:25 | CHARGES:1 | ICON:132361
+SPELL IMPENDING_VICTORY = ID:202168 | NAME:"Верная победа","Impending Victory" | MACRO:"SE","2" | SLOT:10 | KEY:"SE" | CD:25 | CHARGES:1 | ICON:589768
+]]
+
+local WARRIOR_ARMS_ROTATION_MD = [[
+TRACK_SAVES: DIE_BY_THE_SWORD, RALLYING_CRY, SPELL_REFLECTION, IMPENDING_VICTORY
+TRACK_CDS: AVATAR, COLOSSUS_SMASH, BLADESTORM, SWEEPING_STRIKES
+IF player.hp_percent <= 25 AND READY(DIE_BY_THE_SWORD) THEN
+    RETURN EMERGENCY(DIE_BY_THE_SWORD)
+ELSE IF player.hp_percent <= 25 AND READY(IMPENDING_VICTORY) THEN
+    RETURN EMERGENCY(IMPENDING_VICTORY)
+END IF
+IF PROC(EXECUTE) AND READY(EXECUTE) THEN
+    RETURN CAST(EXECUTE)
+ELSE IF USABLE(EXECUTE) AND READY(EXECUTE) THEN
+    RETURN CAST(EXECUTE)
+ELSE IF READY(SWEEPING_STRIKES) THEN
+    RETURN CAST(SWEEPING_STRIKES)
+ELSE IF READY(COLOSSUS_SMASH) THEN
+    RETURN CAST(COLOSSUS_SMASH)
+ELSE IF READY(MORTAL_STRIKE) THEN
+    RETURN CAST(MORTAL_STRIKE)
+ELSE IF READY(BLADESTORM) THEN
+    RETURN CAST(BLADESTORM)
+ELSE IF READY(OVERPOWER) THEN
+    RETURN CAST(OVERPOWER)
+ELSE IF READY(CLEAVE) THEN
+    RETURN CAST(CLEAVE)
+ELSE
+    RETURN CAST(SLAM)
+END IF
+]]
+
 for _, info in ipairs(OTHER_CLASS_PRESETS) do
   local id, cls, title, mode = info[1], info[2], info[3], info[4]
   local headerMD = string.format(
     "# PROFILE: %s\n# CLASS: %s\n# SPEC: %s\n# MODE: %s\n# Tip / Подсказка: paste an Icy Veins rotation generated via Gemini / ChatGPT in Tab 2!\n",
     title, cls, mode, mode
   )
-  local templateMD = headerMD .. PRIEST_SHADOW_SPELLBOOK_MD .. [[
+  local templateMD
+  if cls == "WARRIOR" then
+    templateMD = headerMD .. WARRIOR_ARMS_SPELLBOOK_MD .. WARRIOR_ARMS_ROTATION_MD
+  else
+    templateMD = headerMD .. PRIEST_SHADOW_SPELLBOOK_MD .. [[
 INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: MIND_FLAY
 PROTECT_CHANNEL: VOID_TORRENT
 TRACK_SAVES: DISPERSION, DESPERATE_PRAYER, VAMPIRIC_EMBRACE, FADE
@@ -977,6 +1027,7 @@ ELSE
     RETURN CAST(MIND_FLAY)
 END IF
 ]]
+  end
   RegisterPreset(id, cls, title, mode, templateMD)
 end
 

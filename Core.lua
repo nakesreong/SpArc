@@ -9,7 +9,7 @@ _G.SparkArc = SpArc
 _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
-SpArc.VERSION = "2.8.0-QA"
+SpArc.VERSION = "2.8.0"
 SpArc.PROFILE_SCHEMA_VERSION = 10
 
 local C_AddOns = _G.C_AddOns

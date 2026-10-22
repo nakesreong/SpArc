@@ -557,6 +557,7 @@ eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 eventFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
 eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 eventFrame:RegisterEvent("PLAYER_FLAGS_CHANGED")
+eventFrame:RegisterEvent("UNIT_SPELLCAST_SENT")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_STOP", "player")
@@ -565,7 +566,19 @@ eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "player")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
 
-eventFrame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
+eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
+  local castGUID, spellID = arg2, arg3
+  if event == "UNIT_SPELLCAST_SENT" then
+    if unit ~= "player" then return end
+    spellID = arg4
+    if spellID and not IsSecret(spellID) then
+      local defKey = SpArc:MatchSpellToDefKey(spellID, nil)
+      if defKey and SpArc.TriggerSpellPress then
+        SpArc:TriggerSpellPress(defKey, nil, nil)
+      end
+    end
+    return
+  end
   if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
     if SpArc.EnableAssistedCombatEngine then SpArc.EnableAssistedCombatEngine() end
     SpArc:RebuildParsedProfiles()
@@ -615,6 +628,9 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
 
   if event == "UNIT_SPELLCAST_START" then
     local defKey = SpArc:MatchSpellToDefKey(spellID, sName)
+    if defKey and SpArc.TriggerSpellPress then
+      SpArc:TriggerSpellPress(defKey, nil, nil)
+    end
     local dur = (sCastMS and sCastMS > 0 and (sCastMS / 1000)) or 1.4
     st.castState.active = true
     st.castState.isChannel = false
@@ -625,6 +641,9 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
     st.castState.endTime = now + dur
   elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
     local defKey = SpArc:MatchSpellToDefKey(spellID, sName)
+    if defKey and SpArc.TriggerSpellPress then
+      SpArc:TriggerSpellPress(defKey, nil, nil)
+    end
     local dur = (defKey == "VOID_TORRENT") and 3.0 or 2.8
     st.castState.active = true
     st.castState.isChannel = true
@@ -641,6 +660,9 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
     st.castState.defKey = nil
   elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
     local defKey = SpArc:MatchSpellToDefKey(spellID, sName)
+    if defKey and SpArc.TriggerSpellPress then
+      SpArc:TriggerSpellPress(defKey, nil, nil)
+    end
     if defKey and defKey ~= "VOID_TORRENT" and defKey ~= "MIND_FLAY" and defKey ~= "MIND_FLAY_INSANITY" then
       SpArc:RecordSpellCastSuccess(defKey, now)
     end

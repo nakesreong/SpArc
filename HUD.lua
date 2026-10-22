@@ -80,6 +80,12 @@ local function CreateStyledIconBox(parent, size, isPrimary)
   timer:SetShadowOffset(1, -1)
   f.timer = timer
 
+  local pressFlash = f:CreateTexture(nil, "OVERLAY", nil, 2)
+  pressFlash:SetAllPoints(f)
+  pressFlash:SetColorTexture(1.0, 0.92, 0.55, 0)
+  pressFlash:SetBlendMode("ADD")
+  f.pressFlash = pressFlash
+
   if isPrimary then
     local banner = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(banner, 11)
@@ -252,11 +258,15 @@ SpArc:RebuildParsedProfiles()
 SpArc:ApplyVisualLayout()
 
 local function UpdateCooldownRow(boxes, spellKeys, states)
+  local defs = SpArc.SPELL_DEFS
   for i = 1, #boxes do
     local box = boxes[i]
     local key = spellKeys and spellKeys[i]
     local s = key and states[key]
     if s then
+      box.currentDefKey = key
+      box.currentSlot = (defs and defs[key] and defs[key].slot) or nil
+      box.currentKeybind = s.keybind or ""
       box.icon:SetTexture(s.icon)
       box.keybind:SetText(s.keybind or "")
       if s.isUnavailable or (not s.isUsable and s.isReady) then
@@ -293,6 +303,9 @@ local function UpdateCooldownRow(boxes, spellKeys, states)
       end
       box:Show()
     else
+      box.currentDefKey = nil
+      box.currentSlot = nil
+      box.currentKeybind = nil
       box:Hide()
     end
   end
@@ -395,21 +408,162 @@ local function UpdateCastbar(now)
   end
 end
 
+local PRESS_ANIM_DUR = 0.24
+
+local function GetPressScaleMult(box, now)
+  local t0 = box.pressStartTime
+  if not t0 then
+    if box.pressFlash then box.pressFlash:SetAlpha(0) end
+    return 1.0
+  end
+  local elapsed = now - t0
+  if elapsed < 0 or elapsed >= PRESS_ANIM_DUR then
+    box.pressStartTime = nil
+    if box.pressFlash then box.pressFlash:SetAlpha(0) end
+    return 1.0
+  end
+  local p = elapsed / PRESS_ANIM_DUR
+  local mult
+  if p < 0.40 then
+    -- Сжатие на -20% (1.00 -> 0.80)
+    local k = p / 0.40
+    mult = 1.0 - 0.20 * math.sin(k * (math.pi * 0.5))
+  else
+    -- Отскок обратно +20% (0.80 -> 1.04 -> 1.00)
+    local k = (p - 0.40) / 0.60
+    mult = 0.80 + 0.20 * math.sin(k * (math.pi * 0.5)) + 0.04 * math.sin(k * math.pi)
+  end
+  if box.pressFlash then
+    box.pressFlash:SetAlpha((1.0 - p) * 0.55)
+  end
+  return mult
+end
+
+local function IsSameOrPairedDefKey(a, b)
+  if not a or not b then return false end
+  if a == b then return true end
+  if (a == "MIND_FLAY" and b == "MIND_FLAY_INSANITY") or (a == "MIND_FLAY_INSANITY" and b == "MIND_FLAY") then
+    return true
+  end
+  if (a == "VOID_ERUPTION" and b == "VOID_BOLT") or (a == "VOID_BOLT" and b == "VOID_ERUPTION") then
+    return true
+  end
+  return false
+end
+
+function SpArc:TriggerSpellPress(defKey, slot, keybind)
+  local now = GetTime()
+  local defs = SpArc.SPELL_DEFS
+  if not slot and defKey and defs and defs[defKey] then
+    slot = defs[defKey].slot
+  end
+
+  local function CheckAndTriggerBox(box)
+    if not box or not box:IsShown() then return false end
+    local matched = false
+    if defKey and box.currentDefKey and IsSameOrPairedDefKey(defKey, box.currentDefKey) then
+      matched = true
+    elseif slot and slot > 0 and box.currentSlot and box.currentSlot == slot then
+      matched = true
+    elseif not defKey and not slot and keybind and keybind ~= "" and box.currentKeybind == keybind then
+      matched = true
+    end
+    if matched then
+      if not box.pressStartTime or (now - box.pressStartTime) > 0.10 then
+        box.pressStartTime = now
+      end
+      return true
+    end
+    return false
+  end
+
+  for i = 1, MAX_ARC_SLOTS do
+    CheckAndTriggerBox(arcSlots[i])
+  end
+  for i = 1, #savesBoxes do
+    CheckAndTriggerBox(savesBoxes[i])
+  end
+  for i = 1, #cdsBoxes do
+    CheckAndTriggerBox(cdsBoxes[i])
+  end
+  CheckAndTriggerBox(emergencyBox)
+end
+
+local hookedBT4Buttons = {}
+local function EnsureBT4PressHooks()
+  for slot = 1, 180 do
+    if not hookedBT4Buttons[slot] then
+      local btn = _G["BT4Button" .. slot]
+      if btn and btn.HookScript then
+        hookedBT4Buttons[slot] = true
+        local capturedSlot = slot
+        pcall(btn.HookScript, btn, "PostClick", function()
+          local defKey = nil
+          if _G.GetActionInfo then
+            local okA, aType, aID = pcall(_G.GetActionInfo, capturedSlot)
+            if okA and not IsSecret(aType) and not IsSecret(aID) and aType == "spell" and type(aID) == "number" and aID > 0 then
+              defKey = SpArc:MatchSpellToDefKey(aID, nil)
+            end
+          end
+          local kb = SpArc.GetSlotKeybind and SpArc:GetSlotKeybind(capturedSlot) or nil
+          SpArc:TriggerSpellPress(defKey, capturedSlot, kb)
+        end)
+      end
+    end
+  end
+end
+
+if _G.hooksecurefunc and _G.UseAction then
+  _G.hooksecurefunc("UseAction", function(slot)
+    if not slot or IsSecret(slot) or type(slot) ~= "number" or slot <= 0 then return end
+    local defKey = nil
+    if _G.GetActionInfo then
+      local okA, aType, aID = pcall(_G.GetActionInfo, slot)
+      if okA and not IsSecret(aType) and not IsSecret(aID) and aType == "spell" and type(aID) == "number" and aID > 0 then
+        defKey = SpArc:MatchSpellToDefKey(aID, nil)
+      end
+    end
+    local kb = SpArc.GetSlotKeybind and SpArc:GetSlotKeybind(slot) or nil
+    SpArc:TriggerSpellPress(defKey, slot, kb)
+  end)
+end
+
 local lastLogicTick = 0
 rootFrame:SetScript("OnUpdate", function()
   local now = GetTime()
   local db = SpArc:EnsureDB()
   local v = db.visual or DEFAULT_VISUAL
   local pScale = tonumber(v.primaryScale) or 1.50
+  local qScale = tonumber(v.queueScale) or 1.00
 
   UpdateCastbar(now)
   if arcSlots[1]:IsShown() then
     local speed = st.lastShouldInterrupt and 12.0 or 6.0
     local amp = st.lastShouldInterrupt and 0.08 or 0.04
-    arcSlots[1]:SetScale(pScale + amp * math.sin(now * speed))
+    local mult = GetPressScaleMult(arcSlots[1], now)
+    arcSlots[1]:SetScale((pScale + amp * math.sin(now * speed)) * mult)
+  end
+  for i = 2, MAX_ARC_SLOTS do
+    if arcSlots[i]:IsShown() then
+      local mult = GetPressScaleMult(arcSlots[i], now)
+      arcSlots[i]:SetScale(qScale * mult)
+    end
+  end
+  for i = 1, #savesBoxes do
+    if savesBoxes[i]:IsShown() then
+      local mult = GetPressScaleMult(savesBoxes[i], now)
+      savesBoxes[i]:SetScale(1.0 * mult)
+    end
+  end
+  for i = 1, #cdsBoxes do
+    if cdsBoxes[i]:IsShown() then
+      local mult = GetPressScaleMult(cdsBoxes[i], now)
+      cdsBoxes[i]:SetScale(1.0 * mult)
+    end
   end
   if emergencyBox:IsShown() then
-    emergencyBox:SetScale(1.10 + 0.07 * math.sin(now * 8.0))
+    local mult = GetPressScaleMult(emergencyBox, now)
+    emergencyBox:SetScale((1.10 + 0.07 * math.sin(now * 8.0)) * mult)
   end
 
   if (now - lastLogicTick) < 0.07 then
@@ -417,6 +571,7 @@ rootFrame:SetScript("OnUpdate", function()
   end
   lastLogicTick = now
 
+  EnsureBT4PressHooks()
   SpArc:ScanActionSlotsAndSpells(false)
 
   local isMounted = SafeBool(IsMounted) or SafeBool(UnitInVehicle, "player") or SafeBool(HasOverrideActionBar)
@@ -446,11 +601,15 @@ rootFrame:SetScript("OnUpdate", function()
   end
 
   -- 1. Update Top Semicircle Rotation Arc
+  local defs = SpArc.SPELL_DEFS
   if hasHostileTarget then
     for i = 1, MAX_ARC_SLOTS do
       local box = arcSlots[i]
       local item = (i <= maxQueue) and queue[i] or nil
       if item then
+        box.currentDefKey = item.key
+        box.currentSlot = (defs and item.key and defs[item.key] and defs[item.key].slot) or nil
+        box.currentKeybind = item.keybind or ""
         box.icon:SetTexture(item.icon)
         box.keybind:SetText(item.keybind or "")
         box.timer:SetText("")
@@ -495,11 +654,17 @@ rootFrame:SetScript("OnUpdate", function()
         end
         box:Show()
       else
+        box.currentDefKey = nil
+        box.currentSlot = nil
+        box.currentKeybind = nil
         box:Hide()
       end
     end
   else
     for i = 1, MAX_ARC_SLOTS do
+      arcSlots[i].currentDefKey = nil
+      arcSlots[i].currentSlot = nil
+      arcSlots[i].currentKeybind = nil
       arcSlots[i]:Hide()
     end
   end
@@ -523,21 +688,32 @@ rootFrame:SetScript("OnUpdate", function()
   local emThreshold = tonumber(v.emergencyHP) or 25
   if v.showEmergencySave ~= false and hpPct <= emThreshold and (inCombat or hasHostileTarget or SpArc.testMode) then
     local pickedEm = nil
+    local pickedEmKey = nil
     for _, emKey in ipairs((parsed and parsed.emergency) or { "DISPERSION", "DESPERATE_PRAYER", "VAMPIRIC_EMBRACE" }) do
       local s = states[emKey]
       if s and s.isReady and s.isUsable and not s.isUnavailable then
         pickedEm = s
+        pickedEmKey = emKey
         break
       end
     end
     if pickedEm then
+      emergencyBox.currentDefKey = pickedEmKey
+      emergencyBox.currentSlot = (defs and pickedEmKey and defs[pickedEmKey] and defs[pickedEmKey].slot) or nil
+      emergencyBox.currentKeybind = pickedEm.keybind or ""
       emergencyBox.icon:SetTexture(pickedEm.icon)
       emergencyBox.keybind:SetText(pickedEm.keybind or "")
       emergencyBox:Show()
     else
+      emergencyBox.currentDefKey = nil
+      emergencyBox.currentSlot = nil
+      emergencyBox.currentKeybind = nil
       emergencyBox:Hide()
     end
   else
+    emergencyBox.currentDefKey = nil
+    emergencyBox.currentSlot = nil
+    emergencyBox.currentKeybind = nil
     emergencyBox:Hide()
   end
 end)

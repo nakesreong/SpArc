@@ -480,7 +480,14 @@ local function OpenControlCenter(initialTab)
         tb:SetText(SpArc:L(tb.tKey))
       end
 
+      if SpArc.SelectActiveParsedProfile then
+        SpArc:SelectActiveParsedProfile()
+      end
       local pClass = GetPlayerClassTag()
+      local curSelPr = db.presets[selectedPresetForEdit]
+      if not curSelPr or (filterClassOnly and curSelPr.class ~= pClass) then
+        selectedPresetForEdit = db.activePresetID or selectedPresetForEdit
+      end
       local totalCount = #db.presetOrder
       local classCount = 0
       local filteredIDs = {}

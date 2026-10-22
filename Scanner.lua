@@ -22,6 +22,7 @@ local tostring = _G.tostring
 local type = _G.type
 
 local IsSecret = SpArc.IsSecret
+local SafeBool = SpArc.SafeBool
 local Trim = SpArc.Trim
 local SPELL_DEFS = SpArc.SPELL_DEFS
 local ACTIVE_SLOTS = SpArc.ACTIVE_SLOTS
@@ -29,6 +30,23 @@ local SLOT_DEFAULT_KEYBIND = SpArc.SLOT_DEFAULT_KEYBIND
 local ACTION_BAR_RANGES = SpArc.ACTION_BAR_RANGES
 local CLICKCAST_SHORT = SpArc.CLICKCAST_SHORT
 local st = SpArc.state
+
+local function IsSpellIDKnown(id)
+  if not id or type(id) ~= "number" or id <= 0 then return false end
+  if _G.IsPlayerSpell and SafeBool(_G.IsPlayerSpell, id) then return true end
+  if _G.IsSpellKnownOrOverridesKnown and SafeBool(_G.IsSpellKnownOrOverridesKnown, id) then return true end
+  if _G.IsSpellKnown and SafeBool(_G.IsSpellKnown, id) then return true end
+  if _G.C_SpellBook and _G.C_SpellBook.IsSpellInSpellBook and SafeBool(_G.C_SpellBook.IsSpellInSpellBook, id) then return true end
+  return false
+end
+
+local MACRO_NAME_KEYBINDS = {
+  M1 = "M1", M2 = "M2", M3 = "B3", M4 = "M4", M5 = "M5",
+  SM1 = "SM1", SM2 = "SM2", CM1 = "CM1", CM2 = "CM2", AM1 = "AM1", AM2 = "AM2",
+  ["1"] = "1", ["2"] = "2", ["3"] = "3", ["4"] = "4", ["5"] = "5",
+  Q = "Q", SQ = "SQ", E = "E", SE = "SE", R = "R", SR = "SR",
+  F = "F", SF = "SF", T = "T", ST = "ST", C = "C", V = "V", Z = "Z", SZ = "SZ", G = "G",
+}
 
 local function CompactKey(raw)
   if not raw or raw == "" then return nil end
@@ -63,15 +81,28 @@ function SpArc:GetSlotKeybind(slot)
   if not slot or slot < 1 then return nil end
   local cmd = SlotToBindingCommand(slot)
 
-  local cm = _G.CM
-  if cmd and cm and cm.DB then
-    local loc = (cm.GetBindingsLocation and cm.GetBindingsLocation()) or "char"
-    local root = cm.DB[loc]
-    local binds = root and root.bindings
+  if cmd then
+    local binds = nil
+    local cm = _G.CM
+    if cm and cm.DB then
+      local loc = (cm.GetBindingsLocation and cm.GetBindingsLocation()) or "char"
+      local root = cm.DB[loc]
+      binds = root and root.bindings
+    end
+    if not binds and type(_G.CombatModeDB) == "table" then
+      local uName = _G.UnitName and _G.UnitName("player")
+      local rName = _G.GetRealmName and _G.GetRealmName()
+      local charKey = (uName and rName) and (uName .. " - " .. rName) or nil
+      if charKey and _G.CombatModeDB.char and _G.CombatModeDB.char[charKey] and _G.CombatModeDB.char[charKey].bindings then
+        binds = _G.CombatModeDB.char[charKey].bindings
+      elseif _G.CombatModeDB.global and _G.CombatModeDB.global.bindings then
+        binds = _G.CombatModeDB.global.bindings
+      end
+    end
     if type(binds) == "table" then
       for dbKey, shortName in pairs(CLICKCAST_SHORT) do
         local b = binds[dbKey]
-        if b and b.enabled and b.value == cmd then
+        if b and b.enabled ~= false and b.value == cmd then
           return shortName
         end
       end
@@ -117,7 +148,23 @@ function SpArc:GetSlotKeybind(slot)
     end
   end
 
-  return SLOT_DEFAULT_KEYBIND[slot]
+  if GetActionText then
+    local okT, mName = pcall(GetActionText, slot)
+    if okT and not IsSecret(mName) and type(mName) == "string" and mName ~= "" then
+      local up = Trim(mName):upper()
+      if MACRO_NAME_KEYBINDS[up] then
+        return MACRO_NAME_KEYBINDS[up]
+      end
+    end
+  end
+
+  if _G.UnitClass then
+    local okC, _, cls = pcall(_G.UnitClass, "player")
+    if okC and not IsSecret(cls) and cls == "PRIEST" then
+      return SLOT_DEFAULT_KEYBIND[slot]
+    end
+  end
+  return nil
 end
 
 local function BuildAssistedSlotSet()
@@ -177,14 +224,17 @@ function SpArc:ScanActionSlotsAndSpells(force)
   for k, def in pairs(SPELL_DEFS) do
     local idSet = {}
     local resolvedID, resolvedIcon
+    local isKnown = false
     for _, id in ipairs(def.ids or {}) do
       idSet[id] = true
+      local eid = id
       if C_Spell and C_Spell.GetOverrideSpell then
         local okO, over = pcall(C_Spell.GetOverrideSpell, id)
         if okO and type(over) == "number" and not IsSecret(over) and over > 0 then
           local owner = explicitOwnerBySpellID[over]
           if not owner or owner == k then
             idSet[over] = true
+            eid = over
           end
         end
       end
@@ -197,6 +247,16 @@ function SpArc:ScanActionSlotsAndSpells(force)
           end
         end
       end
+      if not isKnown and (IsSpellIDKnown(eid) or IsSpellIDKnown(id)) then
+        isKnown = true
+        resolvedID = eid
+        if C_Spell and C_Spell.GetSpellInfo then
+          local okI, info = pcall(C_Spell.GetSpellInfo, eid)
+          if okI and type(info) == "table" and not IsSecret(info.iconID) and info.iconID then
+            resolvedIcon = info.iconID
+          end
+        end
+      end
     end
     if C_Spell and C_Spell.GetSpellInfo then
       for _, nm in ipairs(def.names or {}) do
@@ -205,6 +265,7 @@ function SpArc:ScanActionSlotsAndSpells(force)
           local owner = explicitOwnerBySpellID[info.spellID]
           if not owner or owner == k then
             idSet[info.spellID] = true
+            isKnown = true
             if not resolvedID then
               resolvedID = info.spellID
               resolvedIcon = not IsSecret(info.iconID) and info.iconID or nil
@@ -234,12 +295,15 @@ function SpArc:ScanActionSlotsAndSpells(force)
       end
     end
     def.idSet = idSet
+    def.isKnown = isKnown
+    def.resolvedIcon = resolvedIcon
     def.liveSpellID = resolvedID or (def.ids and def.ids[1])
     def.liveIcon = resolvedIcon or def.fallbackIcon
   end
 
   local assistedSlots = BuildAssistedSlotSet()
   local spellIDToSlot = {}
+  local slotDirectSpellID = {}
   local tooltipLinesBySlot = {}
   local castLinesBySlot = {}
   local GetMacroSpell = _G.GetMacroSpell
@@ -251,6 +315,9 @@ function SpArc:ScanActionSlotsAndSpells(force)
 
   local function AssignSpellSlot(sid, s)
     if not sid or not s then return end
+    if not slotDirectSpellID[s] then
+      slotDirectSpellID[s] = sid
+    end
     local prev = spellIDToSlot[sid]
     if not prev or (not HasKeybind(prev) and HasKeybind(s)) then
       spellIDToSlot[sid] = s
@@ -392,11 +459,41 @@ function SpArc:ScanActionSlotsAndSpells(force)
       end
     end
 
+    if not foundSlot and def.idSet then
+      for sid, _ in pairs(def.idSet) do
+        if spellIDToSlot[sid] then
+          foundSlot = spellIDToSlot[sid]
+          break
+        end
+      end
+    end
+
+    if not foundSlot and C_ActionBar and C_ActionBar.FindSpellActionButtons and def.idSet then
+      for sid, _ in pairs(def.idSet) do
+        local okF, slots = pcall(C_ActionBar.FindSpellActionButtons, sid)
+        if okF and type(slots) == "table" and not IsSecret(slots) then
+          for _, s in pairs(slots) do
+            if type(s) == "number" and s > 0 and not assistedSlots[s] then
+              foundSlot = s
+              def.isKnown = true
+              break
+            end
+          end
+        end
+        if foundSlot then break end
+      end
+    end
+
     def.slot = foundSlot
     local kb = foundSlot and SpArc:GetSlotKeybind(foundSlot) or nil
     def.keybind = (kb and kb ~= "" and kb) or ""
 
     if foundSlot then
+      local dirSID = slotDirectSpellID[foundSlot]
+      if dirSID and def.idSet and def.idSet[dirSID] then
+        def.isKnown = true
+        def.liveSpellID = dirSID
+      end
       local btBtn = _G["BT4Button" .. foundSlot]
       local tex = nil
       if btBtn and btBtn.GetTexture then
@@ -412,7 +509,9 @@ function SpArc:ScanActionSlotsAndSpells(force)
         end
       end
       if tex and tex ~= 134400 and tex ~= 136200 and def.key ~= "MIND_FLAY_INSANITY" then
-        def.liveIcon = tex
+        if not def.resolvedIcon or (dirSID and def.idSet and def.idSet[dirSID]) then
+          def.liveIcon = tex
+        end
       end
     end
   end

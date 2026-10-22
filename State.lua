@@ -372,6 +372,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     elseif assistedKey == defKey then
       isUsable = true
       usableSource = "ExecuteAssistedCombat"
+    elseif bookUsableVal ~= nil then
+      isUsable = (bookUsableVal == true) and (not bookNoPowerVal)
+      usableSource = "ExecuteSpellBook(" .. tostring(isUsable) .. ")"
     elseif tgtHP and tgtHP <= 20 then
       isUsable = true
       usableSource = string.format("ExecuteHP(%.1f%%<=20%%)", tgtHP)
@@ -449,11 +452,11 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     usableSource = "procOnly(false)"
   end
 
-  if (not slot or not def.keybind or def.keybind == "") and not SpArc.testMode then
+  if not def.isKnown and not slot and not SpArc.testMode then
     finalReady = false
     isUsable = false
-    usableSource = "NotOnActionBar"
-  elseif slotActiveSpellID and (slotActiveSpellID == 528 or slotActiveSpellID == 130) and not (def.idSet and def.idSet[slotActiveSpellID]) then
+    usableSource = "SpellNotKnown"
+  elseif not def.isKnown and slotActiveSpellID and not (def.idSet and def.idSet[slotActiveSpellID]) and not SpArc.testMode then
     finalReady = false
     isUsable = false
     usableSource = "TalentNotKnown(MacroFallback:" .. tostring(slotActiveSpellID) .. ")"

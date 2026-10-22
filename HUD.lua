@@ -259,16 +259,25 @@ local function UpdateCooldownRow(boxes, spellKeys, states)
     if s then
       box.icon:SetTexture(s.icon)
       box.keybind:SetText(s.keybind or "")
-      if s.isReady then
+      if s.isUnavailable or (not s.isUsable and s.isReady) then
+        box.icon:SetDesaturated(true)
+        box.icon:SetAlpha(0.35)
+        box.border:SetColorTexture(0.18, 0.18, 0.22, 0.85)
+        box.keybind:SetTextColor(0.52, 0.52, 0.58, 0.80)
+        box.timer:SetText("")
+        box.cd:Clear()
+      elseif s.isReady then
         box.icon:SetDesaturated(false)
         box.icon:SetAlpha(1.0)
         box.border:SetColorTexture(0.18, 0.88, 0.42, 0.95)
+        box.keybind:SetTextColor(1, 0.96, 0.80, 1)
         box.timer:SetText("")
         box.cd:Clear()
       else
         box.icon:SetDesaturated(true)
         box.icon:SetAlpha(0.55)
         box.border:SetColorTexture(0.22, 0.22, 0.26, 0.95)
+        box.keybind:SetTextColor(0.80, 0.80, 0.85, 1)
         if s.remSec and s.remSec > 0 then
           if s.remSec >= 60 then
             box.timer:SetText(string.format("%dm", math.ceil(s.remSec / 60)))
@@ -445,29 +454,43 @@ rootFrame:SetScript("OnUpdate", function()
         box.icon:SetTexture(item.icon)
         box.keybind:SetText(item.keybind or "")
         box.timer:SetText("")
-        if i == 1 then
-          if st.lastShouldInterrupt then
-            box.border:SetColorTexture(1.0, 0.18, 0.56, 1.0)
-            box.glow:SetColorTexture(1.0, 0.18, 0.56, 0.78)
-            if box.banner then
-              box.banner:SetTextColor(1.0, 0.30, 0.68, 1)
-              box.banner:SetText(SpArc:L("HUD_CLIP_BANNER"))
+        local isDisabledArcItem = item.isUnavailable or (i == 1 and (item.isReady == false or item.isUsable == false))
+        if isDisabledArcItem then
+          box.icon:SetDesaturated(true)
+          box.icon:SetAlpha(0.45)
+          box.border:SetColorTexture(0.22, 0.22, 0.26, 0.95)
+          box.glow:SetColorTexture(0, 0, 0, 0)
+          if box.banner then box.banner:SetText("") end
+        else
+          box.icon:SetDesaturated(false)
+          box.icon:SetAlpha(1.0)
+          if i == 1 then
+            if st.lastShouldInterrupt then
+              box.border:SetColorTexture(1.0, 0.18, 0.56, 1.0)
+              box.glow:SetColorTexture(1.0, 0.18, 0.56, 0.78)
+              if box.banner then
+                box.banner:SetTextColor(1.0, 0.30, 0.68, 1)
+                box.banner:SetText(SpArc:L("HUD_CLIP_BANNER"))
+              end
+            elseif isProtectedChannel then
+              box.border:SetColorTexture(0.20, 0.85, 1.0, 1.0)
+              box.glow:SetColorTexture(0.20, 0.85, 1.0, 0.55)
+              if box.banner then
+                box.banner:SetTextColor(0.35, 0.90, 1.0, 1)
+                box.banner:SetText(SpArc:L("HUD_CHANNEL_BANNER"))
+              end
+            elseif item.isProc then
+              box.border:SetColorTexture(0.35, 0.92, 1.0, 1.0)
+              box.glow:SetColorTexture(0.35, 0.92, 1.0, 0.65)
+              if box.banner then box.banner:SetText("") end
+            else
+              box.border:SetColorTexture(1.0, 0.80, 0.15, 1.0)
+              box.glow:SetColorTexture(1.0, 0.80, 0.15, 0.55)
+              if box.banner then box.banner:SetText("") end
             end
-          elseif isProtectedChannel then
-            box.border:SetColorTexture(0.20, 0.85, 1.0, 1.0)
-            box.glow:SetColorTexture(0.20, 0.85, 1.0, 0.55)
-            if box.banner then
-              box.banner:SetTextColor(0.35, 0.90, 1.0, 1)
-              box.banner:SetText(SpArc:L("HUD_CHANNEL_BANNER"))
-            end
-          elseif item.isProc then
-            box.border:SetColorTexture(0.35, 0.92, 1.0, 1.0)
-            box.glow:SetColorTexture(0.35, 0.92, 1.0, 0.65)
-            if box.banner then box.banner:SetText("") end
           else
-            box.border:SetColorTexture(1.0, 0.80, 0.15, 1.0)
-            box.glow:SetColorTexture(1.0, 0.80, 0.15, 0.55)
-            if box.banner then box.banner:SetText("") end
+            box.border:SetColorTexture(0.08, 0.08, 0.11, 0.95)
+            box.glow:SetColorTexture(0, 0, 0, 0)
           end
         end
         box:Show()
@@ -502,7 +525,7 @@ rootFrame:SetScript("OnUpdate", function()
     local pickedEm = nil
     for _, emKey in ipairs((parsed and parsed.emergency) or { "DISPERSION", "DESPERATE_PRAYER", "VAMPIRIC_EMBRACE" }) do
       local s = states[emKey]
-      if s and s.isReady then
+      if s and s.isReady and s.isUsable and not s.isUnavailable then
         pickedEm = s
         break
       end

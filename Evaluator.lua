@@ -333,7 +333,7 @@ function SpArc:BuildRotationQueue(maxSlots)
   local simKnown = {}
 
   for k, def in pairs(SPELL_DEFS) do
-    local isReady, remSec, durSec, startTime, isUsable, isProc, icon, keybind, charges = SpArc:EvaluateSpellState(k, assistedKey)
+    local isReady, remSec, durSec, startTime, isUsable, isProc, icon, keybind, charges, isUnavailable = SpArc:EvaluateSpellState(k, assistedKey)
     states[k] = {
       key = k,
       isReady = isReady,
@@ -342,11 +342,12 @@ function SpArc:BuildRotationQueue(maxSlots)
       startTime = startTime,
       isUsable = isUsable,
       isProc = isProc,
+      isUnavailable = isUnavailable or false,
       icon = icon,
       keybind = keybind,
       charges = charges,
     }
-    local known = (def.isKnown or def.slot ~= nil or SpArc.testMode) and true or false
+    local known = (not isUnavailable) and (def.isKnown or def.slot ~= nil or SpArc.testMode) and true or false
     simKnown[k] = known
     if not known then
       simCD[k] = 9999
@@ -418,11 +419,17 @@ function SpArc:BuildRotationQueue(maxSlots)
         simUsable[bestSp] = true
         pickedKey = bestSp
       elseif #parsed.rules > 0 then
-        pickedKey = parsed.rules[#parsed.rules].spell
+        for i = #parsed.rules, 1, -1 do
+          local fallbackSp = parsed.rules[i].spell
+          if simKnown[fallbackSp] then
+            pickedKey = fallbackSp
+            break
+          end
+        end
       end
     end
 
-    if pickedKey and states[pickedKey] then
+    if pickedKey and states[pickedKey] and not states[pickedKey].isUnavailable then
       local s = states[pickedKey]
       local def = SPELL_DEFS[pickedKey]
       queue[#queue + 1] = {
@@ -430,6 +437,9 @@ function SpArc:BuildRotationQueue(maxSlots)
         icon = s.icon,
         keybind = s.keybind,
         isProc = (step == 1 and s.isProc) or false,
+        isReady = (step == 1) and s.isReady or true,
+        isUsable = (step == 1) and s.isUsable or true,
+        isUnavailable = s.isUnavailable or false,
       }
 
       simProcs[pickedKey] = false
@@ -452,6 +462,9 @@ function SpArc:BuildRotationQueue(maxSlots)
           end
         elseif def.baseCD and def.baseCD > 0 then
           simCD[pickedKey] = def.baseCD
+          simReady[pickedKey] = false
+        elseif def.fillerInterruptible then
+          simCD[pickedKey] = 4.5
           simReady[pickedKey] = false
         else
           simCD[pickedKey] = 0
@@ -542,6 +555,8 @@ eventFrame:RegisterEvent("UPDATE_BINDINGS")
 eventFrame:RegisterEvent("SPELLS_CHANGED")
 eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 eventFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
+eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+eventFrame:RegisterEvent("PLAYER_FLAGS_CHANGED")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_STOP", "player")
@@ -565,7 +580,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
     return
   end
 
-  if event == "ACTIONBAR_SLOT_CHANGED" or event == "ACTIONBAR_PAGE_CHANGED" or event == "UPDATE_BONUS_ACTIONBAR" or event == "UPDATE_MACROS" or event == "UPDATE_BINDINGS" or event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "ACTIVE_TALENT_GROUP_CHANGED" then
+  if event == "ACTIONBAR_SLOT_CHANGED" or event == "ACTIONBAR_PAGE_CHANGED" or event == "UPDATE_BONUS_ACTIONBAR" or event == "UPDATE_MACROS" or event == "UPDATE_BINDINGS" or event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "ACTIVE_TALENT_GROUP_CHANGED" or event == "ZONE_CHANGED_NEW_AREA" or event == "PLAYER_FLAGS_CHANGED" then
     if event == "UPDATE_BINDINGS" and SpArc.ApplySmartBossTabBinding then
       SpArc:ApplySmartBossTabBinding()
     end

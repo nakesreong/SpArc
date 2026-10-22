@@ -31,8 +31,38 @@ local ACTION_BAR_RANGES = SpArc.ACTION_BAR_RANGES
 local CLICKCAST_SHORT = SpArc.CLICKCAST_SHORT
 local st = SpArc.state
 
+local PVP_TALENT_SPELL_IDS = {
+  [211522] = true, -- Psyfiend (Ментальный демон)
+  [236077] = true, -- Disarm (Обезоруживание)
+  [198817] = true, -- Sharpen Blade (Заточка клинка)
+  [328530] = true, -- Divine Ascension (Божественное вознесение)
+  [213610] = true, -- Holy Ward (Священный оберег)
+  [236320] = true, -- War Banner (Боевое знамя)
+}
+
+function SpArc:IsPvPActiveNow()
+  if _G.C_PvP then
+    if _G.C_PvP.IsArena and SafeBool(_G.C_PvP.IsArena) then return true end
+    if _G.C_PvP.IsBattleground and SafeBool(_G.C_PvP.IsBattleground) then return true end
+    if _G.C_PvP.IsPVPMap and SafeBool(_G.C_PvP.IsPVPMap) then return true end
+  end
+  if _G.IsInInstance then
+    local ok, inInst, instType = pcall(_G.IsInInstance)
+    if ok and not IsSecret(inInst) and inInst then
+      return (instType == "pvp" or instType == "arena")
+    end
+  end
+  if _G.C_PvP and _G.C_PvP.IsWarModeActive and SafeBool(_G.C_PvP.IsWarModeActive) then
+    return true
+  end
+  return false
+end
+
 local function IsSpellIDKnown(id)
   if not id or type(id) ~= "number" or id <= 0 then return false end
+  if PVP_TALENT_SPELL_IDS[id] and not SpArc:IsPvPActiveNow() then
+    return false
+  end
   if _G.IsPlayerSpell and SafeBool(_G.IsPlayerSpell, id) then return true end
   if _G.IsSpellKnownOrOverridesKnown and SafeBool(_G.IsSpellKnownOrOverridesKnown, id) then return true end
   if _G.IsSpellKnown and SafeBool(_G.IsSpellKnown, id) then return true end
@@ -265,10 +295,12 @@ function SpArc:ScanActionSlotsAndSpells(force)
           local owner = explicitOwnerBySpellID[info.spellID]
           if not owner or owner == k then
             idSet[info.spellID] = true
-            isKnown = true
-            if not resolvedID then
-              resolvedID = info.spellID
-              resolvedIcon = not IsSecret(info.iconID) and info.iconID or nil
+            if IsSpellIDKnown(info.spellID) then
+              isKnown = true
+              if not resolvedID then
+                resolvedID = info.spellID
+                resolvedIcon = not IsSecret(info.iconID) and info.iconID or nil
+              end
             end
           end
         end
@@ -350,12 +382,25 @@ function SpArc:ScanActionSlotsAndSpells(force)
             end
 
             local body = nil
+            local GetMacroInfo = _G.GetMacroInfo
             if GetActionText and GetMacroBody then
               local okT, mName = pcall(GetActionText, slot)
               if okT and not IsSecret(mName) and type(mName) == "string" and mName ~= "" then
-                local okB, b = pcall(GetMacroBody, mName)
-                if okB and not IsSecret(b) and type(b) == "string" then
-                  body = b
+                -- Prefer character-specific macros (indices 121..138) when names collide with account macros
+                if GetMacroInfo then
+                  for mIdx = 138, 121, -1 do
+                    local okMI, miName, _, miBody = pcall(GetMacroInfo, mIdx)
+                    if okMI and not IsSecret(miName) and miName == mName and not IsSecret(miBody) and type(miBody) == "string" and miBody ~= "" then
+                      body = miBody
+                      break
+                    end
+                  end
+                end
+                if not body then
+                  local okB, b = pcall(GetMacroBody, mName)
+                  if okB and not IsSecret(b) and type(b) == "string" then
+                    body = b
+                  end
                 end
               end
             end
@@ -475,7 +520,9 @@ function SpArc:ScanActionSlotsAndSpells(force)
           for _, s in pairs(slots) do
             if type(s) == "number" and s > 0 and not assistedSlots[s] then
               foundSlot = s
-              def.isKnown = true
+              if IsSpellIDKnown(sid) then
+                def.isKnown = true
+              end
               break
             end
           end
@@ -485,12 +532,13 @@ function SpArc:ScanActionSlotsAndSpells(force)
     end
 
     def.slot = foundSlot
+    def.slotCastLineCount = (foundSlot and castLinesBySlot[foundSlot] and #castLinesBySlot[foundSlot]) or 0
     local kb = foundSlot and SpArc:GetSlotKeybind(foundSlot) or nil
     def.keybind = (kb and kb ~= "" and kb) or ""
 
     if foundSlot then
       local dirSID = slotDirectSpellID[foundSlot]
-      if dirSID and def.idSet and def.idSet[dirSID] then
+      if dirSID and def.idSet and def.idSet[dirSID] and not (PVP_TALENT_SPELL_IDS[dirSID] and not SpArc:IsPvPActiveNow()) then
         def.isKnown = true
         def.liveSpellID = dirSID
       end

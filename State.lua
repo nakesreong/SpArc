@@ -274,6 +274,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     if assistedKey == "MIND_FLAY" and (defKey == "MIND_BLAST" or defKey == "VOID_TORRENT" or defKey == "TENTACLE_SLAM" or defKey == "VOID_BOLT") then
       isOnCD = true
       charges = 0
+      if remSec <= 0 then
+        remSec = math.max(1.8, cdDur * 0.35)
+      end
       cdRaw = "AssistSaysOnCD(MF)"
       if maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" then
         if (st.spellChargesUsed[defKey] or 0) < maxCh then
@@ -285,6 +288,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     elseif assistedKey == "TENTACLE_SLAM" and defKey == "MIND_BLAST" and st.targetDoTsUntil and now < st.targetDoTsUntil then
       isOnCD = true
       charges = 0
+      if remSec <= 0 then
+        remSec = math.max(1.8, cdDur * 0.35)
+      end
       cdRaw = "AssistSaysOnCD(TS)"
       if (st.spellChargesUsed[defKey] or 0) < maxCh then
         st.spellChargesUsed[defKey] = maxCh
@@ -338,10 +344,24 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   local actUsableVal, actNoManaVal = nil, nil
   local slotActiveSpellID = nil
   if slot then
-    if GetActionInfo then
-      local okAI, _, aID = pcall(GetActionInfo, slot)
-      if okAI and not IsSecret(aID) and type(aID) == "number" then
-        slotActiveSpellID = aID
+    local btBtn = _G["BT4Button" .. slot]
+    if btBtn and btBtn.GetSpellId then
+      local okBS, btSID = pcall(btBtn.GetSpellId, btBtn)
+      if okBS and not IsSecret(btSID) and type(btSID) == "number" and btSID > 0 then
+        slotActiveSpellID = btSID
+      end
+    end
+    if not slotActiveSpellID and GetActionInfo then
+      local okAI, aType, aID, aSub = pcall(GetActionInfo, slot)
+      if okAI and not IsSecret(aID) and type(aID) == "number" and aID > 0 then
+        if aType == "spell" or aSub == "spell" then
+          slotActiveSpellID = aID
+        elseif aType == "macro" and _G.GetMacroSpell then
+          local okMS, msID = pcall(_G.GetMacroSpell, aID)
+          if okMS and not IsSecret(msID) and type(msID) == "number" and msID > 0 then
+            slotActiveSpellID = msID
+          end
+        end
       end
     end
     if IsUsableAction then
@@ -354,7 +374,6 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         end
       end
     end
-    local btBtn = _G["BT4Button" .. slot]
     if btBtn and btBtn.icon and btBtn.icon.GetVertexColor then
       local okV, r, g, b = pcall(btBtn.icon.GetVertexColor, btBtn.icon)
       if okV and not IsSecret(r) and type(r) == "number" then
@@ -367,12 +386,21 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   if def.isExecute then
     local tgtHP = SpArc:GetTargetHPPercent()
     local hasCD = (def.baseCD and def.baseCD >= 3.0) and true or false
+    local alwaysCastableExecute = (defKey == "SHADOW_WORD_DEATH" or spellID == 32379)
     if isProc then
       isUsable = true
       usableSource = "ExecuteProcOverlay"
     elseif assistedKey == defKey then
       isUsable = true
       usableSource = "ExecuteAssistedCombat"
+    elseif alwaysCastableExecute then
+      if tgtHP and tgtHP <= 20 then
+        isUsable = true
+        usableSource = string.format("ExecuteHP(%.1f%%<=20%%)", tgtHP)
+      else
+        isUsable = false
+        usableSource = "ExecuteWait(>20%HP)"
+      end
     elseif bookUsableVal ~= nil then
       isUsable = (bookUsableVal == true) and (not bookNoPowerVal)
       usableSource = "ExecuteSpellBook(" .. tostring(isUsable) .. ")"
@@ -450,20 +478,41 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   end
 
   local finalReady = (not isOnCD)
+  local isUnavailable = false
   if def.procOnly and not isProc then
     finalReady = false
     isUsable = false
     usableSource = "procOnly(false)"
   end
 
-  if not def.isKnown and not slot and not SpArc.testMode then
-    finalReady = false
-    isUsable = false
-    usableSource = "SpellNotKnown"
-  elseif not def.isKnown and slotActiveSpellID and not (def.idSet and def.idSet[slotActiveSpellID]) and not SpArc.testMode then
-    finalReady = false
-    isUsable = false
-    usableSource = "TalentNotKnown(MacroFallback:" .. tostring(slotActiveSpellID) .. ")"
+  local isStanceWrapper = (
+    slotActiveSpellID == 15473
+    or slotActiveSpellID == 71
+    or slotActiveSpellID == 386208
+    or slotActiveSpellID == 2457
+    or slotActiveSpellID == 386164
+  )
+  local isExplicitFallback = (
+    slotActiveSpellID == 589
+    or slotActiveSpellID == 528
+    or slotActiveSpellID == 57755
+    or (slotActiveSpellID == 34914 and defKey ~= "VAMPIRIC_TOUCH" and defKey ~= "POWER_INFUSION")
+  )
+
+  if not SpArc.testMode and not isProc then
+    if slotActiveSpellID and not (def.idSet and def.idSet[slotActiveSpellID]) and not isStanceWrapper then
+      if not def.isKnown or isExplicitFallback then
+        isUnavailable = true
+        finalReady = false
+        isUsable = false
+        usableSource = "TalentUnavailable(MacroFallback:" .. tostring(slotActiveSpellID) .. ")"
+      end
+    elseif not def.isKnown and not (slotActiveSpellID and def.idSet and def.idSet[slotActiveSpellID]) then
+      isUnavailable = true
+      finalReady = false
+      isUsable = false
+      usableSource = "SpellNotKnown"
+    end
   end
 
   st.lastSpellAudit[defKey] = {
@@ -480,14 +529,15 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     isReady = finalReady,
     isUsable = isUsable,
     isProc = isProc,
+    isUnavailable = isUnavailable,
     usableSource = usableSource,
   }
 
   if not finalReady and def.procOnly and not isProc then
-    return false, remSec, durSec, startTime, false, false, def.liveIcon or def.fallbackIcon, def.keybind or "", 0
+    return false, remSec, durSec, startTime, false, false, def.liveIcon or def.fallbackIcon, def.keybind or "", 0, isUnavailable
   end
 
-  return finalReady, remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or "", charges
+  return finalReady, remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or "", charges, isUnavailable
 end
 
 function SpArc:CheckTargetHasDoTs(assistedKey)

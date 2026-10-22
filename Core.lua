@@ -9,8 +9,8 @@ _G.SparkArc = SpArc
 _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
-SpArc.VERSION = "2.7.1"
-SpArc.PROFILE_SCHEMA_VERSION = 9
+SpArc.VERSION = "2.8.0-QA"
+SpArc.PROFILE_SCHEMA_VERSION = 10
 
 local C_AddOns = _G.C_AddOns
 local C_CVar = _G.C_CVar
@@ -184,14 +184,14 @@ local BASE_SPELL_DEFS = {
   },
   VOID_ERUPTION = {
     key = "VOID_ERUPTION",
-    names = { "Облик Бездны", "Извержение Бездны", "Темное вознесение", "Voidform", "Void Eruption", "Dark Ascension" },
-    macroNames = { "M2", "1_to_2", "Dps" },
-    ids = { 228260, 391109 },
-    preferredSlot = 2,
+    names = { "Вхождение в Бездну", "Облик Бездны", "Извержение Бездны", "Темное вознесение", "Voidform", "Void Eruption", "Dark Ascension" },
+    macroNames = { "Dps", "1_to_2", "M2" },
+    ids = { 228260, 391109, 194249 },
+    preferredSlot = 49,
     baseCD = 120,
     maxCharges = 1,
     fallbackIcon = 537079,
-    fallbackKey = "M2",
+    fallbackKey = "1",
   },
   POWER_INFUSION = {
     key = "POWER_INFUSION",

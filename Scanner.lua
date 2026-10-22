@@ -353,7 +353,7 @@ function SpArc:ScanActionSlotsAndSpells(force)
             end
             if not foundSlot and def.idSet then
               for sid, _ in pairs(def.idSet) do
-                if line:find(tostring(sid), 1, true) then
+                if line:match("%f[%d]" .. tostring(sid) .. "%f[%D]") then
                   foundSlot = slot
                   break
                 end
@@ -379,7 +379,7 @@ function SpArc:ScanActionSlotsAndSpells(force)
             end
             if not foundSlot and def.idSet then
               for sid, _ in pairs(def.idSet) do
-                if line:find(tostring(sid), 1, true) then
+                if line:match("%f[%d]" .. tostring(sid) .. "%f[%D]") then
                   foundSlot = slot
                   break
                 end

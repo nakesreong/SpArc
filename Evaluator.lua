@@ -24,11 +24,18 @@ local SafeBool = SpArc.SafeBool
 local SPELL_DEFS = SpArc.SPELL_DEFS
 local st = SpArc.state
 
-function SpArc:SyncSpellDefsFromProfile(parsed)
+function SpArc:SyncSpellDefsFromProfile(parsed, presetID)
   if not parsed or not parsed.spells then return end
-  local changed = false
+  local changed = (presetID and st.lastSyncedPresetID ~= presetID) or false
+  if changed and next(parsed.spells) ~= nil then
+    for k in pairs(SPELL_DEFS) do
+      if not parsed.spells[k] then
+        SPELL_DEFS[k] = nil
+      end
+    end
+  end
   for k, spDef in pairs(parsed.spells) do
-    if not SPELL_DEFS[k] then
+    if not SPELL_DEFS[k] or changed then
       SPELL_DEFS[k] = spDef
       changed = true
     else
@@ -40,6 +47,7 @@ function SpArc:SyncSpellDefsFromProfile(parsed)
     end
   end
   if changed then
+    st.lastSyncedPresetID = presetID
     SpArc:ScanActionSlotsAndSpells(true)
   end
 end
@@ -96,7 +104,7 @@ function SpArc:SelectActiveParsedProfile()
 
   local parsed = (SpArc.ParsedPresets and SpArc.ParsedPresets[presetID])
     or (SpArc.ParsedPresets and SpArc.ParsedPresets["PRIEST_01_SHADOW_PVE"])
-  SpArc:SyncSpellDefsFromProfile(parsed)
+  SpArc:SyncSpellDefsFromProfile(parsed, presetID)
   return parsed, presetID
 end
 

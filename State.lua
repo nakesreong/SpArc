@@ -366,6 +366,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   local isUsable = true
   if def.isExecute then
     local tgtHP = SpArc:GetTargetHPPercent()
+    local hasCD = (def.baseCD and def.baseCD >= 3.0) and true or false
     if isProc then
       isUsable = true
       usableSource = "ExecuteProcOverlay"
@@ -375,7 +376,10 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     elseif bookUsableVal ~= nil then
       isUsable = (bookUsableVal == true) and (not bookNoPowerVal)
       usableSource = "ExecuteSpellBook(" .. tostring(isUsable) .. ")"
-    elseif tgtHP and tgtHP <= 20 then
+    elseif actUsableVal ~= nil then
+      isUsable = (actUsableVal == true) and (not actNoManaVal)
+      usableSource = "ExecuteActionBar(" .. tostring(isUsable) .. ")"
+    elseif hasCD and tgtHP and tgtHP <= 20 then
       isUsable = true
       usableSource = string.format("ExecuteHP(%.1f%%<=20%%)", tgtHP)
     else
@@ -488,21 +492,22 @@ end
 
 function SpArc:CheckTargetHasDoTs(assistedKey)
   local now = GetTime()
-  if assistedKey == "VAMPIRIC_TOUCH" then
+  local aDef = assistedKey and SPELL_DEFS[assistedKey] or nil
+  if assistedKey == "VAMPIRIC_TOUCH" or (aDef and aDef.appliesDoTs and (aDef.baseCD or 0) <= 1.5) then
     return false
   end
   if st.targetDoTsUntil and now < st.targetDoTsUntil then
     return true
   end
-  if assistedKey == "TENTACLE_SLAM" then
+  if assistedKey == "TENTACLE_SLAM" or (aDef and aDef.appliesDoTs) then
     return false
   end
-  if assistedKey and assistedKey ~= "TENTACLE_SLAM" and assistedKey ~= "VAMPIRIC_TOUCH" then
+  if assistedKey and not (aDef and aDef.appliesDoTs) then
     return true
   end
 
   if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID then
-    for _, dotID in ipairs({ 34914, 589 }) do
+    for _, dotID in ipairs({ 34914, 589, 772, 388539 }) do
       local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", dotID)
       if ok and type(aura) == "table" then
         if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
@@ -520,11 +525,11 @@ function SpArc:CheckTargetHasDoTs(assistedKey)
     local btn = _G["ElvUF_TargetDebuffsButton" .. i]
     if btn and SafeBool(btn.IsShown, btn) then
       local sid = btn.spellID
-      if not IsSecret(sid) and (sid == 34914 or sid == 589) then
+      if not IsSecret(sid) and (sid == 34914 or sid == 589 or sid == 772 or sid == 388539) then
         return true
       end
       local iconTex = btn.Icon and btn.Icon.GetTexture and btn.Icon:GetTexture()
-      if not IsSecret(iconTex) and (iconTex == 135978 or iconTex == 136207) then
+      if not IsSecret(iconTex) and (iconTex == 135978 or iconTex == 136207 or iconTex == 132155) then
         return true
       end
     end

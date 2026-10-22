@@ -7,16 +7,19 @@ local SpArc = _G.SpArc
 
 local GetTime = _G.GetTime
 local UnitPower = _G.UnitPower
+local UnitPowerType = _G.UnitPowerType
 local pcall = _G.pcall
 local ipairs = _G.ipairs
 local pairs = _G.pairs
 local tostring = _G.tostring
+local tonumber = _G.tonumber
 local type = _G.type
 local math = _G.math
 local table = _G.table
 local string = _G.string
 
 local IsSecret = SpArc.IsSecret
+local SPELL_DEFS = SpArc.SPELL_DEFS
 local st = SpArc.state
 
 local lastLoggedTopKey = nil
@@ -37,6 +40,107 @@ local CORE_AUDIT_ORDER = {
   "VOID_ERUPTION",
   "DISPERSION",
 }
+
+local POWER_LABELS_RU = {
+  [0]  = "Мана",
+  [1]  = "Ярость",
+  [2]  = "Фокус",
+  [3]  = "Энергия",
+  [6]  = "СилаРун",
+  [8]  = "АстрМощь",
+  [11] = "Водоворот",
+  [13] = "Безумие",
+  [17] = "Гнев",
+  [18] = "Боль",
+}
+
+local POWER_LABELS_EN = {
+  [0]  = "Mana",
+  [1]  = "Rage",
+  [2]  = "Focus",
+  [3]  = "Energy",
+  [6]  = "RunicPower",
+  [8]  = "AstralPower",
+  [11] = "Maelstrom",
+  [13] = "Insanity",
+  [17] = "Fury",
+  [18] = "Pain",
+}
+
+local function GetActiveAuditOrder(parsed)
+  local order = {}
+  local seen = {}
+  local function addKey(k)
+    if k and not seen[k] and (st.lastSpellAudit[k] or SPELL_DEFS[k]) then
+      seen[k] = true
+      order[#order + 1] = k
+    end
+  end
+
+  if not parsed and SpArc.SelectActiveParsedProfile then
+    parsed = SpArc:SelectActiveParsedProfile()
+  end
+
+  if parsed then
+    for _, r in ipairs(parsed.rules or {}) do
+      addKey(r.spell)
+    end
+    for _, k in ipairs(parsed.trackCDs or {}) do
+      addKey(k)
+    end
+    for _, k in ipairs(parsed.trackSaves or {}) do
+      addKey(k)
+    end
+    for _, r in ipairs(parsed.emergency or {}) do
+      addKey(r.spell)
+    end
+  end
+
+  local extra = {}
+  for k in pairs(st.lastSpellAudit) do
+    if not seen[k] and SPELL_DEFS[k] then
+      extra[#extra + 1] = k
+    end
+  end
+  table.sort(extra)
+  for _, k in ipairs(extra) do
+    addKey(k)
+  end
+
+  if #order == 0 then
+    for _, k in ipairs(CORE_AUDIT_ORDER) do
+      if st.lastSpellAudit[k] then
+        order[#order + 1] = k
+      end
+    end
+  end
+  return order
+end
+
+local function GetPrimaryResourceString(isRU)
+  local pType = 13
+  if UnitPowerType then
+    local okT, pt = pcall(UnitPowerType, "player")
+    if okT and not IsSecret(pt) and type(pt) == "number" then
+      pType = pt
+    end
+  end
+  if SPELL_DEFS["DEVOURING_PLAGUE"] and SPELL_DEFS["MIND_FLAY"] then
+    pType = 13
+  end
+  local label = (isRU and POWER_LABELS_RU[pType] or POWER_LABELS_EN[pType]) or (isRU and "Ресурс" or "Power")
+  local rawStr = "n/a"
+  if UnitPower then
+    local okP, p = pcall(UnitPower, "player", pType)
+    if okP then
+      rawStr = IsSecret(p) and "SECRET" or tostring(p)
+    end
+  end
+  if pType == 13 then
+    return string.format("%s(книга=%s, трек=%d)", label, rawStr, st.trackedInsanity or 0)
+  end
+  return string.format("%s(%s)", label, rawStr)
+end
 
 local function GetTimestampStr()
   if _G.date then
@@ -95,19 +199,14 @@ function SpArc:CaptureTelemetrySnapshot(reasonTag, queue, states, parsed)
   end
   local qStr = (#qParts > 0) and table.concat(qParts, " -> ") or "EMPTY"
 
-  local rawInsStr = "n/a"
-  if UnitPower then
-    local okP, p = pcall(UnitPower, "player", 13)
-    if okP then
-      rawInsStr = IsSecret(p) and "SECRET" or tostring(p)
-    end
-  end
-
+  local isRU = SpArc:IsRU()
+  local resStr = GetPrimaryResourceString(isRU)
   local assistedKey, assistedID = SpArc:GetAssistedSuggestedDefKey()
   local hasDoTs = SpArc:CheckTargetHasDoTs(assistedKey)
+  local auditOrder = GetActiveAuditOrder(parsed)
 
   local bookDiffs = {}
-  for _, sKey in ipairs(CORE_AUDIT_ORDER) do
+  for _, sKey in ipairs(auditOrder) do
     local a = st.lastSpellAudit[sKey]
     if a then
       bookDiffs[#bookDiffs + 1] = string.format(
@@ -131,14 +230,13 @@ function SpArc:CaptureTelemetrySnapshot(reasonTag, queue, states, parsed)
   end
 
   local headerLine = string.format(
-    SpArc:IsRU()
-      and "[%s | %s] Загорелось: %s | Безумие(книга=%s, трек=%d) | Доты=%s | БлиззАссист=%s(%s)"
-      or "[%s | %s] Queue: %s | Insanity(book=%s, sim=%d) | DoTs=%s | BlizzAssist=%s(%s)",
+    isRU
+      and "[%s | %s] Загорелось: %s | %s | Доты=%s | БлиззАссист=%s(%s)"
+      or "[%s | %s] Queue: %s | %s | DoTs=%s | BlizzAssist=%s(%s)",
     GetTimestampStr(),
     reasonTag or "TICK",
     qStr,
-    rawInsStr,
-    st.trackedInsanity or 0,
+    resStr,
     tostring(hasDoTs),
     tostring(assistedKey or "nil"),
     tostring(assistedID or "nil")
@@ -173,6 +271,8 @@ function SpArc:BuildTelemetryReportText()
   local db = SpArc:EnsureDB()
   local isRU = SpArc:IsRU()
   local errs = CaptureBugGrabberErrors(db)
+  local parsed = SpArc.SelectActiveParsedProfile and SpArc:SelectActiveParsedProfile() or nil
+  local auditOrder = GetActiveAuditOrder(parsed)
   local lines = {}
   if isRU then
     lines[#lines + 1] = "=== SPARC v" .. SpArc.VERSION .. " — ТЕЛЕМЕТРИЯ И СВЕРКА С КНИГОЙ ЗАКЛИНАНИЙ ==="
@@ -204,7 +304,7 @@ function SpArc:BuildTelemetryReportText()
     lines[#lines + 1] = "--- 1. CURRENT SPELLBOOK & BARTENDER4 STATE ---"
   end
 
-  for _, sKey in ipairs(CORE_AUDIT_ORDER) do
+  for _, sKey in ipairs(auditOrder) do
     local a = st.lastSpellAudit[sKey]
     if a then
       lines[#lines + 1] = string.format(

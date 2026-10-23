@@ -452,6 +452,10 @@ local function IsSameOrPairedDefKey(a, b)
 end
 
 function SpArc:TriggerSpellPress(defKey, slot, keybind)
+  local db = SpArc:EnsureDB()
+  if db and db.visual and db.visual.enablePressFeedback == false then
+    return
+  end
   local now = GetTime()
   local defs = SpArc.SPELL_DEFS
   if not slot and defKey and defs and defs[defKey] then
@@ -602,7 +606,7 @@ rootFrame:SetScript("OnUpdate", function()
 
   -- 1. Update Top Semicircle Rotation Arc
   local defs = SpArc.SPELL_DEFS
-  if hasHostileTarget then
+  if hasHostileTarget and (v.enableArcHUD ~= false) then
     for i = 1, MAX_ARC_SLOTS do
       local box = arcSlots[i]
       local item = (i <= maxQueue) and queue[i] or nil

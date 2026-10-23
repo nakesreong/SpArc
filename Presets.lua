@@ -39,6 +39,77 @@ local STRINGS = {
     TAB_3 = "3. Visual & HUD",
     TAB_4 = "4. Telemetry / Debug",
 
+    NAV_1 = "Rotation Presets",
+    NAV_2 = ".MD Code & AI",
+    NAV_3 = "Rotation Arc",
+    NAV_4 = "Saves & CDs Wings",
+    NAV_5 = "Dual Castbar",
+    NAV_6 = "Combat Camera",
+    NAV_7 = "Telemetry & Debug",
+    NAV_8 = "Profiles",
+
+    MOD_ENABLE = "Enable",
+    MOD_ENABLE_SAVES = "Enable Left Saves Wing",
+    MOD_ENABLE_CDS = "Enable Right CDs Wing",
+    TOP_TEST_HUD = "Test HUD: %s",
+    TOP_FIX_CURSOR = "Reset Cursor",
+
+    M3_TITLE = "Rotation Arc (Semicircle Queue)",
+    M3_GRP_GEO = "Arc Geometry & Position",
+    M3_GRP_ICONS = "Queue Icons & Scaling",
+    M3_GRP_FEEDBACK = "Press Animation & Feedback",
+    CK_PRESS_FEEDBACK = "Animate icon press feedback (-20% -> +20% bounce) on exact spell cast",
+
+    M4_TITLE = "Defensive Saves & Offensive Cooldowns Wings",
+    M4_GRP_POS = "Wings Position & Visibility",
+    M4_GRP_EMERG = "Emergency Low-HP Save Alert (Center Screen)",
+
+    M5_TITLE = "Dual-Direction Castbar & Filler Clipping",
+    M5_GRP_SIZE = "Castbar Dimensions & Offset",
+    M5_GRP_CLIP = "Channeled Filler Clipping Alert",
+
+    M6_TITLE = "Action Combat Camera (Mouselook)",
+    M6_GRP_KEYS = "Camera & Interact Keybinds (Auto-clears if bound in WoW / Bartender4)",
+    M6_HOLD_LABEL = "Unlock Cursor while held (onHold):",
+    M6_TOGGLE_LABEL = "Unlock / Lock Camera permanently (onPress):",
+    M6_INTERACT_LABEL = "Interact with Target / NPC (INTERACTTARGET):",
+    M6_BIND_WAIT = "Press key... (ESC)",
+    M6_RESET_KEY = "Default",
+    M6_UNBIND_KEY = "Clear",
+    M6_NOT_BOUND = "Not Bound",
+    M6_FIX_BTN = "Flush Hardware Cursor (/sparc fixcursor)",
+    M6_GRP_CROSS = "Center Reticle / Crosshair (Live Preview while open)",
+    SL_CAM_CROSS_Y = "Crosshair Vertical Height Y (px)",
+    SL_CAM_CROSS_SCALE = "Crosshair Scale",
+    M6_GRP_CLICK = "Mouselook Click-Casting (Bartender4 / ActionBars)",
+    CK_CAM_CLICKCAST = "Bind LMB/RMB (+Shift/Ctrl/Alt) to Action Slots 1..8 while camera is locked",
+
+    M7_TITLE = "Live SpellBook & Rotation Telemetry",
+
+    M8_TITLE = "Character Profiles (Per-Character HUD, Camera & Keybinds)",
+    M8_GRP_CUR = "Current Character & Active Profile",
+    M8_CUR_SUMMARY = "Character: |cffffd100%s|r   •   Active Profile: |cff00ff96%s|r\nProfile Keys:  onHold = |cffffd100[%s]|r   |   onPress = |cffffd100[%s]|r   |   Interact = |cffffd100[%s]|r",
+    M8_RESET_BTN = "Reset Current Profile",
+    M8_CHAR_PROF_BTN = "Use Character Profile",
+    M8_DEF_PROF_BTN = "Use 'Default' Profile",
+    M8_GRP_LIST = "All Saved Profiles (Switch, Copy Settings, or Delete)",
+    M8_DETAILS_HEADER = "Selected Profile: |cffffd100%s|r\n\n"
+      .. "• Hold Cursor (onHold): |cff00ccff%s|r\n"
+      .. "• Toggle Camera (onPress): |cff00ccff%s|r\n"
+      .. "• Interact Key: |cff00ccff%s|r\n"
+      .. "• Crosshair Y / Scale: |cff00ff00%d px / %.2f|r\n"
+      .. "• Arc Radius / Spread: |cff00ff00%d px / %d°|r\n\n"
+      .. "|cffaaaaaaEach character automatically uses its own profile (like ElvUI & Plater). If you bind any SpArc key in WoW or Bartender4, SpArc automatically drops the conflicting bind.|r",
+    M8_ACTIVATE_BTN = "Switch to Selected Profile",
+    M8_COPY_BTN = "Copy Selected -> Current Profile",
+    M8_DELETE_BTN = "Delete Selected Profile",
+    MSG_PROF_SWITCHED = "|cffa335eeSpArc:|r Switched active profile to |cff00ff96%s|r.",
+    MSG_PROF_COPIED = "|cffa335eeSpArc:|r Copied settings from |cffffd100%s|r into |cff00ff96%s|r.",
+    MSG_PROF_RESET = "|cffa335eeSpArc:|r Profile |cff00ff96%s|r reset to defaults.",
+    MSG_PROF_DELETED = "|cffa335eeSpArc:|r Deleted profile |cffff6060%s|r.",
+    MSG_BIND_CONFLICT_CLEARED = "|cffa335eeSpArc:|r Key |cffffd100[%s]|r is bound to '|cff00ccff%s|r' in game/addon — SpArc bind automatically cleared.",
+    MSG_INTERACT_AUTO_ADAPTED = "|cffa335eeSpArc:|r Key |cffffd100[%s]|r is used by '|cff00ccff%s|r' — Interact key in SpArc automatically set to |cff00ff96[%s]|r.",
+
     P1_SUMMARY = "Total Presets: |cffffd100%d|r  |  Your Class (%s): |cff00ff00%d|r  |  Active: |cffa335ee%s|r (%s)",
     FILTER_CLASS = "Filter: Only %s (%d)",
     FILTER_ALL = "Filter: All Classes (%d)",
@@ -92,6 +163,8 @@ local STRINGS = {
     CK_INTERRUPT = "Flash 'CLIP CHANNEL!' when a higher-priority spell comes ready during filler channel",
     CK_CASTBAR = "Show Dual-Direction SpArc Castbar (Left->Right cast / Right->Left channel)",
     CK_MINIMAP = "Show SpArc Minimap Button (Left-Click: Settings, Right-Click: Telemetry)",
+    CK_COMBAT_CAM = "Enable SpArc Combat Camera Module (replaces CombatMode; G = hold cursor, ` = toggle)",
+    CK_CAM_CROSSHAIR = "Show Combat Camera Center Crosshair when camera is locked",
     CK_TEST_MODE = "Test / Preview Mode (display full rotation arc, wings, and castbar right now)",
 
     TEL_HEADER = "|cffffd100Telemetry & Debugger:|r compares SpArc queue decisions against live SpellBook & Bartender4 state",
@@ -115,6 +188,8 @@ local STRINGS = {
     MM_TT_DRAG = "|cffaaaaaaHold Left-Click: Drag button around Minimap|r",
 
     MSG_TEST_TOGGLE = "|cffa335eeSpArc:|r HUD Test Preview: %s",
+    MSG_CAM_TOGGLE = "|cffa335eeSpArc:|r Combat Camera Module: %s",
+    MSG_CURSOR_FIXED = "|cffa335eeSpArc:|r Hardware cursor & freelook centering CVars flushed.",
     MSG_ON = "|cff00ff00ON|r",
     MSG_OFF = "|cffff4040OFF|r",
   },
@@ -128,6 +203,77 @@ local STRINGS = {
     TAB_2 = "2. Импорт .MD и ИИ",
     TAB_3 = "3. Визуал и HUD",
     TAB_4 = "4. Телеметрия / Дебаг",
+
+    NAV_1 = "Пресеты ротаций",
+    NAV_2 = "Псевдокод .MD и ИИ",
+    NAV_3 = "Дуга ротации",
+    NAV_4 = "Крылья Сейвов и КД",
+    NAV_5 = "Двойной Кастбар",
+    NAV_6 = "Боевая Камера",
+    NAV_7 = "Телеметрия и Дебаг",
+    NAV_8 = "Профили",
+
+    MOD_ENABLE = "Включить",
+    MOD_ENABLE_SAVES = "Включить левое крыло сейвов",
+    MOD_ENABLE_CDS = "Включить правое крыло бурстов/КД",
+    TOP_TEST_HUD = "Тест HUD: %s",
+    TOP_FIX_CURSOR = "Сброс курсора",
+
+    M3_TITLE = "Дуга ротации (Полукруг очереди заклинаний)",
+    M3_GRP_GEO = "Геометрия и положение дуги",
+    M3_GRP_ICONS = "Масштаб и количество иконок",
+    M3_GRP_FEEDBACK = "Отклик нажатия кнопок",
+    CK_PRESS_FEEDBACK = "Имитировать нажатие иконки (-20% -> +20% размера) при прожиме спелла",
+
+    M4_TITLE = "Боковые крылья Сейвов и Бурстов (КД)",
+    M4_GRP_POS = "Положение и видимость крыльев",
+    M4_GRP_EMERG = "Экстренный сейв в центре экрана (при низком ХП)",
+
+    M5_TITLE = "Двунаправленный Кастбар и Контроль Филлера",
+    M5_GRP_SIZE = "Размеры и отступы кастбара",
+    M5_GRP_CLIP = "Индикация прерывания потокового филлера",
+
+    M6_TITLE = "Боевая Камера (Удержание камеры / Mouselook)",
+    M6_GRP_KEYS = "Клавиши камеры и взаимодействия (авто-сброс при конфликте с игрой/аддонами)",
+    M6_HOLD_LABEL = "Отвязать курсор при удержании (onHold):",
+    M6_TOGGLE_LABEL = "Отвязать / привязать камеру насовсем (onPress):",
+    M6_INTERACT_LABEL = "Взаимодействие с целью / НПЦ (Interact):",
+    M6_BIND_WAIT = "Нажми клавишу... (ESC)",
+    M6_RESET_KEY = "По умолч.",
+    M6_UNBIND_KEY = "Снять",
+    M6_NOT_BOUND = "Не назначено",
+    M6_FIX_BTN = "Сбросить аппаратный курсор (/sparc fixcursor)",
+    M6_GRP_CROSS = "Прицел камеры в центре экрана (показывается вживую при настройке)",
+    SL_CAM_CROSS_Y = "Высота прицела по Y (px)",
+    SL_CAM_CROSS_SCALE = "Масштаб прицела",
+    M6_GRP_CLICK = "Боевой клик-каст мыши (Mouselook Click-Casting)",
+    CK_CAM_CLICKCAST = "Перехватывать ЛКМ/ПКМ (+Shift/Ctrl/Alt) под способности 1..8 при зажатой камере",
+
+    M7_TITLE = "Телеметрия книги заклинаний и отладка ротации",
+
+    M8_TITLE = "Профили персонажей (Индивидуальные бинды, Боевая Камера и HUD)",
+    M8_GRP_CUR = "Текущий персонаж и активный профиль",
+    M8_CUR_SUMMARY = "Персонаж: |cffffd100%s|r   •   Активный профиль: |cff00ff96%s|r\nБинды профиля:  onHold = |cffffd100[%s]|r   |   onPress = |cffffd100[%s]|r   |   Interact = |cffffd100[%s]|r",
+    M8_RESET_BTN = "Сбросить текущий профиль",
+    M8_CHAR_PROF_BTN = "Профиль этого персонажа",
+    M8_DEF_PROF_BTN = "Общий профиль (Default)",
+    M8_GRP_LIST = "Список всех профилей (Переключение, Копирование как в ElvUI/Plater, Удаление)",
+    M8_DETAILS_HEADER = "Выбранный профиль: |cffffd100%s|r\n\n"
+      .. "• Отвязать курсор (onHold): |cff00ccff%s|r\n"
+      .. "• Камера вкл/выкл (onPress): |cff00ccff%s|r\n"
+      .. "• Клавиша взаимодействия (Interact): |cff00ccff%s|r\n"
+      .. "• Прицел (Высота Y / Масштаб): |cff00ff00%d px / %.2f|r\n"
+      .. "• Дуга ротации (Радиус / Угол): |cff00ff00%d px / %d°|r\n\n"
+      .. "|cffaaaaaaУ каждого персонажа автоматически свой профиль (например, E на присте и C на варе). Если ты забиндишь кнопку SpArc в настройках игры или Bartender4 — бинд в SpArc автоматически снимется без конфликта.|r",
+    M8_ACTIVATE_BTN = "Переключиться на выбранный профиль",
+    M8_COPY_BTN = "Скопировать из выбранного в текущий",
+    M8_DELETE_BTN = "Удалить выбранный профиль",
+    MSG_PROF_SWITCHED = "|cffa335eeSpArc:|r Активный профиль переключён на |cff00ff96%s|r.",
+    MSG_PROF_COPIED = "|cffa335eeSpArc:|r Настройки скопированы из профиля |cffffd100%s|r в |cff00ff96%s|r.",
+    MSG_PROF_RESET = "|cffa335eeSpArc:|r Профиль |cff00ff96%s|r сброшен к значениям по умолчанию.",
+    MSG_PROF_DELETED = "|cffa335eeSpArc:|r Профиль |cffff6060%s|r удалён.",
+    MSG_BIND_CONFLICT_CLEARED = "|cffa335eeSpArc:|r Клавиша |cffffd100[%s]|r занята действием «|cff00ccff%s|r» в игре/аддоне — бинд в SpArc автоматически снят.",
+    MSG_INTERACT_AUTO_ADAPTED = "|cffa335eeSpArc:|r Клавиша |cffffd100[%s]|r занята («|cff00ccff%s|r») — клавиша Interact в SpArc автоматически переключена на |cff00ff96[%s]|r.",
 
     P1_SUMMARY = "Всего пресетов: |cffffd100%d|r  |  Для вашего класса (%s): |cff00ff00%d|r  |  Активный: |cffa335ee%s|r (%s)",
     FILTER_CLASS = "Фильтр: Только %s (%d)",
@@ -182,6 +328,8 @@ local STRINGS = {
     CK_INTERRUPT = "Подсвечивать 'ПРЕРВИ КАСТ!', когда во время филлера (Пытка разума) откатился спелл",
     CK_CASTBAR = "Показывать двойной кастбар SpArc (слева->направо каст / справа->налево потоковый)",
     CK_MINIMAP = "Показывать иконку-кнопку SpArc у миникарты (ЛКМ — настройки, ПКМ — телеметрия)",
+    CK_COMBAT_CAM = "Включить модуль Combat Camera в SpArc (замена CombatMode; G = курсор при зажатии, ` = вкл/выкл)",
+    CK_CAM_CROSSHAIR = "Показывать прицел Combat Camera в центре экрана при зажатой камере",
     CK_TEST_MODE = "Тестовый режим (показать превью всей дуги, кастбара и крыльев прямо сейчас)",
 
     TEL_HEADER = "|cffffd100Телеметрия и Дебаг:|r сравнивает выбор SpArc с реальным ответом книги заклинаний и панелей Bartender4",
@@ -205,6 +353,8 @@ local STRINGS = {
     MM_TT_DRAG = "|cffaaaaaaЗажать ЛКМ: Перетащить кнопку вокруг миникарты|r",
 
     MSG_TEST_TOGGLE = "|cffa335eeSpArc:|r Тестовый режим: %s",
+    MSG_CAM_TOGGLE = "|cffa335eeSpArc:|r Модуль Combat Camera: %s",
+    MSG_CURSOR_FIXED = "|cffa335eeSpArc:|r Аппаратный курсор и CVar центрирования камеры сброшены.",
     MSG_ON = "|cff00ff00ВКЛ|r",
     MSG_OFF = "|cffff4040ВЫКЛ|r",
   },

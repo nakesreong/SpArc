@@ -109,6 +109,9 @@ end
 
 function SpArc:GetSlotKeybind(slot)
   if not slot or slot < 1 then return nil end
+  if SpArc.IsCamClickCastEnabled and SpArc:IsCamClickCastEnabled() and SpArc.COMBAT_CAM_SLOT_KEYBINDS and SpArc.COMBAT_CAM_SLOT_KEYBINDS[slot] then
+    return SpArc.COMBAT_CAM_SLOT_KEYBINDS[slot]
+  end
   local cmd = SlotToBindingCommand(slot)
 
   if cmd then

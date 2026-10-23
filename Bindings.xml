@@ -1,0 +1,12 @@
+<Bindings>
+	<Binding name="SpArc - Hold Free Cursor" description="Hold to unlock cursor while held (G by default)" header="SpArc Combat Camera" category="|cffa335eeSpArc|r" runOnUp="true">
+		if SpArc_CameraHoldKey then
+			SpArc_CameraHoldKey(keystate)
+		end
+	</Binding>
+	<Binding name="SpArc - Toggle Combat Camera" description="Press to toggle Combat Camera lock/unlock (` by default)" category="|cffa335eeSpArc|r">
+		if SpArc_CameraToggleKey then
+			SpArc_CameraToggleKey("down")
+		end
+	</Binding>
+</Bindings>

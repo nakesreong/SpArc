@@ -20,6 +20,7 @@ local pcall = _G.pcall
 local ipairs = _G.ipairs
 local pairs = _G.pairs
 local type = _G.type
+local table = _G.table
 
 local FONT_PATH = (_G.GameFontNormal and select(1, _G.GameFontNormal:GetFont()))
   or (_G.StandardTextFont and select(1, _G.StandardTextFont:GetFont()))
@@ -327,7 +328,6 @@ SpArc.SLOT_DEFAULT_KEYBIND = {
   [6]  = "CM2",
   [7]  = "AM1",
   [8]  = "AM2",
-  [9]  = "E",
   [10] = "SE",
   [11] = "Q",
   [12] = "SQ",
@@ -384,6 +384,16 @@ SpArc.DEFAULT_VISUAL = {
   enableTelemetry = true,
   showMinimapButton = true,
   minimapAngle = 205,
+  enableArcHUD = true,
+  enablePressFeedback = true,
+  enableCombatCamera = true,
+  enableCamClickCast = true,
+  showCameraCrosshair = true,
+  camCrosshairOffsetY = 20,
+  camCrosshairScale = 1.00,
+  camHoldKey = "G",
+  camToggleKey = "`",
+  camInteractKey = "AUTO",
   lang = "AUTO",
 }
 
@@ -411,6 +421,75 @@ SpArc.state = {
   },
 }
 
+function SpArc:GetCurrentCharKey()
+  local uName = _G.UnitName and _G.UnitName("player")
+  local rName = _G.GetRealmName and _G.GetRealmName()
+  if uName and not SpArc.IsSecret(uName) and type(uName) == "string" and uName ~= "" and uName ~= _G.UNKNOWNOBJECT then
+    if rName and not SpArc.IsSecret(rName) and type(rName) == "string" and rName ~= "" then
+      return uName .. " - " .. rName
+    end
+    return uName
+  end
+  return "Default"
+end
+
+function SpArc:GetGameInteractKey()
+  if _G.GetBindingKey then
+    local ok1, k1, k2 = pcall(_G.GetBindingKey, "INTERACTTARGET")
+    if ok1 then
+      if k1 and not SpArc.IsSecret(k1) and k1 ~= "" then return k1 end
+      if k2 and not SpArc.IsSecret(k2) and k2 ~= "" then return k2 end
+    end
+    local ok2, m1, m2 = pcall(_G.GetBindingKey, "INTERACTMOUSEOVER")
+    if ok2 then
+      if m1 and not SpArc.IsSecret(m1) and m1 ~= "" then return m1 end
+      if m2 and not SpArc.IsSecret(m2) and m2 ~= "" then return m2 end
+    end
+  end
+  return "E"
+end
+
+local function CloneVisualTable(src, keepExplicitInteract)
+  local dst = {}
+  for k, v in pairs(SpArc.DEFAULT_VISUAL) do
+    dst[k] = v
+  end
+  if type(src) == "table" then
+    for k, v in pairs(src) do
+      if type(v) ~= "table" then
+        dst[k] = v
+      end
+    end
+  end
+  if not keepExplicitInteract or dst.camInteractKey == "AUTO" or dst.camInteractKey == nil then
+    dst.camInteractKey = SpArc:GetGameInteractKey()
+    dst.camInteractKeyUserSet = false
+  end
+  dst.camBindSnapshot = {}
+  return dst
+end
+
+local function EnsureProfileObject(db, profName, templateVisual, keepExplicitInteract)
+  db.profiles = db.profiles or {}
+  if not db.profiles[profName] then
+    db.profiles[profName] = {
+      visual = CloneVisualTable(templateVisual or (db.profiles["Default"] and db.profiles["Default"].visual), keepExplicitInteract),
+    }
+  end
+  local prof = db.profiles[profName]
+  prof.visual = prof.visual or {}
+  for k, v in pairs(SpArc.DEFAULT_VISUAL) do
+    if prof.visual[k] == nil then
+      prof.visual[k] = v
+    end
+  end
+  if prof.visual.camInteractKey == "AUTO" or prof.visual.camInteractKey == nil then
+    prof.visual.camInteractKey = SpArc:GetGameInteractKey()
+  end
+  prof.visual.camBindSnapshot = prof.visual.camBindSnapshot or {}
+  return prof
+end
+
 function SpArc:EnsureDB()
   _G.SpArcDB = _G.SpArcDB or _G.SparkArcDB or {}
   _G.SparkArcDB = _G.SpArcDB
@@ -423,12 +502,30 @@ function SpArc:EnsureDB()
     BOSS = "PRIEST_02_SHADOW_BOSS",
     PVP  = "PRIEST_03_SHADOW_PVP",
   }
-  db.visual = db.visual or {}
-  for k, v in pairs(SpArc.DEFAULT_VISUAL) do
-    if db.visual[k] == nil then
-      db.visual[k] = v
+
+  db.profileKeys = db.profileKeys or {}
+  db.profiles = db.profiles or {}
+
+  if not db._profilesInitialized then
+    local legacyVis = type(db.visual) == "table" and db.visual or nil
+    EnsureProfileObject(db, "Default", legacyVis)
+    if legacyVis then
+      EnsureProfileObject(db, "Ньарлатхотеп - Свежеватель Душ", legacyVis)
     end
+    db._profilesInitialized = true
+  else
+    EnsureProfileObject(db, "Default", nil)
   end
+
+  local charKey = SpArc:GetCurrentCharKey()
+  if charKey ~= "Default" and not db.profileKeys[charKey] then
+    db.profileKeys[charKey] = charKey
+  end
+
+  local activeProfName = (charKey ~= "Default" and db.profileKeys[charKey]) or db.activeProfile or "Default"
+  local activeProf = EnsureProfileObject(db, activeProfName, db.profiles["Default"] and db.profiles["Default"].visual)
+  db.activeProfile = activeProfName
+  db.visual = activeProf.visual
 
   db.presets = db.presets or {}
   db.presetOrder = db.presetOrder or {}
@@ -453,6 +550,108 @@ function SpArc:EnsureDB()
   db.telemetryLog = db.telemetryLog or {}
   db.lastSpellAudit = db.lastSpellAudit or {}
   return db
+end
+
+function SpArc:GetActiveProfileName()
+  local db = SpArc:EnsureDB()
+  return db.activeProfile or "Default"
+end
+
+function SpArc:GetProfileList()
+  local db = SpArc:EnsureDB()
+  local charKey = SpArc:GetCurrentCharKey()
+  local seen = {}
+  local list = {}
+  local function add(name)
+    if name and name ~= "" and not seen[name] and db.profiles[name] then
+      seen[name] = true
+      list[#list + 1] = name
+    end
+  end
+  if charKey ~= "Default" then
+    EnsureProfileObject(db, charKey, db.profiles["Default"] and db.profiles["Default"].visual)
+    add(charKey)
+  end
+  add("Default")
+  local others = {}
+  for k in pairs(db.profiles) do
+    if not seen[k] then
+      others[#others + 1] = k
+    end
+  end
+  table.sort(others)
+  for _, k in ipairs(others) do
+    add(k)
+  end
+  return list
+end
+
+function SpArc:SetProfile(profileName)
+  if not profileName or profileName == "" then return end
+  local db = SpArc:EnsureDB()
+  local charKey = SpArc:GetCurrentCharKey()
+  local prof = EnsureProfileObject(db, profileName, db.profiles["Default"] and db.profiles["Default"].visual)
+  if charKey ~= "Default" then
+    db.profileKeys[charKey] = profileName
+  end
+  db.activeProfile = profileName
+  db.visual = prof.visual
+  if SpArc.ApplyVisualLayout then SpArc:ApplyVisualLayout() end
+  if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
+  if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
+  if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
+end
+
+function SpArc:CopyProfileFrom(srcProfileName)
+  local db = SpArc:EnsureDB()
+  local srcProf = db.profiles and db.profiles[srcProfileName]
+  if not srcProf or not srcProf.visual then return false end
+  local curProfName = SpArc:GetActiveProfileName()
+  local curProf = EnsureProfileObject(db, curProfName, nil)
+  for k, v in pairs(srcProf.visual) do
+    if type(v) ~= "table" then
+      curProf.visual[k] = v
+    end
+  end
+  curProf.visual.camBindSnapshot = {}
+  curProf.visual.camInteractKeyUserSet = false
+  db.visual = curProf.visual
+  if SpArc.ApplyVisualLayout then SpArc:ApplyVisualLayout() end
+  if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
+  if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
+  if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
+  return true
+end
+
+function SpArc:ResetCurrentProfile()
+  local db = SpArc:EnsureDB()
+  local curProfName = SpArc:GetActiveProfileName()
+  db.profiles[curProfName] = {
+    visual = CloneVisualTable(nil),
+  }
+  db.visual = db.profiles[curProfName].visual
+  if SpArc.ApplyVisualLayout then SpArc:ApplyVisualLayout() end
+  if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
+  if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
+  if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
+end
+
+function SpArc:DeleteProfile(profileName)
+  local db = SpArc:EnsureDB()
+  local curProfName = SpArc:GetActiveProfileName()
+  if not profileName or profileName == "Default" or profileName == curProfName then
+    return false
+  end
+  if db.profiles[profileName] then
+    db.profiles[profileName] = nil
+    for ck, pk in pairs(db.profileKeys or {}) do
+      if pk == profileName then
+        db.profileKeys[ck] = ck
+      end
+    end
+    return true
+  end
+  return false
 end
 
 function SpArc:RebuildParsedProfiles()

@@ -20,5 +20,6 @@ Scanner.lua
 State.lua
 Evaluator.lua
 HUD.lua
+Camera.lua
 Telemetry.lua
 SpArc.lua

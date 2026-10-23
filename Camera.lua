@@ -264,9 +264,9 @@ function SpArc:RecordManualCameraBind(dbKey, bindStr)
   v[dbKey] = bindStr or ""
   v.camBindSnapshot = v.camBindSnapshot or {}
   if dbKey == "camInteractKey" then
-    v.camInteractKeyUserSet = (bindStr ~= nil and bindStr ~= "" and bindStr ~= "AUTO")
+    v.camInteractKeyUserSet = true
   else
-    v[dbKey .. "UserSet"] = (bindStr ~= nil and bindStr ~= "")
+    v[dbKey .. "UserSet"] = true
   end
   if bindStr and bindStr ~= "" and bindStr ~= "AUTO" then
     local act = GetRawGameBindingAction(bindStr)
@@ -276,11 +276,30 @@ function SpArc:RecordManualCameraBind(dbKey, bindStr)
   end
 end
 
+local function IsActionBarConflictAction(action)
+  if not action or action == "" then return false end
+  if action:find("^ACTIONBUTTON") or action:find("^MULTIACTIONBAR") or action:find("^CLICK%s+BT4Button") or action:find("^CLICK%s+ElvUI_Bar") then
+    return true
+  end
+  return false
+end
+
 function SpArc:CheckAndResolveCameraBindConflicts(reason)
   local db = SpArc:EnsureDB()
   local v = db and db.visual
   if not v then return false end
   v.camBindSnapshot = v.camBindSnapshot or {}
+
+  -- Restore G / ` if they were accidentally cleared by v2.8.0 initial snapshot check
+  if not v._restoredHoldV281 then
+    if v.camHoldKey == "" and not v.camHoldKeyUserSet then
+      v.camHoldKey = "G"
+    end
+    if v.camToggleKey == "" and not v.camToggleKeyUserSet then
+      v.camToggleKey = "`"
+    end
+    v._restoredHoldV281 = true
+  end
 
   local changed = false
   local slots = { "camHoldKey", "camToggleKey", "camInteractKey" }
@@ -303,36 +322,26 @@ function SpArc:CheckAndResolveCameraBindConflicts(reason)
       local userSet = (slotKey == "camInteractKey") and v.camInteractKeyUserSet or v[slotKey .. "UserSet"]
 
       if not isOwn and curAct ~= "" then
-        if slotKey == "camInteractKey" and not isInteract then
-          -- Conflict on Interact key (e.g. 'E' is bound to ACTIONBUTTON9 on Warrior)
-          if prevKey == key and prevAct ~= curAct then
-            -- User just bound this key to something else in Game / Bartender4!
-            v.camInteractKey = ""
-            v.camInteractKeyUserSet = false
+        if reason == "UPDATE_BINDINGS" and prevKey == key and prevAct ~= nil and prevAct ~= curAct then
+          -- The user actively bound this key to a new action in Game Keybindings / Bartender4 while playing
+          if not (slotKey == "camInteractKey" and isInteract) then
+            v[slotKey] = ""
+            v[slotKey .. "UserSet"] = true
             v.camBindSnapshot[slotKey] = nil
             changed = true
             print(string.format(SpArc:L("MSG_BIND_CONFLICT_CLEARED"), key, curAct))
-          elseif not userSet then
-            -- Auto-adapt to character's game INTERACTTARGET key (e.g. 'C' on Warrior) if free
-            local gameIntKey = SpArc:GetGameInteractKey()
-            local gameIntAct = GetRawGameBindingAction(gameIntKey)
-            if gameIntKey and gameIntKey ~= "" and gameIntKey ~= key and (gameIntAct == "" or IsInteractBindingAction(gameIntAct) or IsSpArcOwnBindingAction(gameIntAct)) then
-              v.camInteractKey = gameIntKey
-              v.camBindSnapshot[slotKey] = gameIntKey .. "::" .. gameIntAct
-              changed = true
-              print(string.format(SpArc:L("MSG_INTERACT_AUTO_ADAPTED"), key, curAct, gameIntKey))
-            else
-              v.camInteractKey = ""
-              v.camBindSnapshot[slotKey] = nil
-              changed = true
-              print(string.format(SpArc:L("MSG_BIND_CONFLICT_CLEARED"), key, curAct))
-            end
           end
-        elseif slotKey ~= "camInteractKey" then
-          -- Conflict on Hold (G) or Toggle (`) key
-          if (prevKey == key and prevAct ~= curAct) or (not userSet and not isInteract) then
-            v[slotKey] = ""
-            v[slotKey .. "UserSet"] = false
+        elseif slotKey == "camInteractKey" and not isInteract and IsActionBarConflictAction(curAct) and not userSet then
+          -- On login/profile copy: Interact key (e.g. 'E') is bound to an ActionBar button on this character (e.g. Warrior)
+          local gameIntKey = SpArc:GetGameInteractKey()
+          local gameIntAct = GetRawGameBindingAction(gameIntKey)
+          if gameIntKey and gameIntKey ~= "" and gameIntKey ~= key and not IsActionBarConflictAction(gameIntAct) then
+            v.camInteractKey = gameIntKey
+            v.camBindSnapshot[slotKey] = gameIntKey .. "::" .. gameIntAct
+            changed = true
+            print(string.format(SpArc:L("MSG_INTERACT_AUTO_ADAPTED"), key, curAct, gameIntKey))
+          else
+            v.camInteractKey = ""
             v.camBindSnapshot[slotKey] = nil
             changed = true
             print(string.format(SpArc:L("MSG_BIND_CONFLICT_CLEARED"), key, curAct))

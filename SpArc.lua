@@ -1382,7 +1382,8 @@ local minimapBtn = nil
 local function UpdateMinimapButtonPosition()
   if not minimapBtn or not _G.Minimap then return end
   local parent = minimapBtn:GetParent()
-  if parent and parent ~= _G.Minimap and parent:GetName() and parent:GetName():find("WTMinimap") then
+  -- Do not override position if ElvUI_WindTools MinimapButtons or another bar has adopted the button
+  if (parent and parent ~= _G.Minimap) or minimapBtn.isSkinned or minimapBtn.original then
     return
   end
   local db = SpArc:EnsureDB()
@@ -1416,13 +1417,19 @@ local function CreateSpArcMinimapButton()
   btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   btn:RegisterForDrag("LeftButton")
 
-  local bg = btn:CreateTexture(nil, "BACKGROUND")
-  bg:SetAllPoints(btn)
+  -- Keep ONLY the main icon texture as a direct region of btn so WindTools MinimapButtons
+  -- skins the icon cleanly instead of stretching solid background/border textures over ARTWORK!
+  local frameDecor = CreateFrame("Frame", nil, btn)
+  frameDecor:SetAllPoints(btn)
+  frameDecor:SetFrameLevel(math.max(1, btn:GetFrameLevel() - 1))
+
+  local bg = frameDecor:CreateTexture(nil, "BACKGROUND")
+  bg:SetAllPoints(frameDecor)
   bg:SetColorTexture(0.06, 0.04, 0.10, 0.95)
 
-  local border = btn:CreateTexture(nil, "BORDER")
-  border:SetPoint("TOPLEFT", btn, "TOPLEFT", -1, 1)
-  border:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 1, -1)
+  local border = frameDecor:CreateTexture(nil, "BORDER")
+  border:SetPoint("TOPLEFT", frameDecor, "TOPLEFT", -1, 1)
+  border:SetPoint("BOTTOMRIGHT", frameDecor, "BOTTOMRIGHT", 1, -1)
   border:SetColorTexture(0.75, 0.30, 1.0, 0.90)
   btn.border = border
 
@@ -1440,7 +1447,7 @@ local function CreateSpArcMinimapButton()
   label:SetText("SpArc")
 
   btn:SetScript("OnEnter", function(self)
-    self.border:SetColorTexture(1.0, 0.82, 0.20, 1.0)
+    if self.border then self.border:SetColorTexture(1.0, 0.82, 0.20, 1.0) end
     if _G.GameTooltip then
       _G.GameTooltip:SetOwner(self, "ANCHOR_LEFT")
       _G.GameTooltip:AddLine(string.format(SpArc:L("MM_TT_TITLE"), SpArc.VERSION))
@@ -1452,11 +1459,12 @@ local function CreateSpArcMinimapButton()
     end
   end)
   btn:SetScript("OnLeave", function(self)
-    self.border:SetColorTexture(0.75, 0.30, 1.0, 0.90)
+    if self.border then self.border:SetColorTexture(0.75, 0.30, 1.0, 0.90) end
     if _G.GameTooltip then _G.GameTooltip:Hide() end
   end)
 
   btn:SetScript("OnDragStart", function(self)
+    if (self:GetParent() and self:GetParent() ~= _G.Minimap) or self.isSkinned then return end
     self:SetScript("OnUpdate", function()
       if not _G.Minimap or not _G.GetCursorPosition then return end
       local okC, mx, my = pcall(_G.Minimap.GetCenter, _G.Minimap)
@@ -1497,11 +1505,66 @@ local function CreateSpArcMinimapButton()
   SpArc:UpdateMinimapButtonVisibility()
 end
 
+---------------------------------------------------------------------------------------
+--         BLIZZARD ADDON SETTINGS PANEL (ESC -> ПАРАМЕТРЫ -> МОДИФИКАЦИИ)           --
+---------------------------------------------------------------------------------------
+local blizzardSettingsRegistered = false
+local function RegisterSpArcBlizzardSettings()
+  if blizzardSettingsRegistered then return end
+  if not (_G.Settings and _G.Settings.RegisterCanvasLayoutCategory and _G.Settings.RegisterAddOnCategory) then
+    return
+  end
+  blizzardSettingsRegistered = true
+
+  local panel = CreateFrame("Frame", "SpArcBlizzardSettingsPanel", UIParent)
+  panel.name = "SpArc"
+
+  local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  ApplyCyrFont(title, 18)
+  title:SetPoint("TOPLEFT", 16, -16)
+  title:SetText("|cffa335eeSpArc v" .. tostring(SpArc.VERSION) .. "|r — Semicircle FSM Rotation & Action Combat Camera")
+
+  local desc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  ApplyCyrFont(desc, 13)
+  desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -12)
+  desc:SetWidth(580)
+  desc:SetJustifyH("LEFT")
+  desc:SetSpacing(4)
+  desc:SetText("Авторы: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r\n\nМодульный визуализатор FSM-ротаций (.MD псевдокод), двунаправленный кастбар, крылья сейвов/бурстов, автономная Боевая Камера (Mouselook) и индивидуальные профили персонажей.")
+
+  local function CreateQuickBtn(text, x, y, tabIdx)
+    local b = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    b:SetSize(250, 32)
+    b:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
+    b:SetText(text)
+    b:SetScript("OnClick", function()
+      if _G.HideUIPanel and _G.SettingsPanel and _G.SettingsPanel:IsShown() then
+        pcall(_G.HideUIPanel, _G.SettingsPanel)
+      end
+      OpenControlCenter(tabIdx or 1)
+    end)
+    return b
+  end
+
+  CreateQuickBtn("Открыть центр управления SpArc (/sparc)", 16, -110, 1)
+  CreateQuickBtn("Боевая Камера и клавиши (/sparc cam)", 280, -110, 6)
+  CreateQuickBtn("Дуга ротации и HUD (/sparc hud)", 16, -152, 3)
+  CreateQuickBtn("Профили персонажей (/sparc profiles)", 280, -152, 8)
+
+  local okCat, category = pcall(_G.Settings.RegisterCanvasLayoutCategory, panel, "SpArc")
+  if okCat and category then
+    pcall(_G.Settings.RegisterAddOnCategory, category)
+    SpArc.settingsCategoryID = category.GetID and category:GetID() or nil
+  end
+end
+
 CreateSpArcMinimapButton()
+RegisterSpArcBlizzardSettings()
 SpArc:ApplySmartBossTabBinding()
 if _G.C_Timer and _G.C_Timer.After then
   _G.C_Timer.After(1.0, function()
     CreateSpArcMinimapButton()
+    RegisterSpArcBlizzardSettings()
     UpdateMinimapButtonPosition()
     SpArc:UpdateMinimapButtonVisibility()
     SpArc:ApplySmartBossTabBinding()

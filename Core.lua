@@ -9,7 +9,7 @@ _G.SparkArc = SpArc
 _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
-SpArc.VERSION = "2.8.1"
+SpArc.VERSION = "2.8.3"
 SpArc.PROFILE_SCHEMA_VERSION = 10
 
 local C_AddOns = _G.C_AddOns
@@ -461,8 +461,8 @@ local function CloneVisualTable(src, keepExplicitInteract)
       end
     end
   end
-  if not keepExplicitInteract or dst.camInteractKey == "AUTO" or dst.camInteractKey == nil then
-    dst.camInteractKey = SpArc:GetGameInteractKey()
+  if not keepExplicitInteract or dst.camInteractKey == nil then
+    dst.camInteractKey = "AUTO"
     dst.camInteractKeyUserSet = false
   end
   dst.camBindSnapshot = {}
@@ -482,9 +482,6 @@ local function EnsureProfileObject(db, profName, templateVisual, keepExplicitInt
     if prof.visual[k] == nil then
       prof.visual[k] = v
     end
-  end
-  if prof.visual.camInteractKey == "AUTO" or prof.visual.camInteractKey == nil then
-    prof.visual.camInteractKey = SpArc:GetGameInteractKey()
   end
   prof.visual.camBindSnapshot = prof.visual.camBindSnapshot or {}
   return prof

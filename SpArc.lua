@@ -184,10 +184,14 @@ local function OpenControlCenter(initialTab)
     verText:SetTextColor(0.55, 0.80, 1.0, 1)
     verText:SetText("v" .. tostring(SpArc.VERSION))
 
+    local ui = {}
+    controlFrame.ui = ui
+
     local subTitle = topBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(subTitle, 12)
     subTitle:SetPoint("LEFT", topBar, "LEFT", 218, 0)
     subTitle:SetTextColor(0.80, 0.80, 0.88, 1)
+    ui.subTitle = subTitle
 
     local closeBtn = CreateElvButton(topBar, 28, 26, "X")
     closeBtn:SetPoint("RIGHT", topBar, "RIGHT", -10, 0)
@@ -201,6 +205,7 @@ local function OpenControlCenter(initialTab)
       SpArc:ApplyVisualLayout()
       controlFrame:RefreshUI()
     end)
+    ui.langBtn = langBtn
 
     local fixCursorTopBtn = CreateElvButton(topBar, 125, 26, "")
     fixCursorTopBtn:SetPoint("RIGHT", langBtn, "LEFT", -6, 0)
@@ -210,6 +215,7 @@ local function OpenControlCenter(initialTab)
       end
       print(SpArc:L("MSG_CURSOR_FIXED"))
     end)
+    ui.fixCursorTopBtn = fixCursorTopBtn
 
     local testHudTopBtn = CreateElvButton(topBar, 135, 26, "")
     testHudTopBtn:SetPoint("RIGHT", fixCursorTopBtn, "LEFT", -6, 0)
@@ -218,6 +224,7 @@ local function OpenControlCenter(initialTab)
       if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
       controlFrame:RefreshUI()
     end)
+    ui.testHudTopBtn = testHudTopBtn
 
     subTitle:SetPoint("RIGHT", testHudTopBtn, "LEFT", -10, 0)
     subTitle:SetJustifyH("LEFT")
@@ -236,6 +243,11 @@ local function OpenControlCenter(initialTab)
     local groupBoxes = {}
     local allSliders = {}
     local allChecks = {}
+    ui.navButtons = navButtons
+    ui.pages = pages
+    ui.groupBoxes = groupBoxes
+    ui.allSliders = allSliders
+    ui.allChecks = allChecks
 
     local function SelectTab(idx)
       currentTabIdx = idx or 1
@@ -469,28 +481,28 @@ local function OpenControlCenter(initialTab)
     -- MODULE 1: ROTATION PRESETS (55)
     -----------------------------------------------------------------------------------
     local p1 = pages[1]
-    local p1Summary = p1:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(p1Summary, 13)
-    p1Summary:SetPoint("TOPLEFT", 0, 0)
-    p1Summary:SetJustifyH("LEFT")
+    ui.p1Summary = p1:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ui.p1Summary, 13)
+    ui.p1Summary:SetPoint("TOPLEFT", 0, 0)
+    ui.p1Summary:SetJustifyH("LEFT")
 
-    local filterBtn = CreateElvButton(p1, 210, 26, "")
-    filterBtn:SetPoint("TOPLEFT", 0, -26)
-    filterBtn:SetScript("OnClick", function()
+    ui.filterBtn = CreateElvButton(p1, 210, 26, "")
+    ui.filterBtn:SetPoint("TOPLEFT", 0, -26)
+    ui.filterBtn:SetScript("OnClick", function()
       filterClassOnly = not filterClassOnly
       controlFrame:RefreshUI()
     end)
 
-    local autoModeBtn = CreateElvButton(p1, 210, 26, "")
-    autoModeBtn:SetPoint("LEFT", filterBtn, "RIGHT", 8, 0)
-    autoModeBtn:SetScript("OnClick", function()
+    ui.autoModeBtn = CreateElvButton(p1, 210, 26, "")
+    ui.autoModeBtn:SetPoint("LEFT", ui.filterBtn, "RIGHT", 8, 0)
+    ui.autoModeBtn:SetScript("OnClick", function()
       db.mode = (db.mode == "AUTO") and "MANUAL" or "AUTO"
       controlFrame:RefreshUI()
     end)
 
-    local newPresetBtn = CreateElvButton(p1, 160, 26, "")
-    newPresetBtn:SetPoint("LEFT", autoModeBtn, "RIGHT", 8, 0)
-    newPresetBtn:SetScript("OnClick", function()
+    ui.newPresetBtn = CreateElvButton(p1, 160, 26, "")
+    ui.newPresetBtn:SetPoint("LEFT", ui.autoModeBtn, "RIGHT", 8, 0)
+    ui.newPresetBtn:SetScript("OnClick", function()
       local newIdx = #db.presetOrder + 1
       local cls = GetPlayerClassTag()
       local newID = string.format("%s_CUSTOM_%d", cls, newIdx)
@@ -514,13 +526,13 @@ local function OpenControlCenter(initialTab)
     listScroll:SetPoint("TOPLEFT", 4, -4)
     listScroll:SetPoint("BOTTOMRIGHT", -26, 4)
 
-    local listContent = CreateFrame("Frame", nil, listScroll)
-    listContent:SetSize(296, 1500)
-    listScroll:SetScrollChild(listContent)
+    ui.listContent = CreateFrame("Frame", nil, listScroll)
+    ui.listContent:SetSize(296, 1500)
+    listScroll:SetScrollChild(ui.listContent)
 
-    local rowButtons = {}
+    ui.rowButtons = {}
     for idx = 1, 65 do
-      local rBtn = CreateElvButton(listContent, 294, 24, "")
+      local rBtn = CreateElvButton(ui.listContent, 294, 24, "")
       rBtn:SetPoint("TOPLEFT", 0, -(idx - 1) * 26)
       rBtn.fs:ClearAllPoints()
       rBtn.fs:SetPoint("LEFT", rBtn, "LEFT", 8, 0)
@@ -528,7 +540,7 @@ local function OpenControlCenter(initialTab)
       rBtn.fs:SetJustifyH("LEFT")
       rBtn.fs:SetWordWrap(false)
       rBtn:Hide()
-      rowButtons[idx] = rBtn
+      ui.rowButtons[idx] = rBtn
     end
 
     local detailsBox = CreateFrame("Frame", nil, p1, "BackdropTemplate")
@@ -536,17 +548,17 @@ local function OpenControlCenter(initialTab)
     detailsBox:SetPoint("BOTTOMRIGHT", 0, 0)
     SetBackdropFlat(detailsBox, 0.08, 0.08, 0.11, 0.95, 0.20, 0.20, 0.27, 1.0)
 
-    local detailsText = detailsBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(detailsText, 12)
-    detailsText:SetPoint("TOPLEFT", 14, -14)
-    detailsText:SetPoint("TOPRIGHT", -14, -14)
-    detailsText:SetJustifyH("LEFT")
-    detailsText:SetJustifyV("TOP")
-    detailsText:SetSpacing(3)
+    ui.detailsText = detailsBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ui.detailsText, 12)
+    ui.detailsText:SetPoint("TOPLEFT", 14, -14)
+    ui.detailsText:SetPoint("TOPRIGHT", -14, -14)
+    ui.detailsText:SetJustifyH("LEFT")
+    ui.detailsText:SetJustifyV("TOP")
+    ui.detailsText:SetSpacing(3)
 
-    local activateBtn = CreateElvButton(detailsBox, 270, 28, "")
-    activateBtn:SetPoint("BOTTOM", 0, 82)
-    activateBtn:SetScript("OnClick", function()
+    ui.activateBtn = CreateElvButton(detailsBox, 270, 28, "")
+    ui.activateBtn:SetPoint("BOTTOM", 0, 82)
+    ui.activateBtn:SetScript("OnClick", function()
       if selectedPresetForEdit and db.presets[selectedPresetForEdit] then
         db.activePresetID = selectedPresetForEdit
         db.mode = "MANUAL"
@@ -556,16 +568,16 @@ local function OpenControlCenter(initialTab)
       end
     end)
 
-    local openMdBtn = CreateElvButton(detailsBox, 270, 28, "")
-    openMdBtn:SetPoint("BOTTOM", 0, 48)
-    openMdBtn:SetScript("OnClick", function()
+    ui.openMdBtn = CreateElvButton(detailsBox, 270, 28, "")
+    ui.openMdBtn:SetPoint("BOTTOM", 0, 48)
+    ui.openMdBtn:SetScript("OnClick", function()
       showingAIPrompt = false
       SelectTab(2)
     end)
 
-    local testModeBtn1 = CreateElvButton(detailsBox, 270, 28, "")
-    testModeBtn1:SetPoint("BOTTOM", 0, 14)
-    testModeBtn1:SetScript("OnClick", function()
+    ui.testModeBtn1 = CreateElvButton(detailsBox, 270, 28, "")
+    ui.testModeBtn1:SetPoint("BOTTOM", 0, 14)
+    ui.testModeBtn1:SetScript("OnClick", function()
       SpArc.testMode = not SpArc.testMode
       controlFrame:RefreshUI()
     end)
@@ -580,19 +592,19 @@ local function OpenControlCenter(initialTab)
     aiBanner:SetHeight(48)
     SetBackdropFlat(aiBanner, 0.09, 0.08, 0.14, 0.96, 0.35, 0.24, 0.55, 1.0)
 
-    local aiText = aiBanner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(aiText, 12)
-    aiText:SetPoint("TOPLEFT", 12, -8)
-    aiText:SetPoint("BOTTOMRIGHT", -195, 8)
-    aiText:SetJustifyH("LEFT")
-    aiText:SetTextColor(1, 0.88, 0.30, 1)
+    ui.aiText = aiBanner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ui.aiText, 12)
+    ui.aiText:SetPoint("TOPLEFT", 12, -8)
+    ui.aiText:SetPoint("BOTTOMRIGHT", -195, 8)
+    ui.aiText:SetJustifyH("LEFT")
+    ui.aiText:SetTextColor(1, 0.88, 0.30, 1)
 
-    local aiPromptBtn = CreateElvButton(aiBanner, 175, 28, "")
-    aiPromptBtn:SetPoint("RIGHT", -10, 0)
+    ui.aiPromptBtn = CreateElvButton(aiBanner, 175, 28, "")
+    ui.aiPromptBtn:SetPoint("RIGHT", -10, 0)
 
-    local editorStatus = p2:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(editorStatus, 12)
-    editorStatus:SetPoint("TOPLEFT", 0, -56)
+    ui.editorStatus = p2:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ui.editorStatus, 12)
+    ui.editorStatus:SetPoint("TOPLEFT", 0, -56)
 
     local editorBoxFrame = CreateFrame("Frame", nil, p2, "BackdropTemplate")
     editorBoxFrame:SetPoint("TOPLEFT", 0, -78)
@@ -603,20 +615,20 @@ local function OpenControlCenter(initialTab)
     mdScroll:SetPoint("TOPLEFT", 8, -8)
     mdScroll:SetPoint("BOTTOMRIGHT", -28, 8)
 
-    local editBox = CreateFrame("EditBox", nil, mdScroll)
-    editBox:SetMultiLine(true)
-    editBox:SetFontObject("ChatFontNormal")
-    ApplyCyrFont(editBox, 12)
-    editBox:SetWidth(590)
-    editBox:SetAutoFocus(false)
-    editBox:SetScript("OnEscapePressed", function() editBox:ClearFocus() end)
-    mdScroll:SetScrollChild(editBox)
+    ui.editBox = CreateFrame("EditBox", nil, mdScroll)
+    ui.editBox:SetMultiLine(true)
+    ui.editBox:SetFontObject("ChatFontNormal")
+    ApplyCyrFont(ui.editBox, 12)
+    ui.editBox:SetWidth(590)
+    ui.editBox:SetAutoFocus(false)
+    ui.editBox:SetScript("OnEscapePressed", function() ui.editBox:ClearFocus() end)
+    mdScroll:SetScrollChild(ui.editBox)
 
-    local saveMdBtn = CreateElvButton(p2, 230, 30, "")
-    saveMdBtn:SetPoint("BOTTOMLEFT", 0, 2)
-    saveMdBtn:SetScript("OnClick", function()
+    ui.saveMdBtn = CreateElvButton(p2, 230, 30, "")
+    ui.saveMdBtn:SetPoint("BOTTOMLEFT", 0, 2)
+    ui.saveMdBtn:SetScript("OnClick", function()
       if showingAIPrompt then return end
-      local txt = editBox:GetText() or ""
+      local txt = ui.editBox:GetText() or ""
       if selectedPresetForEdit and db.presets[selectedPresetForEdit] then
         db.presets[selectedPresetForEdit].md = txt
         local compiled = SpArc:ParseMarkdownFSM(txt)
@@ -638,9 +650,9 @@ local function OpenControlCenter(initialTab)
       end
     end)
 
-    local resetMdBtn = CreateElvButton(p2, 210, 30, "")
-    resetMdBtn:SetPoint("LEFT", saveMdBtn, "RIGHT", 10, 0)
-    resetMdBtn:SetScript("OnClick", function()
+    ui.resetMdBtn = CreateElvButton(p2, 210, 30, "")
+    ui.resetMdBtn:SetPoint("LEFT", ui.saveMdBtn, "RIGHT", 10, 0)
+    ui.resetMdBtn:SetScript("OnClick", function()
       showingAIPrompt = false
       local bp = SpArc.BuiltInPresets and SpArc.BuiltInPresets[selectedPresetForEdit]
       if bp and db.presets[selectedPresetForEdit] then
@@ -652,12 +664,12 @@ local function OpenControlCenter(initialTab)
       end
     end)
 
-    aiPromptBtn:SetScript("OnClick", function()
+    ui.aiPromptBtn:SetScript("OnClick", function()
       showingAIPrompt = not showingAIPrompt
       controlFrame:RefreshUI()
       if showingAIPrompt then
-        editBox:SetFocus()
-        editBox:HighlightText()
+        ui.editBox:SetFocus()
+        ui.editBox:HighlightText()
       end
     end)
 
@@ -665,10 +677,10 @@ local function OpenControlCenter(initialTab)
     -- MODULE 3: ROTATION ARC (ДУГА РОТАЦИИ)
     -----------------------------------------------------------------------------------
     local p3 = pages[3]
-    local m3Title = p3:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(m3Title, 15)
-    m3Title:SetPoint("TOPLEFT", 0, 0)
-    m3Title:SetTextColor(1, 0.85, 0.25, 1)
+    ui.m3Title = p3:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ui.m3Title, 15)
+    ui.m3Title:SetPoint("TOPLEFT", 0, 0)
+    ui.m3Title:SetTextColor(1, 0.85, 0.25, 1)
 
     CreateElvCheck(p3, "MOD_ENABLE", "enableArcHUD", 0, -24, true, false)
 
@@ -690,10 +702,10 @@ local function OpenControlCenter(initialTab)
     -- MODULE 4: SAVES & CDS WINGS (КРЫЛЬЯ СЕЙВОВ И КД)
     -----------------------------------------------------------------------------------
     local p4 = pages[4]
-    local m4Title = p4:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(m4Title, 15)
-    m4Title:SetPoint("TOPLEFT", 0, 0)
-    m4Title:SetTextColor(1, 0.85, 0.25, 1)
+    ui.m4Title = p4:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ui.m4Title, 15)
+    ui.m4Title:SetPoint("TOPLEFT", 0, 0)
+    ui.m4Title:SetTextColor(1, 0.85, 0.25, 1)
 
     local cSavesMaster = CreateElvCheck(p4, "MOD_ENABLE_SAVES", "showSavesWing", 0, -24, true, false)
     cSavesMaster:SetWidth(290)
@@ -712,10 +724,10 @@ local function OpenControlCenter(initialTab)
     -- MODULE 5: DUAL CASTBAR (ДВОЙНОЙ КАСТБАР)
     -----------------------------------------------------------------------------------
     local p5 = pages[5]
-    local m5Title = p5:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(m5Title, 15)
-    m5Title:SetPoint("TOPLEFT", 0, 0)
-    m5Title:SetTextColor(1, 0.85, 0.25, 1)
+    ui.m5Title = p5:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ui.m5Title, 15)
+    ui.m5Title:SetPoint("TOPLEFT", 0, 0)
+    ui.m5Title:SetTextColor(1, 0.85, 0.25, 1)
 
     CreateElvCheck(p5, "MOD_ENABLE", "showCastbar", 0, -24, true, false)
 
@@ -730,10 +742,10 @@ local function OpenControlCenter(initialTab)
     -- MODULE 6: COMBAT CAMERA (БОЕВАЯ КАМЕРА)
     -----------------------------------------------------------------------------------
     local p6 = pages[6]
-    local m6Title = p6:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(m6Title, 15)
-    m6Title:SetPoint("TOPLEFT", 0, 0)
-    m6Title:SetTextColor(1, 0.85, 0.25, 1)
+    ui.m6Title = p6:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ui.m6Title, 15)
+    ui.m6Title:SetPoint("TOPLEFT", 0, 0)
+    ui.m6Title:SetTextColor(1, 0.85, 0.25, 1)
 
     CreateElvCheck(p6, "MOD_ENABLE", "enableCombatCamera", 0, -24, true, false, function()
       if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
@@ -829,7 +841,7 @@ local function OpenControlCenter(initialTab)
       self:CancelCapture()
     end)
 
-    local keybindRows = {}
+    ui.keybindRows = {}
     local function CreateKeybindCaptureRow(parent, labelKey, dbKey, defaultVal, y)
       local row = CreateFrame("Frame", nil, parent)
       row:SetSize(610, 30)
@@ -890,7 +902,7 @@ local function OpenControlCenter(initialTab)
         controlFrame:RefreshUI()
       end)
 
-      keybindRows[#keybindRows + 1] = row
+      ui.keybindRows[#ui.keybindRows + 1] = row
       return row
     end
 
@@ -898,9 +910,9 @@ local function OpenControlCenter(initialTab)
     CreateKeybindCaptureRow(m6KeysBox, "M6_TOGGLE_LABEL", "camToggleKey", "`", -44)
     CreateKeybindCaptureRow(m6KeysBox, "M6_INTERACT_LABEL", "camInteractKey", "AUTO", -78)
 
-    local m6FixCursorBtn = CreateElvButton(m6KeysBox, 360, 26, "")
-    m6FixCursorBtn:SetPoint("TOPLEFT", m6KeysBox, "TOPLEFT", 16, -118)
-    m6FixCursorBtn:SetScript("OnClick", function()
+    ui.m6FixCursorBtn = CreateElvButton(m6KeysBox, 360, 26, "")
+    ui.m6FixCursorBtn:SetPoint("TOPLEFT", m6KeysBox, "TOPLEFT", 16, -118)
+    ui.m6FixCursorBtn:SetScript("OnClick", function()
       if SpArc.FlushHardwareCursor then
         SpArc:FlushHardwareCursor(true)
       end
@@ -925,21 +937,21 @@ local function OpenControlCenter(initialTab)
     -- MODULE 7: TELEMETRY & DEBUGGER (ТЕЛЕМЕТРИЯ И ДЕБАГ)
     -----------------------------------------------------------------------------------
     local p7 = pages[7]
-    local m7Title = p7:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(m7Title, 15)
-    m7Title:SetPoint("TOPLEFT", 0, 0)
-    m7Title:SetTextColor(1, 0.85, 0.25, 1)
+    ui.m7Title = p7:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ui.m7Title, 15)
+    ui.m7Title:SetPoint("TOPLEFT", 0, 0)
+    ui.m7Title:SetTextColor(1, 0.85, 0.25, 1)
 
     CreateElvCheck(p7, "MOD_ENABLE", "enableTelemetry", 0, -24, true, false)
 
-    local snapBtn = CreateElvButton(p7, 195, 26, "")
-    snapBtn:SetPoint("TOPLEFT", 0, -54)
+    ui.snapBtn = CreateElvButton(p7, 195, 26, "")
+    ui.snapBtn:SetPoint("TOPLEFT", 0, -54)
 
-    local copyTelBtn = CreateElvButton(p7, 180, 26, "")
-    copyTelBtn:SetPoint("LEFT", snapBtn, "RIGHT", 8, 0)
+    ui.copyTelBtn = CreateElvButton(p7, 180, 26, "")
+    ui.copyTelBtn:SetPoint("LEFT", ui.snapBtn, "RIGHT", 8, 0)
 
-    local clearTelBtn = CreateElvButton(p7, 195, 26, "")
-    clearTelBtn:SetPoint("LEFT", copyTelBtn, "RIGHT", 8, 0)
+    ui.clearTelBtn = CreateElvButton(p7, 195, 26, "")
+    ui.clearTelBtn:SetPoint("LEFT", ui.copyTelBtn, "RIGHT", 8, 0)
 
     local telBoxFrame = CreateFrame("Frame", nil, p7, "BackdropTemplate")
     telBoxFrame:SetPoint("TOPLEFT", 0, -88)
@@ -950,24 +962,24 @@ local function OpenControlCenter(initialTab)
     telScroll:SetPoint("TOPLEFT", 8, -8)
     telScroll:SetPoint("BOTTOMRIGHT", -28, 8)
 
-    local telEditBox = CreateFrame("EditBox", nil, telScroll)
-    telEditBox:SetMultiLine(true)
-    telEditBox:SetFontObject("ChatFontNormal")
-    ApplyCyrFont(telEditBox, 11)
-    telEditBox:SetWidth(590)
-    telEditBox:SetAutoFocus(false)
-    telEditBox:SetScript("OnEscapePressed", function() telEditBox:ClearFocus() end)
-    telScroll:SetScrollChild(telEditBox)
+    ui.telEditBox = CreateFrame("EditBox", nil, telScroll)
+    ui.telEditBox:SetMultiLine(true)
+    ui.telEditBox:SetFontObject("ChatFontNormal")
+    ApplyCyrFont(ui.telEditBox, 11)
+    ui.telEditBox:SetWidth(590)
+    ui.telEditBox:SetAutoFocus(false)
+    ui.telEditBox:SetScript("OnEscapePressed", function() ui.telEditBox:ClearFocus() end)
+    telScroll:SetScrollChild(ui.telEditBox)
 
-    snapBtn:SetScript("OnClick", function()
+    ui.snapBtn:SetScript("OnClick", function()
       pcall(SpArc.CaptureTelemetrySnapshot, SpArc, "MANUAL_SNAPSHOT")
       controlFrame:RefreshUI()
     end)
-    copyTelBtn:SetScript("OnClick", function()
-      telEditBox:SetFocus()
-      telEditBox:HighlightText()
+    ui.copyTelBtn:SetScript("OnClick", function()
+      ui.telEditBox:SetFocus()
+      ui.telEditBox:HighlightText()
     end)
-    clearTelBtn:SetScript("OnClick", function()
+    ui.clearTelBtn:SetScript("OnClick", function()
       db.telemetryLog = {}
       db.capturedLuaErrors = {}
       if _G.BugSack and type(_G.BugSack.Reset) == "function" then
@@ -982,43 +994,43 @@ local function OpenControlCenter(initialTab)
     -- MODULE 8: CHARACTER PROFILES (ПРОФИЛИ ПЕРСОНАЖЕЙ)
     -----------------------------------------------------------------------------------
     local p8 = pages[8]
-    local selectedProfileForOps = SpArc:GetActiveProfileName()
+    ui.selectedProfileForOps = SpArc:GetActiveProfileName()
 
-    local m8Title = p8:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(m8Title, 15)
-    m8Title:SetPoint("TOPLEFT", 0, 0)
-    m8Title:SetTextColor(1, 0.85, 0.25, 1)
+    ui.m8Title = p8:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ui.m8Title, 15)
+    ui.m8Title:SetPoint("TOPLEFT", 0, 0)
+    ui.m8Title:SetTextColor(1, 0.85, 0.25, 1)
 
     local m8CurBox = RegisterGroupBox(p8, "M8_GRP_CUR", 0, -34, 640, 102)
-    local m8CurSummary = m8CurBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(m8CurSummary, 12)
-    m8CurSummary:SetPoint("TOPLEFT", 16, -12)
-    m8CurSummary:SetPoint("TOPRIGHT", -16, -12)
-    m8CurSummary:SetJustifyH("LEFT")
-    m8CurSummary:SetSpacing(4)
+    ui.m8CurSummary = m8CurBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ui.m8CurSummary, 12)
+    ui.m8CurSummary:SetPoint("TOPLEFT", 16, -12)
+    ui.m8CurSummary:SetPoint("TOPRIGHT", -16, -12)
+    ui.m8CurSummary:SetJustifyH("LEFT")
+    ui.m8CurSummary:SetSpacing(4)
 
-    local m8CharProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
-    m8CharProfBtn:SetPoint("BOTTOMLEFT", 16, 12)
-    m8CharProfBtn:SetScript("OnClick", function()
+    ui.m8CharProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
+    ui.m8CharProfBtn:SetPoint("BOTTOMLEFT", 16, 12)
+    ui.m8CharProfBtn:SetScript("OnClick", function()
       local charProf = SpArc:GetCurrentCharKey()
       SpArc:SetProfile(charProf)
-      selectedProfileForOps = charProf
+      ui.selectedProfileForOps = charProf
       print(string.format(SpArc:L("MSG_PROF_SWITCHED"), charProf))
       controlFrame:RefreshUI()
     end)
 
-    local m8DefProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
-    m8DefProfBtn:SetPoint("LEFT", m8CharProfBtn, "RIGHT", 8, 0)
-    m8DefProfBtn:SetScript("OnClick", function()
+    ui.m8DefProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
+    ui.m8DefProfBtn:SetPoint("LEFT", ui.m8CharProfBtn, "RIGHT", 8, 0)
+    ui.m8DefProfBtn:SetScript("OnClick", function()
       SpArc:SetProfile("Default")
-      selectedProfileForOps = "Default"
+      ui.selectedProfileForOps = "Default"
       print(string.format(SpArc:L("MSG_PROF_SWITCHED"), "Default"))
       controlFrame:RefreshUI()
     end)
 
-    local m8ResetProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
-    m8ResetProfBtn:SetPoint("LEFT", m8DefProfBtn, "RIGHT", 8, 0)
-    m8ResetProfBtn:SetScript("OnClick", function()
+    ui.m8ResetProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
+    ui.m8ResetProfBtn:SetPoint("LEFT", ui.m8DefProfBtn, "RIGHT", 8, 0)
+    ui.m8ResetProfBtn:SetScript("OnClick", function()
       local curProf = SpArc:GetActiveProfileName()
       SpArc:ResetCurrentProfile()
       print(string.format(SpArc:L("MSG_PROF_RESET"), curProf))
@@ -1036,13 +1048,13 @@ local function OpenControlCenter(initialTab)
     profScroll:SetPoint("TOPLEFT", 4, -4)
     profScroll:SetPoint("BOTTOMRIGHT", -26, 4)
 
-    local profListContent = CreateFrame("Frame", nil, profScroll)
-    profListContent:SetSize(236, 600)
-    profScroll:SetScrollChild(profListContent)
+    ui.profListContent = CreateFrame("Frame", nil, profScroll)
+    ui.profListContent:SetSize(236, 600)
+    profScroll:SetScrollChild(ui.profListContent)
 
-    local profRowButtons = {}
+    ui.profRowButtons = {}
     for idx = 1, 24 do
-      local prBtn = CreateElvButton(profListContent, 234, 26, "")
+      local prBtn = CreateElvButton(ui.profListContent, 234, 26, "")
       prBtn:SetPoint("TOPLEFT", 0, -(idx - 1) * 28)
       prBtn.fs:ClearAllPoints()
       prBtn.fs:SetPoint("LEFT", prBtn, "LEFT", 8, 0)
@@ -1050,7 +1062,7 @@ local function OpenControlCenter(initialTab)
       prBtn.fs:SetJustifyH("LEFT")
       prBtn.fs:SetWordWrap(false)
       prBtn:Hide()
-      profRowButtons[idx] = prBtn
+      ui.profRowButtons[idx] = prBtn
     end
 
     local profDetailsBox = CreateFrame("Frame", nil, m8ListBox, "BackdropTemplate")
@@ -1058,44 +1070,44 @@ local function OpenControlCenter(initialTab)
     profDetailsBox:SetPoint("BOTTOMRIGHT", -14, 14)
     SetBackdropFlat(profDetailsBox, 0.06, 0.06, 0.09, 0.96, 0.20, 0.20, 0.27, 1.0)
 
-    local profDetailsText = profDetailsBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(profDetailsText, 12)
-    profDetailsText:SetPoint("TOPLEFT", 14, -14)
-    profDetailsText:SetPoint("TOPRIGHT", -14, -14)
-    profDetailsText:SetJustifyH("LEFT")
-    profDetailsText:SetJustifyV("TOP")
-    profDetailsText:SetSpacing(3)
+    ui.profDetailsText = profDetailsBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ui.profDetailsText, 12)
+    ui.profDetailsText:SetPoint("TOPLEFT", 14, -14)
+    ui.profDetailsText:SetPoint("TOPRIGHT", -14, -14)
+    ui.profDetailsText:SetJustifyH("LEFT")
+    ui.profDetailsText:SetJustifyV("TOP")
+    ui.profDetailsText:SetSpacing(3)
 
-    local m8ActivateBtn = CreateElvButton(profDetailsBox, 300, 28, "")
-    m8ActivateBtn:SetPoint("BOTTOM", 0, 82)
-    m8ActivateBtn:SetScript("OnClick", function()
-      if selectedProfileForOps and selectedProfileForOps ~= "" then
-        SpArc:SetProfile(selectedProfileForOps)
-        print(string.format(SpArc:L("MSG_PROF_SWITCHED"), selectedProfileForOps))
+    ui.m8ActivateBtn = CreateElvButton(profDetailsBox, 300, 28, "")
+    ui.m8ActivateBtn:SetPoint("BOTTOM", 0, 82)
+    ui.m8ActivateBtn:SetScript("OnClick", function()
+      if ui.selectedProfileForOps and ui.selectedProfileForOps ~= "" then
+        SpArc:SetProfile(ui.selectedProfileForOps)
+        print(string.format(SpArc:L("MSG_PROF_SWITCHED"), ui.selectedProfileForOps))
         controlFrame:RefreshUI()
       end
     end)
 
-    local m8CopyBtn = CreateElvButton(profDetailsBox, 300, 28, "")
-    m8CopyBtn:SetPoint("BOTTOM", 0, 48)
-    m8CopyBtn:SetScript("OnClick", function()
+    ui.m8CopyBtn = CreateElvButton(profDetailsBox, 300, 28, "")
+    ui.m8CopyBtn:SetPoint("BOTTOM", 0, 48)
+    ui.m8CopyBtn:SetScript("OnClick", function()
       local curProf = SpArc:GetActiveProfileName()
-      if selectedProfileForOps and selectedProfileForOps ~= "" and selectedProfileForOps ~= curProf then
-        if SpArc:CopyProfileFrom(selectedProfileForOps) then
-          print(string.format(SpArc:L("MSG_PROF_COPIED"), selectedProfileForOps, curProf))
+      if ui.selectedProfileForOps and ui.selectedProfileForOps ~= "" and ui.selectedProfileForOps ~= curProf then
+        if SpArc:CopyProfileFrom(ui.selectedProfileForOps) then
+          print(string.format(SpArc:L("MSG_PROF_COPIED"), ui.selectedProfileForOps, curProf))
           controlFrame:RefreshUI()
         end
       end
     end)
 
-    local m8DeleteBtn = CreateElvButton(profDetailsBox, 300, 28, "")
-    m8DeleteBtn:SetPoint("BOTTOM", 0, 14)
-    m8DeleteBtn:SetScript("OnClick", function()
+    ui.m8DeleteBtn = CreateElvButton(profDetailsBox, 300, 28, "")
+    ui.m8DeleteBtn:SetPoint("BOTTOM", 0, 14)
+    ui.m8DeleteBtn:SetScript("OnClick", function()
       local curProf = SpArc:GetActiveProfileName()
-      if selectedProfileForOps and selectedProfileForOps ~= "Default" and selectedProfileForOps ~= curProf then
-        local delName = selectedProfileForOps
+      if ui.selectedProfileForOps and ui.selectedProfileForOps ~= "Default" and ui.selectedProfileForOps ~= curProf then
+        local delName = ui.selectedProfileForOps
         if SpArc:DeleteProfile(delName) then
-          selectedProfileForOps = curProf
+          ui.selectedProfileForOps = curProf
           print(string.format(SpArc:L("MSG_PROF_DELETED"), delName))
           controlFrame:RefreshUI()
         end
@@ -1109,31 +1121,31 @@ local function OpenControlCenter(initialTab)
       isRefreshingUI = true
       db = SpArc:EnsureDB()
 
-      subTitle:SetText(SpArc:L("WINDOW_SUBTITLE"))
-      langBtn:SetText(SpArc:L("LANG_BTN"))
-      fixCursorTopBtn:SetText(SpArc:L("TOP_FIX_CURSOR"))
-      testHudTopBtn:SetText(string.format(SpArc:L("TOP_TEST_HUD"), SpArc.testMode and SpArc:L("MSG_ON") or SpArc:L("MSG_OFF")))
-      testHudTopBtn:SetSelected(SpArc.testMode and true or false)
+      ui.subTitle:SetText(SpArc:L("WINDOW_SUBTITLE"))
+      ui.langBtn:SetText(SpArc:L("LANG_BTN"))
+      ui.fixCursorTopBtn:SetText(SpArc:L("TOP_FIX_CURSOR"))
+      ui.testHudTopBtn:SetText(string.format(SpArc:L("TOP_TEST_HUD"), SpArc.testMode and SpArc:L("MSG_ON") or SpArc:L("MSG_OFF")))
+      ui.testHudTopBtn:SetSelected(SpArc.testMode and true or false)
 
-      for i, nb in ipairs(navButtons) do
+      for i, nb in ipairs(ui.navButtons) do
         nb:SetText(SpArc:L(nb.nKey))
         nb:SetSelected(i == currentTabIdx)
       end
 
-      for _, gb in ipairs(groupBoxes) do
+      for _, gb in ipairs(ui.groupBoxes) do
         gb.header:SetText(SpArc:L(gb.titleKey))
       end
 
-      m3Title:SetText(SpArc:L("M3_TITLE"))
-      m4Title:SetText(SpArc:L("M4_TITLE"))
-      m5Title:SetText(SpArc:L("M5_TITLE"))
-      m6Title:SetText(SpArc:L("M6_TITLE"))
-      m7Title:SetText(SpArc:L("M7_TITLE"))
-      m8Title:SetText(SpArc:L("M8_TITLE"))
-      m6FixCursorBtn:SetText(SpArc:L("M6_FIX_BTN"))
+      ui.m3Title:SetText(SpArc:L("M3_TITLE"))
+      ui.m4Title:SetText(SpArc:L("M4_TITLE"))
+      ui.m5Title:SetText(SpArc:L("M5_TITLE"))
+      ui.m6Title:SetText(SpArc:L("M6_TITLE"))
+      ui.m7Title:SetText(SpArc:L("M7_TITLE"))
+      ui.m8Title:SetText(SpArc:L("M8_TITLE"))
+      ui.m6FixCursorBtn:SetText(SpArc:L("M6_FIX_BTN"))
 
       local notBoundLabel = SpArc:L("M6_NOT_BOUND")
-      for _, kbRow in ipairs(keybindRows) do
+      for _, kbRow in ipairs(ui.keybindRows) do
         kbRow.lbl:SetText(SpArc:L(kbRow.labelKey))
         kbRow.unbindBtn:SetText(SpArc:L("M6_UNBIND_KEY"))
         kbRow.resetBtn:SetText(SpArc:L("M6_RESET_KEY"))
@@ -1179,19 +1191,19 @@ local function OpenControlCenter(initialTab)
 
       local activePr = db.presets[db.activePresetID]
       local activeTitle = (activePr and SpArc:GetPresetDisplayTitle(activePr)) or db.activePresetID
-      p1Summary:SetText(string.format(
+      ui.p1Summary:SetText(string.format(
         SpArc:L("P1_SUMMARY"),
         totalCount, pClass, classCount, activeTitle, db.mode
       ))
-      filterBtn:SetText(filterClassOnly and string.format(SpArc:L("FILTER_CLASS"), pClass, classCount) or string.format(SpArc:L("FILTER_ALL"), totalCount))
-      autoModeBtn:SetText(db.mode == "AUTO" and SpArc:L("MODE_AUTO") or SpArc:L("MODE_MANUAL"))
-      newPresetBtn:SetText(SpArc:L("NEW_PRESET_BTN"))
-      activateBtn:SetText(SpArc:L("ACTIVATE_BTN"))
-      openMdBtn:SetText(SpArc:L("OPEN_MD_BTN"))
-      testModeBtn1:SetText(SpArc:L("TEST_HUD_BTN"))
+      ui.filterBtn:SetText(filterClassOnly and string.format(SpArc:L("FILTER_CLASS"), pClass, classCount) or string.format(SpArc:L("FILTER_ALL"), totalCount))
+      ui.autoModeBtn:SetText(db.mode == "AUTO" and SpArc:L("MODE_AUTO") or SpArc:L("MODE_MANUAL"))
+      ui.newPresetBtn:SetText(SpArc:L("NEW_PRESET_BTN"))
+      ui.activateBtn:SetText(SpArc:L("ACTIVATE_BTN"))
+      ui.openMdBtn:SetText(SpArc:L("OPEN_MD_BTN"))
+      ui.testModeBtn1:SetText(SpArc:L("TEST_HUD_BTN"))
 
-      for idx = 1, #rowButtons do
-        local rBtn = rowButtons[idx]
+      for idx = 1, #ui.rowButtons do
+        local rBtn = ui.rowButtons[idx]
         local id = filteredIDs[idx]
         if id and db.presets[id] then
           local pr = db.presets[id]
@@ -1207,7 +1219,7 @@ local function OpenControlCenter(initialTab)
           rBtn:Hide()
         end
       end
-      listContent:SetHeight(math.max(450, #filteredIDs * 26 + 10))
+      ui.listContent:SetHeight(math.max(450, #filteredIDs * 26 + 10))
 
       local selPr = db.presets[selectedPresetForEdit]
       local selParsed = SpArc.ParsedPresets and SpArc.ParsedPresets[selectedPresetForEdit]
@@ -1217,7 +1229,7 @@ local function OpenControlCenter(initialTab)
         local protList = {}
         for k, _ in pairs(selParsed.protectedChannels or {}) do protList[#protList + 1] = k end
         local noneStr = SpArc:L("NONE_STR")
-        detailsText:SetText(string.format(
+        ui.detailsText:SetText(string.format(
           SpArc:L("DETAILS_BODY"),
           SpArc:GetPresetDisplayTitle(selPr),
           selPr.class or "ANY", selPr.mode or "PVE",
@@ -1230,29 +1242,29 @@ local function OpenControlCenter(initialTab)
       end
 
       -- Module 2 refresh
-      aiText:SetText(SpArc:L("AI_BANNER_PREFIX") .. SpArc:GetAIPromptHeader())
-      saveMdBtn:SetText(SpArc:L("SAVE_MD_BTN"))
-      resetMdBtn:SetText(SpArc:L("RESET_MD_BTN"))
+      ui.aiText:SetText(SpArc:L("AI_BANNER_PREFIX") .. SpArc:GetAIPromptHeader())
+      ui.saveMdBtn:SetText(SpArc:L("SAVE_MD_BTN"))
+      ui.resetMdBtn:SetText(SpArc:L("RESET_MD_BTN"))
       if showingAIPrompt then
-        aiPromptBtn:SetText(SpArc:L("AI_BACK_BTN"))
-        editorStatus:SetText(SpArc:L("AI_STATUS_COPY"))
-        editBox:SetText(SpArc:GetAIPromptTemplate())
+        ui.aiPromptBtn:SetText(SpArc:L("AI_BACK_BTN"))
+        ui.editorStatus:SetText(SpArc:L("AI_STATUS_COPY"))
+        ui.editBox:SetText(SpArc:GetAIPromptTemplate())
       else
-        aiPromptBtn:SetText(SpArc:L("AI_PROMPT_BTN"))
+        ui.aiPromptBtn:SetText(SpArc:L("AI_PROMPT_BTN"))
         local pr = db.presets[selectedPresetForEdit]
         local cp = SpArc.ParsedPresets and SpArc.ParsedPresets[selectedPresetForEdit]
-        editorStatus:SetText(string.format(
+        ui.editorStatus:SetText(string.format(
           SpArc:L("EDITOR_STATUS"),
           (pr and SpArc:GetPresetDisplayTitle(pr)) or selectedPresetForEdit,
           (cp and cp.rules and #cp.rules) or 0,
           (cp and cp.saves and #cp.saves) or 0,
           (cp and cp.cds and #cp.cds) or 0
         ))
-        editBox:SetText((pr and pr.md) or "")
+        ui.editBox:SetText((pr and pr.md) or "")
       end
 
       -- Sliders & Checkboxes refresh
-      for _, s in ipairs(allSliders) do
+      for _, s in ipairs(ui.allSliders) do
         local val = tonumber(db.visual[s.key])
         if val == nil then val = DEFAULT_VISUAL[s.key] or 0 end
         s.title:SetText(SpArc:L(s.labelKey))
@@ -1261,7 +1273,7 @@ local function OpenControlCenter(initialTab)
         s.UpdateFill(val)
       end
 
-      for _, c in ipairs(allChecks) do
+      for _, c in ipairs(ui.allChecks) do
         c.txt:SetText(SpArc:L(c.labelKey))
         local checked
         if c.isTestToggle then
@@ -1273,20 +1285,20 @@ local function OpenControlCenter(initialTab)
       end
 
       -- Module 7 refresh
-      snapBtn:SetText(SpArc:L("TEL_SNAP_BTN"))
-      copyTelBtn:SetText(SpArc:L("TEL_COPY_BTN"))
-      clearTelBtn:SetText(SpArc:L("TEL_CLEAR_BTN"))
-      if pages[7]:IsShown() then
+      ui.snapBtn:SetText(SpArc:L("TEL_SNAP_BTN"))
+      ui.copyTelBtn:SetText(SpArc:L("TEL_COPY_BTN"))
+      ui.clearTelBtn:SetText(SpArc:L("TEL_CLEAR_BTN"))
+      if ui.pages[7]:IsShown() then
         local okRep, repText = pcall(SpArc.BuildTelemetryReportText, SpArc)
-        telEditBox:SetText((okRep and repText) or "")
+        ui.telEditBox:SetText((okRep and repText) or "")
       end
 
       -- Module 8 (Profiles) refresh
       local curChar = SpArc:GetCurrentCharKey()
       local activeProfName = SpArc:GetActiveProfileName()
       local profList = SpArc:GetProfileList()
-      if not selectedProfileForOps or not (db.profiles and db.profiles[selectedProfileForOps]) then
-        selectedProfileForOps = activeProfName
+      if not ui.selectedProfileForOps or not (db.profiles and db.profiles[ui.selectedProfileForOps]) then
+        ui.selectedProfileForOps = activeProfName
       end
 
       local function fmtBind(val, isInteract)
@@ -1300,7 +1312,7 @@ local function OpenControlCenter(initialTab)
       end
 
       local curVis = db.visual or {}
-      m8CurSummary:SetText(string.format(
+      ui.m8CurSummary:SetText(string.format(
         SpArc:L("M8_CUR_SUMMARY"),
         curChar,
         activeProfName,
@@ -1308,23 +1320,23 @@ local function OpenControlCenter(initialTab)
         fmtBind(curVis.camToggleKey, false),
         fmtBind(curVis.camInteractKey, true)
       ))
-      m8CharProfBtn:SetText(SpArc:L("M8_CHAR_PROF_BTN"))
-      m8CharProfBtn:SetSelected(activeProfName == curChar)
-      m8DefProfBtn:SetText(SpArc:L("M8_DEF_PROF_BTN"))
-      m8DefProfBtn:SetSelected(activeProfName == "Default")
-      m8ResetProfBtn:SetText(SpArc:L("M8_RESET_BTN"))
+      ui.m8CharProfBtn:SetText(SpArc:L("M8_CHAR_PROF_BTN"))
+      ui.m8CharProfBtn:SetSelected(activeProfName == curChar)
+      ui.m8DefProfBtn:SetText(SpArc:L("M8_DEF_PROF_BTN"))
+      ui.m8DefProfBtn:SetSelected(activeProfName == "Default")
+      ui.m8ResetProfBtn:SetText(SpArc:L("M8_RESET_BTN"))
 
-      for idx = 1, #profRowButtons do
-        local prBtn = profRowButtons[idx]
+      for idx = 1, #ui.profRowButtons do
+        local prBtn = ui.profRowButtons[idx]
         local pName = profList[idx]
         if pName then
           local prefix = (pName == activeProfName and SpArc:L("PREFIX_ACTIVE"))
-            or (pName == selectedProfileForOps and SpArc:L("PREFIX_SELECTED"))
+            or (pName == ui.selectedProfileForOps and SpArc:L("PREFIX_SELECTED"))
             or ""
           prBtn:SetText(prefix .. pName)
-          prBtn:SetSelected(pName == selectedProfileForOps)
+          prBtn:SetSelected(pName == ui.selectedProfileForOps)
           prBtn:SetScript("OnClick", function()
-            selectedProfileForOps = pName
+            ui.selectedProfileForOps = pName
             controlFrame:RefreshUI()
           end)
           prBtn:Show()
@@ -1332,13 +1344,13 @@ local function OpenControlCenter(initialTab)
           prBtn:Hide()
         end
       end
-      profListContent:SetHeight(math.max(320, #profList * 28 + 10))
+      ui.profListContent:SetHeight(math.max(320, #profList * 28 + 10))
 
-      local selProfObj = db.profiles and db.profiles[selectedProfileForOps]
+      local selProfObj = db.profiles and db.profiles[ui.selectedProfileForOps]
       local selVis = (selProfObj and selProfObj.visual) or curVis
-      profDetailsText:SetText(string.format(
+      ui.profDetailsText:SetText(string.format(
         SpArc:L("M8_DETAILS_HEADER"),
-        selectedProfileForOps or activeProfName,
+        ui.selectedProfileForOps or activeProfName,
         fmtBind(selVis.camHoldKey, false),
         fmtBind(selVis.camToggleKey, false),
         fmtBind(selVis.camInteractKey, true),
@@ -1347,9 +1359,9 @@ local function OpenControlCenter(initialTab)
         tonumber(selVis.arcRadius) or 108,
         tonumber(selVis.arcSpreadDeg) or 116
       ))
-      m8ActivateBtn:SetText(SpArc:L("M8_ACTIVATE_BTN"))
-      m8CopyBtn:SetText(SpArc:L("M8_COPY_BTN"))
-      m8DeleteBtn:SetText(SpArc:L("M8_DELETE_BTN"))
+      ui.m8ActivateBtn:SetText(SpArc:L("M8_ACTIVATE_BTN"))
+      ui.m8CopyBtn:SetText(SpArc:L("M8_COPY_BTN"))
+      ui.m8DeleteBtn:SetText(SpArc:L("M8_DELETE_BTN"))
 
       isRefreshingUI = false
     end

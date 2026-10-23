@@ -226,8 +226,7 @@ function SpArc:GetCamInteractKey()
   end
   local k = v.camInteractKey
   if k == nil or k == "AUTO" then
-    k = SpArc:GetGameInteractKey()
-    v.camInteractKey = k
+    return SpArc:GetGameInteractKey()
   end
   if type(k) == "string" then
     return k
@@ -284,85 +283,148 @@ local function IsActionBarConflictAction(action)
   return false
 end
 
+local function IsUserKeybindingUIOpen()
+  local frames = {
+    _G.SettingsPanel,
+    _G.KeyBindingFrame,
+    _G.QuickKeybindFrame,
+    _G.KeyBoundDialog,
+    _G.ElvUIBindPopupWindow,
+  }
+  for i = 1, #frames do
+    local f = frames[i]
+    if f and f.IsShown and SafeBool(f.IsShown, f) then
+      return true
+    end
+  end
+  if _G.LibStub then
+    local ok, lkb = pcall(_G.LibStub, "LibKeyBound-1.0", true)
+    if ok and type(lkb) == "table" and lkb.dialog and lkb.dialog.IsShown and SafeBool(lkb.dialog.IsShown, lkb.dialog) then
+      return true
+    end
+  end
+  local E = _G.ElvUI and _G.ElvUI[1]
+  if E and E.Bind and E.Bind.active then
+    return true
+  end
+  return false
+end
+
+local function OnExternalKeyBindingAssigned(rawKey, rawAction)
+  if loadingScreenActive then return end
+  if not IsUserKeybindingUIOpen() then return end
+  if type(rawKey) ~= "string" or rawKey == "" then return end
+  if type(rawAction) ~= "string" or rawAction == "" then return end
+  if IsSpArcOwnBindingAction(rawAction) then return end
+
+  local key = rawKey:upper()
+  local db = SpArc:EnsureDB()
+  local v = db and db.visual
+  if not v then return end
+
+  local changed = false
+  local isInteract = IsInteractBindingAction(rawAction)
+  local slots = { "camHoldKey", "camToggleKey", "camInteractKey" }
+
+  for _, slotKey in ipairs(slots) do
+    local curSlotKey = (slotKey == "camHoldKey" and SpArc:GetCamHoldKey())
+      or (slotKey == "camToggleKey" and SpArc:GetCamToggleKey())
+      or SpArc:GetCamInteractKey()
+    if type(curSlotKey) == "string" and curSlotKey:upper() == key then
+      if slotKey == "camInteractKey" and isInteract then
+        -- User bound this key to Interact in Game Settings; keep it in sync
+        v.camInteractKey = key
+      else
+        v[slotKey] = ""
+        if slotKey == "camInteractKey" then
+          v.camInteractKeyUserSet = true
+        else
+          v[slotKey .. "UserSet"] = true
+        end
+        changed = true
+        print(string.format(SpArc:L("MSG_BIND_CONFLICT_CLEARED"), key, rawAction))
+      end
+    end
+  end
+
+  if changed then
+    if SpArc.RefreshControlCenterUI then
+      pcall(SpArc.RefreshControlCenterUI)
+    end
+    if C_Timer and C_Timer.After then
+      C_Timer.After(0, function()
+        if SpArc.ApplyCombatCameraBindings then
+          SpArc:ApplyCombatCameraBindings("EXTERNAL_BIND")
+        end
+      end)
+    end
+  end
+end
+
+if _G.hooksecurefunc then
+  if _G.SetBinding then
+    _G.hooksecurefunc("SetBinding", function(key, command)
+      OnExternalKeyBindingAssigned(key, command)
+    end)
+  end
+  if _G.SetBindingClick then
+    _G.hooksecurefunc("SetBindingClick", function(key, buttonName, mouseButton)
+      if type(buttonName) == "string" and buttonName ~= "" then
+        local act = "CLICK " .. buttonName .. ":" .. tostring(mouseButton or "LeftButton")
+        OnExternalKeyBindingAssigned(key, act)
+      end
+    end)
+  end
+  if _G.SetBindingSpell then
+    _G.hooksecurefunc("SetBindingSpell", function(key, spellName)
+      if type(spellName) == "string" and spellName ~= "" then
+        OnExternalKeyBindingAssigned(key, "SPELL " .. spellName)
+      end
+    end)
+  end
+  if _G.SetBindingItem then
+    _G.hooksecurefunc("SetBindingItem", function(key, itemName)
+      if type(itemName) == "string" and itemName ~= "" then
+        OnExternalKeyBindingAssigned(key, "ITEM " .. itemName)
+      end
+    end)
+  end
+  if _G.SetBindingMacro then
+    _G.hooksecurefunc("SetBindingMacro", function(key, macroName)
+      if type(macroName) == "string" and macroName ~= "" then
+        OnExternalKeyBindingAssigned(key, "MACRO " .. tostring(macroName))
+      end
+    end)
+  end
+end
+
 function SpArc:CheckAndResolveCameraBindConflicts(reason)
   local db = SpArc:EnsureDB()
   local v = db and db.visual
   if not v then return false end
   v.camBindSnapshot = v.camBindSnapshot or {}
 
-  -- Restore G / ` if they were accidentally cleared by v2.8.0 initial snapshot check
-  if not v._restoredHoldV281 then
-    if v.camHoldKey == "" and not v.camHoldKeyUserSet then
+  -- One-time heal if G / ` / Interact were wiped by v2.8.0-v2.8.2 UPDATE_BINDINGS login race
+  if not v._restoredKeysV283 then
+    if v.camHoldKey == "" or v.camHoldKey == nil then
       v.camHoldKey = "G"
+      v.camHoldKeyUserSet = false
     end
-    if v.camToggleKey == "" and not v.camToggleKeyUserSet then
+    if v.camToggleKey == "" or v.camToggleKey == nil then
       v.camToggleKey = "`"
+      v.camToggleKeyUserSet = false
     end
-    v._restoredHoldV281 = true
-  end
-
-  local changed = false
-  local slots = { "camHoldKey", "camToggleKey", "camInteractKey" }
-
-  for _, slotKey in ipairs(slots) do
-    local key = (slotKey == "camHoldKey" and SpArc:GetCamHoldKey())
-      or (slotKey == "camToggleKey" and SpArc:GetCamToggleKey())
-      or SpArc:GetCamInteractKey()
-
-    if key and key ~= "" then
-      local curAct = GetRawGameBindingAction(key)
-      local prevSnap = v.camBindSnapshot[slotKey]
-      local prevKey, prevAct = nil, nil
-      if type(prevSnap) == "string" then
-        prevKey, prevAct = prevSnap:match("^(.-)::(.*)$")
-      end
-
-      local isOwn = IsSpArcOwnBindingAction(curAct)
-      local isInteract = IsInteractBindingAction(curAct)
-      local userSet = (slotKey == "camInteractKey") and v.camInteractKeyUserSet or v[slotKey .. "UserSet"]
-
-      if not isOwn and curAct ~= "" then
-        if reason == "UPDATE_BINDINGS" and prevKey == key and prevAct ~= nil and prevAct ~= curAct then
-          -- The user actively bound this key to a new action in Game Keybindings / Bartender4 while playing
-          if not (slotKey == "camInteractKey" and isInteract) then
-            v[slotKey] = ""
-            v[slotKey .. "UserSet"] = true
-            v.camBindSnapshot[slotKey] = nil
-            changed = true
-            print(string.format(SpArc:L("MSG_BIND_CONFLICT_CLEARED"), key, curAct))
-          end
-        elseif slotKey == "camInteractKey" and not isInteract and IsActionBarConflictAction(curAct) and not userSet then
-          -- On login/profile copy: Interact key (e.g. 'E') is bound to an ActionBar button on this character (e.g. Warrior)
-          local gameIntKey = SpArc:GetGameInteractKey()
-          local gameIntAct = GetRawGameBindingAction(gameIntKey)
-          if gameIntKey and gameIntKey ~= "" and gameIntKey ~= key and not IsActionBarConflictAction(gameIntAct) then
-            v.camInteractKey = gameIntKey
-            v.camBindSnapshot[slotKey] = gameIntKey .. "::" .. gameIntAct
-            changed = true
-            print(string.format(SpArc:L("MSG_INTERACT_AUTO_ADAPTED"), key, curAct, gameIntKey))
-          else
-            v.camInteractKey = ""
-            v.camBindSnapshot[slotKey] = nil
-            changed = true
-            print(string.format(SpArc:L("MSG_BIND_CONFLICT_CLEARED"), key, curAct))
-          end
-        end
-      end
-
-      if v[slotKey] and v[slotKey] ~= "" then
-        local finalKey = v[slotKey]
-        local finalAct = GetRawGameBindingAction(finalKey)
-        v.camBindSnapshot[slotKey] = finalKey .. "::" .. finalAct
-      end
-    else
-      v.camBindSnapshot[slotKey] = nil
+    if v.camInteractKey == "" or v.camInteractKey == nil then
+      v.camInteractKey = "AUTO"
+      v.camInteractKeyUserSet = false
+    end
+    v._restoredKeysV283 = true
+    if SpArc.RefreshControlCenterUI then
+      pcall(SpArc.RefreshControlCenterUI)
     end
   end
 
-  if changed and SpArc.RefreshControlCenterUI then
-    pcall(SpArc.RefreshControlCenterUI)
-  end
-  return changed
+  return false
 end
 
 ---------------------------------------------------------------------------------------

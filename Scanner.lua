@@ -248,7 +248,7 @@ function SpArc:ScanActionSlotsAndSpells(force)
   local explicitOwnerBySpellID = {}
   for k, def in pairs(SPELL_DEFS) do
     for _, id in ipairs(def.ids or {}) do
-      if not explicitOwnerBySpellID[id] or k == "VOID_BOLT" or k == "MIND_FLAY_INSANITY" then
+      if not explicitOwnerBySpellID[id] or def.overrideOf or def.procOnly or k == "VOID_BOLT" or k == "MIND_FLAY_INSANITY" then
         explicitOwnerBySpellID[id] = k
       end
     end
@@ -389,9 +389,11 @@ function SpArc:ScanActionSlotsAndSpells(force)
             if GetActionText and GetMacroBody then
               local okT, mName = pcall(GetActionText, slot)
               if okT and not IsSecret(mName) and type(mName) == "string" and mName ~= "" then
-                -- Prefer character-specific macros (indices 121..138) when names collide with account macros
+                -- Prefer character-specific macros (indices 121..150) when names collide with account macros
                 if GetMacroInfo then
-                  for mIdx = 138, 121, -1 do
+                  local maxAcc = _G.MAX_ACCOUNT_MACROS or 120
+                  local maxChar = _G.MAX_CHARACTER_MACROS or 30
+                  for mIdx = maxAcc + maxChar, maxAcc + 1, -1 do
                     local okMI, miName, _, miBody = pcall(GetMacroInfo, mIdx)
                     if okMI and not IsSecret(miName) and miName == mName and not IsSecret(miBody) and type(miBody) == "string" and miBody ~= "" then
                       body = miBody
@@ -573,6 +575,21 @@ function SpArc:ScanActionSlotsAndSpells(force)
     mfiDef.slot = mfDef.slot
     mfiDef.keybind = mfDef.keybind
   end
+
+  for _, def in pairs(SPELL_DEFS) do
+    if def.overrideOf then
+      local baseDef = SPELL_DEFS[def.overrideOf]
+      if baseDef then
+        if baseDef.slot and not def.isKnown then
+          def.slot = baseDef.slot
+          def.keybind = baseDef.keybind
+        elseif not baseDef.slot and def.slot then
+          baseDef.slot = def.slot
+          baseDef.keybind = def.keybind
+        end
+      end
+    end
+  end
 end
 
 function SpArc:MatchSpellToDefKey(spellID, spellName)
@@ -605,6 +622,15 @@ function SpArc:MatchSpellToDefKey(spellID, spellName)
   end
 
   if spellID and not IsSecret(spellID) then
+    for k, def in pairs(SPELL_DEFS) do
+      if def.overrideOf or def.procOnly then
+        for _, id in ipairs(def.ids or {}) do
+          if id == spellID then
+            return k
+          end
+        end
+      end
+    end
     for k, def in pairs(SPELL_DEFS) do
       if k ~= "MIND_FLAY_INSANITY" then
         for _, id in ipairs(def.ids or {}) do

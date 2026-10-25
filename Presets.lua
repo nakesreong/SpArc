@@ -47,6 +47,7 @@ local STRINGS = {
     NAV_6 = "Combat Camera",
     NAV_7 = "Telemetry & Debug",
     NAV_8 = "Profiles",
+    NAV_9 = "Macro Generator",
 
     MOD_ENABLE = "Enable",
     MOD_ENABLE_SAVES = "Enable Left Saves Wing",
@@ -110,13 +111,35 @@ local STRINGS = {
     MSG_BIND_CONFLICT_CLEARED = "|cffa335eeSpArc:|r Key |cffffd100[%s]|r is bound to '|cff00ccff%s|r' in game/addon — SpArc bind automatically cleared.",
     MSG_INTERACT_AUTO_ADAPTED = "|cffa335eeSpArc:|r Key |cffffd100[%s]|r is used by '|cff00ccff%s|r' — Interact key in SpArc automatically set to |cff00ff96[%s]|r.",
 
+    M9_TITLE = "SpellBook Wrapper Macro Generator (Class & Spec)",
+    M9_GRP_INFO = "Naming Scheme & Macro Slot Capacity",
+    M9_SUMMARY_TEXT = "Class (%s): |cffffd100%s|r   •   Spec (%s): |cff00ff96%s|r\nCharacter Macros: |cff00ff96%d / %d|r   •   General (Account) Macros (Overflow): |cff00ccff%d / %d|r",
+    M9_GRP_TPL = "Macro Template (use 'spell' or '%s' for Spell Name) & SpellBook Filters",
+    M9_TPL_DEFAULT_BTN = "Default [@target]",
+    M9_TPL_MO_BTN = "[@mouseover] + Target",
+    CK_M9_SKIP_EXISTING = "Skip spells that already exist in macros",
+    CK_M9_INC_CLASS = "Include General Class Spells (w1, p1, r1, d1...)",
+    CK_M9_INC_SPEC = "Include Active Spec Spells (sp1, ar1, fd1, aw1...)",
+    M9_GRP_PREVIEW = "SpellBook Scan Preview & Generation Log",
+    M9_PREVIEW_BTN = "Rescan SpellBook Preview",
+    M9_GENERATE_BTN = "Generate Wrapper Macros Now",
+    M9_OPEN_MACROS_BTN = "Open /m Window",
+    M9_PREVIEW_HEADER = "|cffffd100SpellBook Scan:|r Found |cffffffff%d|r active spells  ->  Will create: |cff00ff96%d Character|r + |cff00ccff%d General|r  |  Skipped: |cffaaaaaa%d|r",
+    M9_OVERFLOW_WARN = "Warning: %d spell(s) will not fit (both Character and General macro tabs are full).",
+    M9_ALREADY_HAS = "already in",
+    M9_SLOTS_FULL = "Character & General macro slots are full!",
+    M9_ERR_COMBAT = "Cannot create macros while in combat! Leave combat and try again.",
+    MSG_M9_DONE = "|cffa335eeSpArc Macro Generator:|r Created |cff00ff96%d Character|r and |cff00ccff%d General|r macros (Skipped existing: |cffaaaaaa%d|r).",
+
     P1_SUMMARY = "Total Presets: |cffffd100%d|r  |  Your Class (%s): |cff00ff00%d|r  |  Active: |cffa335ee%s|r (%s)",
     FILTER_CLASS = "Filter: Only %s (%d)",
     FILTER_ALL = "Filter: All Classes (%d)",
     MODE_AUTO = "Mode: AUTO (PvE/Boss/PvP)",
     MODE_MANUAL = "Mode: Manual Preset",
     NEW_PRESET_BTN = "+ New Preset",
+    DEL_PRESET_BTN = "Delete Preset",
     NEW_PRESET_TITLE = "%d. Custom %s #%d",
+    MSG_PRESET_DELETED = "|cffa335eeSpArc:|r Deleted preset: |cffff6060%s|r",
     PREFIX_ACTIVE = "|cff00ff00[ACTIVE]|r ",
     PREFIX_SELECTED = "|cffffd100[>]|r ",
 
@@ -212,6 +235,7 @@ local STRINGS = {
     NAV_6 = "Боевая Камера",
     NAV_7 = "Телеметрия и Дебаг",
     NAV_8 = "Профили",
+    NAV_9 = "Макросогенератор",
 
     MOD_ENABLE = "Включить",
     MOD_ENABLE_SAVES = "Включить левое крыло сейвов",
@@ -275,13 +299,35 @@ local STRINGS = {
     MSG_BIND_CONFLICT_CLEARED = "|cffa335eeSpArc:|r Клавиша |cffffd100[%s]|r занята действием «|cff00ccff%s|r» в игре/аддоне — бинд в SpArc автоматически снят.",
     MSG_INTERACT_AUTO_ADAPTED = "|cffa335eeSpArc:|r Клавиша |cffffd100[%s]|r занята («|cff00ccff%s|r») — клавиша Interact в SpArc автоматически переключена на |cff00ff96[%s]|r.",
 
+    M9_TITLE = "Макросогенератор (Авто-генерация обвязок по всей книге заклинаний)",
+    M9_GRP_INFO = "Схема именования и свободные слоты макросов",
+    M9_SUMMARY_TEXT = "Класс (%s): |cffffd100%s|r   •   Спек (%s): |cff00ff96%s|r\nМакросы персонажа: |cff00ff96%d / %d|r   •   Общие макросы (при нехватке места): |cff00ccff%d / %d|r",
+    M9_GRP_TPL = "Шаблон макроса ('spell' или '%s' = имя спелла) и фильтры спеллбука",
+    M9_TPL_DEFAULT_BTN = "Шаблон [@target]",
+    M9_TPL_MO_BTN = "[@mouseover] + Цель",
+    CK_M9_SKIP_EXISTING = "Пропускать спеллы, для которых уже есть макрос",
+    CK_M9_INC_CLASS = "Общие классовые спеллы (w1, p5, r1, d1...)",
+    CK_M9_INC_SPEC = "Спеллы специализации (sp1, ar1, fd1, aw1...)",
+    M9_GRP_PREVIEW = "Предпросмотр спеллбука и лог генерации макросов",
+    M9_PREVIEW_BTN = "Обновить список спеллов",
+    M9_GENERATE_BTN = "Сгенерировать макросы сейчас",
+    M9_OPEN_MACROS_BTN = "Открыть окно /m",
+    M9_PREVIEW_HEADER = "|cffffd100Сканирование спеллбука:|r Найдено |cffffffff%d|r активных спеллов  ->  Будет создано: |cff00ff96%d Персонажа|r + |cff00ccff%d Общих|r  |  Пропущено: |cffaaaaaa%d|r",
+    M9_OVERFLOW_WARN = "Внимание: %d спелл(ов) не поместятся (заполнены и личные, и общие макросы).",
+    M9_ALREADY_HAS = "уже есть в",
+    M9_SLOTS_FULL = "Слоты макросов персонажа и общих макросов полностью заняты!",
+    M9_ERR_COMBAT = "Нельзя создавать макросы в бою! Выйдите из боя и нажмите снова.",
+    MSG_M9_DONE = "|cffa335eeSpArc Макросогенератор:|r Создано макросов персонажа: |cff00ff96%d|r, общих макросов: |cff00ccff%d|r (Пропущено существующих: |cffaaaaaa%d|r).",
+
     P1_SUMMARY = "Всего пресетов: |cffffd100%d|r  |  Для вашего класса (%s): |cff00ff00%d|r  |  Активный: |cffa335ee%s|r (%s)",
     FILTER_CLASS = "Фильтр: Только %s (%d)",
     FILTER_ALL = "Фильтр: Все классы (%d)",
     MODE_AUTO = "Режим: AUTO (ПвЕ/Босс/ПвП)",
     MODE_MANUAL = "Режим: Ручной пресет",
     NEW_PRESET_BTN = "+ Новый пресет",
+    DEL_PRESET_BTN = "Удалить пресет",
     NEW_PRESET_TITLE = "%d. Кастомный %s #%d",
+    MSG_PRESET_DELETED = "|cffa335eeSpArc:|r Пресет удалён: |cffff6060%s|r",
     PREFIX_ACTIVE = "|cff00ff00[АКТИВЕН]|r ",
     PREFIX_SELECTED = "|cffffd100[>]|r ",
 
@@ -374,76 +420,129 @@ SpArc.AIPromptHeader_RU =
   "Попросите своего Gemini или ChatGPT написать вам ротацию с Icy Veins / Wowhead "
   .. "на псевдокоде в формате SpArc .MD и засуньте её сюды!"
 
-SpArc.AIPromptTemplate_EN = [[Hello Gemini / ChatGPT! Please write a rotation profile from Icy Veins / Wowhead for the SpArc addon (World of Warcraft: Midnight 12.x) strictly following the SpArc .MD pseudocode format below.
+SpArc.AIPromptTemplate_EN = [[Hello Gemini / ChatGPT / Claude!
+Please look up the latest rotation guide on Icy Veins or Wowhead for World of Warcraft: Midnight (12.x) and compile a ready-to-import rotation profile for the SpArc addon strictly in the SpArc .MD pseudocode format described below.
 
-Class & Spec: [INSERT CLASS & SPEC, e.g., Shadow Priest]
-Content Mode: [PvE Mythic+ Cleave / Raid Boss Single Target / PvP Arena]
+====================================================================
+1. TARGET CHARACTER & CONTENT
+====================================================================
+• Class & Spec: [INSERT CLASS & SPEC, e.g., Frost Mage / Spellslinger]
+• Hero Talents / Build: [OPTIONAL, e.g., Spellslinger / Frostfire / Default Icy Veins]
+• Content Mode: [PvE Mythic+ Cleave / Raid Boss Single Target / PvP Arena]
 
-Use strictly the following SpArc .MD syntax (output only the markdown code block):
+====================================================================
+2. HOW THE SPARC .MD COMPILER WORKS (STRICT SYNTAX RULES)
+====================================================================
+SpArc compiles a Markdown (.MD) document into a 5-step lookahead Finite State Machine (FSM).
+Output ONLY a single raw code block following these exact 6 sections:
 
-# PROFILE: Preset Title
-# CLASS: PRIEST (or MAGE, WARLOCK, PALADIN, HUNTER, ROGUE, WARRIOR, DRUID, SHAMAN, DEATHKNIGHT, MONK, DEMONHUNTER, EVOKER)
-# SPEC: Shadow
-# MODE: PVE (or BOSS, PVP)
+SECTION A — HEADER METADATA:
+# PROFILE: <Preset Title>
+# CLASS: <WARRIOR | PALADIN | HUNTER | ROGUE | PRIEST | DEATHKNIGHT | SHAMAN | MAGE | WARLOCK | MONK | DRUID | DEMONHUNTER | EVOKER>
+# SPEC: <Spec Name>
+# MODE: <PVE | BOSS | PVP>
+# TARGET_DEBUFF: ID:<id1,id2> | NAME:"Russian Name","English Name"
+  (Optional: include # TARGET_DEBUFF only if the rotation tracks a stacking debuff on the target, such as Frost Mage's Freezing / Обледенение).
 
-## SPELL_BOOK (Declare spells with SpellIDs, localized names, optional macro names, base CD, charges, resource gain/cost, and behavior flags)
-SPELL TENTACLE_SLAM = ID:1227280,205385,457042 | NAME:"Tentacle Slam","Shadow Crash" | CD:15 | CHARGES:2 | GAIN:15 | DOTS:true | ICON:136201
-SPELL VAMPIRIC_TOUCH = ID:34914 | NAME:"Vampiric Touch" | CD:0 | GAIN:6 | DOTS:true | ICON:135978
-SPELL VOID_TORRENT = ID:263165 | NAME:"Void Torrent" | CD:45 | GAIN:35 | GRANTS:MIND_FLAY_INSANITY | LOCK_CHANNEL:true | ICON:1386551
-SPELL DEVOURING_PLAGUE = ID:335467 | NAME:"Devouring Plague","Shadow Word: Madness" | COST:50 | GRANTS:MIND_FLAY_INSANITY | SPENDER:true | ICON:252997
-SPELL MIND_BLAST = ID:450983,8092 | NAME:"Mind Blast","Void Blast" | CD:7.5 | CHARGES:2 | GAIN:15 | ICON:136224
-SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Void Volley","Void Bolt" | CD:6 | GAIN:10 | PROC_ONLY:true | ICON:1386548
-SPELL SHADOW_WORD_DEATH = ID:32379 | NAME:"Shadow Word: Death" | CD:10 | GAIN:10 | EXECUTE:true | ICON:136149
-SPELL MIND_FLAY_INSANITY = ID:391403 | NAME:"Mind Flay: Insanity" | GAIN:16 | PROC_ONLY:true | ICON:136208
-SPELL MIND_FLAY = ID:15407 | NAME:"Mind Flay" | GAIN:12 | FILLER_INTERRUPTIBLE:true | ICON:136208
-SPELL POWER_INFUSION = ID:10060 | NAME:"Power Infusion" | CD:120 | ICON:135939
-SPELL VOID_ERUPTION = ID:228260,391109 | NAME:"Void Eruption","Dark Ascension" | CD:120 | ICON:537079
-SPELL PSYFIEND = ID:34433,451235 | NAME:"Shadowfiend","Voidwraith" | CD:60 | ICON:136199
-SPELL DISPERSION = ID:47585 | NAME:"Dispersion" | CD:90 | ICON:237563
-SPELL DESPERATE_PRAYER = ID:19236 | NAME:"Desperate Prayer" | CD:90 | ICON:237550
-SPELL VAMPIRIC_EMBRACE = ID:15286 | NAME:"Vampiric Embrace" | CD:120 | ICON:136230
-SPELL FADE = ID:586 | NAME:"Fade" | CD:30 | ICON:135994
+SECTION B — ## SPELL_BOOK:
+Every spell used anywhere in the profile (rotation, saves, cooldowns, emergency) MUST be declared here, one per line:
+SPELL <KEY> = ID:<id1,id2> | NAME:"Russian Name","English Name" | CD:<sec> | ICON:<FileDataID> [| optional flags]
+• Always provide BOTH official Russian and English spell names in NAME:"...","..." and all relevant SpellIDs (including talent/hero-talent overrides) in ID:... so SpArc resolves the spell on any WoW client locale and Bartender4/ElvUI action bar.
+• Supported optional flags (separated by ` | `):
+  - `CD:<seconds>` : Base cooldown in seconds (`0` if none).
+  - `CHARGES:<N>` : Max charges for multi-charge abilities (e.g., `CHARGES:2`).
+  - `GAIN:<N>` : Primary resource generated on cast (0..100 scale).
+  - `COST:<N> | SPENDER:true` : Primary resource cost; marks ability as a resource spender.
+  - `DOTS:true` : Applies or refreshes main target DoTs (satisfies `target.has_dots`).
+  - `STACKS:+N` : Generates +N stacks of `TARGET_DEBUFF` on the target (e.g., `STACKS:+2`).
+  - `STACKS:-N | CONSUMES_STACKS:true` : Consumes N stacks of `TARGET_DEBUFF` when cast without a proc (e.g., `STACKS:-4 | CONSUMES_STACKS:true`).
+  - `PROC_ONLY:true` : Only castable when glowing (`IsSpellOverlayed`) or active as a temporary spell override.
+  - `OVERRIDE_OF:<BASE_KEY>` : For Midnight 12.x combo/transformation spells that temporarily replace another spell on the same button (e.g., `COMET_STORM` has `OVERRIDE_OF:RAY_OF_FROST`, `GLACIAL_SPIKE` has `OVERRIDE_OF:FROSTBOLT`).
+  - `GRANTS:<PROC_KEY>` : Casting this spell guarantees a proc of `<PROC_KEY>`.
+  - `EXECUTE:true` : Execute ability (usable below 20% target HP or on proc).
+  - `LOCK_CHANNEL:true` : High-priority channeled spell that must NEVER be clipped early.
+  - `FILLER_INTERRUPTIBLE:true` : Channeled filler spell that SHOULD be interrupted when a higher-priority spell becomes ready.
+  - `ICON:<FileDataID>` : Numeric WoW icon texture ID (use `134400` if unknown).
 
-## CHANNEL_POLICY (Which channeled spells should flash 'CLIP CAST!' when a higher-priority spell comes ready, and which channels must never be clipped)
-INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: MIND_FLAY
-PROTECT_CHANNEL: VOID_TORRENT
+SECTION C — ## CHANNEL_POLICY:
+INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: <KEY1, KEY2 or NONE>
+PROTECT_CHANNEL: <KEY1, KEY2 or NONE>
 
-## TRACKERS (Optional Side Cooldown Wings: up to 4 Defensive Saves on the left via TRACK_SAVES, and up to 4 Offensive Burst CDs on the right via TRACK_CDS)
-TRACK_SAVES: DISPERSION, DESPERATE_PRAYER, VAMPIRIC_EMBRACE, FADE
-TRACK_CDS: POWER_INFUSION, VOID_ERUPTION, VOID_TORRENT, PSYFIEND
+SECTION D — ## TRACKERS (Side HUD Wings — up to 4 keys each, all declared in SPELL_BOOK):
+TRACK_SAVES: <DEFENSIVE_1>, <DEFENSIVE_2>, <DEFENSIVE_3>, <DEFENSIVE_4>
+TRACK_CDS: <OFFENSIVE_CD_1>, <OFFENSIVE_CD_2>, <OFFENSIVE_CD_3>, <OFFENSIVE_CD_4>
 
-## EMERGENCY_SAVE (Center Screen Alert when Player HP drops below threshold)
-IF player.hp_percent <= 25 AND READY(DISPERSION) THEN
-    RETURN EMERGENCY(DISPERSION)
-ELSE IF player.hp_percent <= 25 AND READY(DESPERATE_PRAYER) THEN
-    RETURN EMERGENCY(DESPERATE_PRAYER)
+SECTION E — ## EMERGENCY_SAVE (Center low-HP alert):
+IF player.hp_percent <= 25 AND READY(<DEFENSIVE_KEY>) THEN
+    RETURN EMERGENCY(<DEFENSIVE_KEY>)
 END IF
 
-## ROTATION_QUEUE (FSM Priority Rules evaluated top-to-bottom; supported conditions: NOT target.has_dots, target.has_dots, READY(X), NOT READY(X), USABLE(X), PROC(X), AND)
-IF NOT target.has_dots AND READY(TENTACLE_SLAM) THEN
-    RETURN CAST(TENTACLE_SLAM)
-ELSE IF NOT target.has_dots AND NOT READY(TENTACLE_SLAM) THEN
-    RETURN CAST(VAMPIRIC_TOUCH)
-ELSE IF PROC(VOID_BOLT) AND READY(VOID_BOLT) THEN
-    RETURN CAST(VOID_BOLT)
-ELSE IF PROC(DEVOURING_PLAGUE) AND USABLE(DEVOURING_PLAGUE) THEN
-    RETURN CAST(DEVOURING_PLAGUE)
-ELSE IF PROC(MIND_FLAY_INSANITY) THEN
-    RETURN CAST(MIND_FLAY_INSANITY)
-ELSE IF PROC(SHADOW_WORD_DEATH) AND READY(SHADOW_WORD_DEATH) THEN
-    RETURN CAST(SHADOW_WORD_DEATH)
-ELSE IF READY(VOID_TORRENT) THEN
-    RETURN CAST(VOID_TORRENT)
-ELSE IF USABLE(DEVOURING_PLAGUE) THEN
-    RETURN CAST(DEVOURING_PLAGUE)
-ELSE IF READY(MIND_BLAST) THEN
-    RETURN CAST(MIND_BLAST)
-ELSE IF READY(TENTACLE_SLAM) THEN
-    RETURN CAST(TENTACLE_SLAM)
-ELSE IF READY(SHADOW_WORD_DEATH) AND USABLE(SHADOW_WORD_DEATH) THEN
-    RETURN CAST(SHADOW_WORD_DEATH)
+SECTION F — ## ROTATION_QUEUE (Top-to-Bottom Priority FSM):
+Use `IF <condition> THEN` / `ELSE IF <condition> THEN` / `ELSE` / `END IF` with `RETURN CAST(<KEY>)` on the line inside each branch.
+• Allowed condition primitives ONLY (combinable with `AND` / `OR`):
+  - `READY(KEY)` / `NOT READY(KEY)` — spell is off cooldown (or has >= 1 charge).
+  - `USABLE(KEY)` — spell is off cooldown AND player has enough resource/mana/target state to cast it.
+  - `PROC(KEY)` / `NOT PROC(KEY)` — spell has an active proc overlay or active `OVERRIDE_OF` button transformation.
+  - `CHARGES(KEY) >= N` (supports `>=`, `<=`, `==`, `>`, `<`) — current charge count.
+  - `target.has_dots` / `NOT target.has_dots` — target has active DoTs from a `DOTS:true` spell.
+  - `target.debuff_stacks >= N` (or `target.freezing_stacks >= N`) — current stacks of `TARGET_DEBUFF`.
+• Always end with an unconditional `ELSE` -> `RETURN CAST(<FILLER_KEY>)` and `END IF`.
+
+====================================================================
+3. REFERENCE EXAMPLE (FROST MAGE — MIDNIGHT 12.x)
+====================================================================
+# PROFILE: Mage: Frost — Raid Boss / ST (Icy Veins Midnight)
+# CLASS: MAGE
+# SPEC: Frost
+# MODE: BOSS
+# TARGET_DEBUFF: ID:1221389,1246769,228358 | NAME:"Обледенение","Freezing","Зимняя стужа"
+
+## SPELL_BOOK
+SPELL RAY_OF_FROST = ID:205021 | NAME:"Морозный луч","Ray of Frost" | CD:30 | STACKS:+4 | LOCK_CHANNEL:true | ICON:135845
+SPELL COMET_STORM = ID:153595,448601 | NAME:"Кометная буря","Comet Storm" | CD:30 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:RAY_OF_FROST | ICON:1035046
+SPELL GLACIAL_SPIKE = ID:199786,448604 | NAME:"Ледовый шип","Glacial Spike" | CD:0 | STACKS:-4 | CONSUMES_STACKS:true | PROC_ONLY:true | OVERRIDE_OF:FROSTBOLT | ICON:1392548
+SPELL FLURRY = ID:44614,228354 | NAME:"Шквал","Flurry" | CD:30 | CHARGES:2 | STACKS:+3 | ICON:135847
+SPELL FROZEN_ORB = ID:84714,198149 | NAME:"Мерзлая сфера","Ледяной шар","Frozen Orb" | CD:45 | STACKS:+3 | ICON:629077
+SPELL ICE_LANCE = ID:30455 | NAME:"Ледяное копье","Ice Lance" | CD:0 | STACKS:-4 | CONSUMES_STACKS:true | ICON:135844
+SPELL FROSTBOLT = ID:116 | NAME:"Ледяная стрела","Frostbolt" | CD:0 | STACKS:+1 | ICON:135846
+SPELL ICE_BLOCK = ID:45438,414658 | NAME:"Ледяная глыба","Ice Block" | CD:240 | ICON:135841
+SPELL ICE_BARRIER = ID:11426 | NAME:"Ледяная преграда","Ice Barrier" | CD:25 | ICON:135843
+SPELL MIRROR_IMAGE = ID:55342 | NAME:"Зеркальное изображение","Mirror Image" | CD:120 | ICON:135994
+SPELL GREATER_INVIS = ID:110959,66 | NAME:"Великая невидимость","Greater Invisibility","Невидимость" | CD:120 | ICON:132220
+SPELL COUNTERSPELL = ID:2139 | NAME:"Антимагия","Counterspell" | CD:24 | ICON:135856
+
+## CHANNEL_POLICY
+INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: NONE
+PROTECT_CHANNEL: RAY_OF_FROST
+
+## TRACKERS
+TRACK_SAVES: ICE_BLOCK, ICE_BARRIER, MIRROR_IMAGE, GREATER_INVIS
+TRACK_CDS: RAY_OF_FROST, FROZEN_ORB, FLURRY, COUNTERSPELL
+
+## EMERGENCY_SAVE
+IF player.hp_percent <= 20 AND READY(ICE_BLOCK) THEN
+    RETURN EMERGENCY(ICE_BLOCK)
+ELSE IF player.hp_percent <= 35 AND READY(ICE_BARRIER) THEN
+    RETURN EMERGENCY(ICE_BARRIER)
+END IF
+
+## ROTATION_QUEUE
+IF PROC(COMET_STORM) THEN
+    RETURN CAST(COMET_STORM)
+ELSE IF READY(RAY_OF_FROST) AND NOT READY(FLURRY) THEN
+    RETURN CAST(RAY_OF_FROST)
+ELSE IF READY(FLURRY) THEN
+    RETURN CAST(FLURRY)
+ELSE IF READY(RAY_OF_FROST) THEN
+    RETURN CAST(RAY_OF_FROST)
+ELSE IF READY(FROZEN_ORB) THEN
+    RETURN CAST(FROZEN_ORB)
+ELSE IF PROC(GLACIAL_SPIKE) THEN
+    RETURN CAST(GLACIAL_SPIKE)
+ELSE IF PROC(ICE_LANCE) OR target.freezing_stacks >= 4 THEN
+    RETURN CAST(ICE_LANCE)
 ELSE
-    RETURN CAST(MIND_FLAY)
+    RETURN CAST(FROSTBOLT)
 END IF]]
 
 function SpArc:GetAIPromptHeader()
@@ -475,8 +574,8 @@ local EN_PRESET_TITLES = {
   MAGE_01_ARCANE_PVE = "11. Mage: Arcane — PvE (Icy Veins)",
   MAGE_02_ARCANE_BOSS = "12. Mage: Arcane — Raid Boss ST",
   MAGE_03_FIRE_PVE = "13. Mage: Fire — PvE / Mythic+",
-  MAGE_04_FROST_PVE = "14. Mage: Frost — PvE Cleave",
-  MAGE_05_FROST_PVP = "15. Mage: Frost — PvP Arena",
+  MAGE_04_FROST_PVE = "14. Mage: Frost — PvE Cleave (Midnight)",
+  MAGE_05_FROST_PVP = "15. Mage: Frost — ST / Boss / PvP (Midnight)",
 
   WARLOCK_01_AFF_PVE = "16. Warlock: Affliction — PvE",
   WARLOCK_02_AFF_BOSS = "17. Warlock: Affliction — Raid Boss",
@@ -556,7 +655,7 @@ local SpArc = _G.SpArc or _G.SparkArc or {}
 _G.SpArc = SpArc
 _G.SparkArc = SpArc
 
-SpArc.PROFILE_SCHEMA_VERSION = 6
+SpArc.PROFILE_SCHEMA_VERSION = 12
 
 ---------------------------------------------------------------------------------------
 --                  AI PROMPT TEMPLATE (FOR GEMINI / CHATGPT)                        --
@@ -565,71 +664,129 @@ SpArc.AIPromptHeaderText =
   "Попросите своего Gemini или ChatGPT написать вам ротацию с Icy Veins / Wowhead "
   .. "на псевдокоде в формате SpArc .MD и засуньте её сюды!"
 
-SpArc.AIPromptTemplate = [[Привет, Gemini / ChatGPT! Напиши мне профиль ротации с Icy Veins для аддона SpArc (World of Warcraft) строго в формате псевдокода SpArc .MD.
+SpArc.AIPromptTemplate = [[Привет, Gemini / ChatGPT / Claude!
+Сходи, пожалуйста, на Icy Veins или Wowhead, изучи актуальный гайд по ротации для World of Warcraft: Midnight (12.x) и напиши мне готовый профиль ротации для аддона SpArc строго на языке псевдокода SpArc .MD по правилам ниже.
 
-Класс и спек: [УКАЖИ КЛАСС И СПЕК, например: Жрец Тьмы / Shadow Priest]
-Тип контента: [PvE Мифик+ / Босс СТ / PvP Арена]
+====================================================================
+1. ПАРАМЕТРЫ ПЕРСОНАЖА И КОНТЕНТА
+====================================================================
+• Класс и спек: [УКАЖИ КЛАСС И СПЕК, например: Маг Льда / Frost Mage]
+• Героические таланты / билд: [ПО ЖЕЛАНИЮ, например: Заклинатель (Spellslinger) / Стандарт с Icy Veins]
+• Тип контента: [PvE Мифик+ (Клив/АоЕ) / Босс (Соло-таргет) / PvP Арена]
 
-Используй строго следующий синтаксис SpArc .MD (без лишнего текста вне блока):
+====================================================================
+2. ПРАВИЛА КОМПИЛЯТОРА SPARC .MD (СТРОГАЯ СПЕЦИФИКАЦИЯ)
+====================================================================
+Аддон SpArc напрямую компилирует текстовый .MD-профиль в конечный автомат (FSM) и просчитывает очередь ротации на 5 шагов вперёд (с симуляцией КД, зарядов, ресурса, дот и стаков дебаффа).
+Выведи В ОТВЕТЕ ТОЛЬКО ОДИН кодовый блок без лишнего текста, строго соблюдая структуру из 6 секций:
 
-# PROFILE: Название пресета
-# CLASS: PRIEST (или MAGE, WARLOCK, PALADIN, HUNTER, ROGUE, WARRIOR, DRUID, SHAMAN, DEATHKNIGHT, MONK, DEMONHUNTER, EVOKER)
-# SPEC: Shadow
-# MODE: PVE (или BOSS, PVP)
+СЕКЦИЯ А — МЕТАДАННЫЕ ПРОФИЛЯ (ШАПКА):
+# PROFILE: <Название пресета>
+# CLASS: <WARRIOR | PALADIN | HUNTER | ROGUE | PRIEST | DEATHKNIGHT | SHAMAN | MAGE | WARLOCK | MONK | DRUID | DEMONHUNTER | EVOKER>
+# SPEC: <Английское название спека, например: Frost, Shadow, Retribution>
+# MODE: <PVE | BOSS | PVP>
+# TARGET_DEBUFF: ID:<id1,id2> | NAME:"Русское название","English Name"
+  (Опционально: добавляй строку # TARGET_DEBUFF только если ротация строит и тратит стакающийся дебафф на цели — например, «Обледенение» / «Freezing» у Фрост Мага).
 
-## SPELL_BOOK (описание спеллов: ID, русские/англ имена, макросы, КД, генерация/трата ресурса, флаги)
-SPELL TENTACLE_SLAM = ID:205385,457042,1234796 | NAME:"Мощный удар щупальцем","Темное сокрушение" | MACRO:"M2","sp3" | CD:15 | GAIN:15 | DOTS:true | ICON:136201
-SPELL VAMPIRIC_TOUCH = ID:34914 | NAME:"Прикосновение вампира" | MACRO:"sp1pvp","sp1" | CD:0 | GAIN:6 | DOTS:true | ICON:135978
-SPELL VOID_TORRENT = ID:263165 | NAME:"Поток бездны" | MACRO:"SM2" | CD:45 | GAIN:35 | GRANTS:MIND_FLAY_INSANITY | LOCK_CHANNEL:true | ICON:1386551
-SPELL DEVOURING_PLAGUE = ID:335467 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума" | MACRO:"sp4" | COST:50 | GRANTS:MIND_FLAY_INSANITY | SPENDER:true | ICON:252997
-SPELL MIND_BLAST = ID:450983,8092 | NAME:"Выброс Бездны","Взрыв разума" | MACRO:"M1" | CD:7.5 | CHARGES:2 | GAIN:15 | ICON:136224
-SPELL MIND_FLAY_INSANITY = ID:391403 | NAME:"Пытка разума: безумие" | MACRO:"sp8" | GAIN:16 | PROC_ONLY:true | ICON:136208
-SPELL MIND_FLAY = ID:15407 | NAME:"Пытка разума" | MACRO:"sp8" | GAIN:12 | FILLER_INTERRUPTIBLE:true | ICON:136208
+СЕКЦИЯ Б — ## SPELL_BOOK (КНИГА ЗАКЛИНАНИЙ):
+Каждое заклинание, которое используется в очереди ротации, крыльях КД или экстренных сейвах, ОБЯЗАТЕЛЬНО объявляется отдельной строкой:
+SPELL <КЛЮЧ_КАПСОМ> = ID:<id1,id2> | NAME:"Русское имя","English Name" | CD:<сек> | ICON:<FileDataID> [| доп. флаги]
+• В поле NAME всегда пиши И русское, И английское официальное название спелла через запятую в кавычках, а в ID перечисляй все актуальные SpellID (включая ID талантов-замен), чтобы SpArc автоматически нашёл кнопку на панелях Bartender4 / ElvUI на любом клиенте.
+• Доступные флаги поведения (разделяются через ` | `):
+  - `CD:<секунды>` — базовое время восстановления (`0`, если без КД).
+  - `CHARGES:<N>` — максимум зарядов, если у спелла 2+ заряда (например, `CHARGES:2`).
+  - `GAIN:<N>` — сколько основного ресурса генерирует каст (по шкале 0..100).
+  - `COST:<N> | SPENDER:true` — сколько ресурса тратит спелл (помечает способность как спендер).
+  - `DOTS:true` — спелл вешает или обновляет основные доты на цели (делает `target.has_dots = true`).
+  - `STACKS:+N` — каст добавляет `+N` стаков `TARGET_DEBUFF` на цель (например, `STACKS:+2`).
+  - `STACKS:-N | CONSUMES_STACKS:true` — каст поглощает `N` стаков `TARGET_DEBUFF`, если нажат без прока (например, `STACKS:-4 | CONSUMES_STACKS:true` у Ледяного копья).
+  - `PROC_ONLY:true` — спелл доступен ТОЛЬКО при свечении прока (`IsSpellOverlayed`) или временной подмене кнопки.
+  - `OVERRIDE_OF:<БАЗОВЫЙ_КЛЮЧ>` — для комбо-заклинаний Midnight 12.x, в которые временно превращается базовая кнопка (например, `COMET_STORM` имеет `OVERRIDE_OF:RAY_OF_FROST`, а `GLACIAL_SPIKE` имеет `OVERRIDE_OF:FROSTBOLT`).
+  - `GRANTS:<КЛЮЧ_ПРОКА>` — каст этого спелла гарантированно даёт прок `<КЛЮЧ_ПРОКА>`.
+  - `EXECUTE:true` — экзекут-способность (активна при ХП цели < 20% или по проку).
+  - `LOCK_CHANNEL:true` — приоритетный потоковый каст (канал), который НЕЛЬЗЯ прерывать раньше времени.
+  - `FILLER_INTERRUPTIBLE:true` — потоковый филлер (например, Пытка разума), который НУЖНО обрывать при откате любого приоритетного КД/прока.
+  - `ICON:<FileDataID>` — числовой ID текстуры иконки WoW (если не уверен, ставь `134400`).
 
-## CHANNEL_POLICY (какие потоковые касты МОЖНО и НУЖНО прерывать при откате КД/проке, а какие НЕЛЬЗЯ)
-INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: MIND_FLAY
-PROTECT_CHANNEL: VOID_TORRENT
+СЕКЦИЯ В — ## CHANNEL_POLICY (ПОЛИТИКА ПОТОКОВЫХ КАСТОВ):
+INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: <КЛЮЧ1, КЛЮЧ2 или NONE>
+PROTECT_CHANNEL: <КЛЮЧ1, КЛЮЧ2 или NONE>
 
-## TRACKERS (Боковые крылья по 4 иконки: слева защитные сейвы TRACK_SAVES, справа бурсты и КД TRACK_CDS; каждый ключ должен быть объявлен выше в SPELL_BOOK)
-TRACK_SAVES: DISPERSION, DESPERATE_PRAYER, VAMPIRIC_EMBRACE, FADE
-TRACK_CDS: POWER_INFUSION, VOID_ERUPTION, VOID_TORRENT, PSYFIEND
+СЕКЦИЯ Г — ## TRACKERS (БОКОВЫЕ КРЫЛЬЯ ХУДА — по 4 спелла из SPELL_BOOK):
+TRACK_SAVES: <СЕЙВ_1>, <СЕЙВ_2>, <СЕЙВ_3>, <СЕЙВ_4>
+TRACK_CDS: <БУРСТ_1>, <БУРСТ_2>, <БУРСТ_3>, <БУРСТ_4>
 
-## EMERGENCY_SAVE (Экстренный сейв в центре экрана, когда ХП падает ниже порога)
-IF player.hp_percent <= 25 AND READY(DISPERSION) THEN
-    RETURN EMERGENCY(DISPERSION)
-ELSE IF player.hp_percent <= 25 AND READY(DESPERATE_PRAYER) THEN
-    RETURN EMERGENCY(DESPERATE_PRAYER)
+СЕКЦИЯ Д — ## EMERGENCY_SAVE (ЭКСТРЕННЫЙ СЕЙВ В ЦЕНТРЕ ЭКРАНА ПРИ НИЗКОМ ХП):
+IF player.hp_percent <= 25 AND READY(<КЛЮЧ_СЕЙВА>) THEN
+    RETURN EMERGENCY(<КЛЮЧ_СЕЙВА>)
 END IF
 
-## ROTATION_QUEUE (приоритеты конечного автомата сверху вниз; доступные условия: NOT target.has_dots, target.has_dots, READY(X), NOT READY(X), USABLE(X), PROC(X), AND)
-IF NOT target.has_dots AND READY(TENTACLE_SLAM) THEN
-    RETURN CAST(TENTACLE_SLAM)
-ELSE IF NOT target.has_dots AND NOT READY(TENTACLE_SLAM) THEN
-    RETURN CAST(VAMPIRIC_TOUCH)
-ELSE IF PROC(VOID_BOLT) AND READY(VOID_BOLT) THEN
-    RETURN CAST(VOID_BOLT)
-ELSE IF PROC(VOID_BLAST) AND READY(MIND_BLAST) THEN
-    RETURN CAST(MIND_BLAST)
-ELSE IF PROC(DEVOURING_PLAGUE) AND USABLE(DEVOURING_PLAGUE) THEN
-    RETURN CAST(DEVOURING_PLAGUE)
-ELSE IF PROC(MIND_FLAY_INSANITY) THEN
-    RETURN CAST(MIND_FLAY_INSANITY)
-ELSE IF PROC(SHADOW_WORD_DEATH) AND READY(SHADOW_WORD_DEATH) THEN
-    RETURN CAST(SHADOW_WORD_DEATH)
-ELSE IF READY(VOID_TORRENT) THEN
-    RETURN CAST(VOID_TORRENT)
-ELSE IF USABLE(DEVOURING_PLAGUE) THEN
-    RETURN CAST(DEVOURING_PLAGUE)
-ELSE IF READY(MIND_BLAST) THEN
-    RETURN CAST(MIND_BLAST)
-ELSE IF READY(TENTACLE_SLAM) THEN
-    RETURN CAST(TENTACLE_SLAM)
-ELSE IF READY(SHADOW_WORD_DEATH) AND USABLE(SHADOW_WORD_DEATH) THEN
-    RETURN CAST(SHADOW_WORD_DEATH)
-ELSE IF READY(HALO) THEN
-    RETURN CAST(HALO)
+СЕКЦИЯ Е — ## ROTATION_QUEUE (ПРИОРИТЕТЫ РОТАЦИИ СВЕРХУ ВНИЗ):
+Строится строго конструкцией `IF <условие> THEN` / `ELSE IF <условие> THEN` / `ELSE` / `END IF`, внутри каждой ветки на следующей строке пишется `RETURN CAST(<КЛЮЧ>)`.
+• Разрешённые условия (можно комбинировать через `AND` и `OR`):
+  - `READY(KEY)` / `NOT READY(KEY)` — спелл откатился (или имеет >= 1 заряда).
+  - `USABLE(KEY)` — спелл откатился И хватает ресурса/маны/условий для каста.
+  - `PROC(KEY)` / `NOT PROC(KEY)` — активен прок (свечение кнопки) или активна подмена `OVERRIDE_OF`.
+  - `CHARGES(KEY) >= N` (поддерживаются `>=`, `<=`, `==`, `>`, `<`) — проверка числа зарядов.
+  - `target.has_dots` / `NOT target.has_dots` — висят ли на цели доты от спелла с флагом `DOTS:true`.
+  - `target.debuff_stacks >= N` (или `target.freezing_stacks >= N`) — текущее число стаков `TARGET_DEBUFF` на цели.
+• В самом конце ОБЯЗАТЕЛЬНО должна быть ветка `ELSE` -> `RETURN CAST(<КЛЮЧ_ФИЛЛЕРА>)` и закрывающий `END IF`.
+
+====================================================================
+3. ЭТАЛОННЫЙ ПРИМЕР (МАГ ЛЬДА — MIDNIGHT 12.x)
+====================================================================
+# PROFILE: Маг: Лед — Босс / СТ (Icy Veins Midnight)
+# CLASS: MAGE
+# SPEC: Frost
+# MODE: BOSS
+# TARGET_DEBUFF: ID:1221389,1246769,228358 | NAME:"Обледенение","Freezing","Зимняя стужа"
+
+## SPELL_BOOK
+SPELL RAY_OF_FROST = ID:205021 | NAME:"Морозный луч","Ray of Frost" | CD:30 | STACKS:+4 | LOCK_CHANNEL:true | ICON:135845
+SPELL COMET_STORM = ID:153595,448601 | NAME:"Кометная буря","Comet Storm" | CD:30 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:RAY_OF_FROST | ICON:1035046
+SPELL GLACIAL_SPIKE = ID:199786,448604 | NAME:"Ледовый шип","Glacial Spike" | CD:0 | STACKS:-4 | CONSUMES_STACKS:true | PROC_ONLY:true | OVERRIDE_OF:FROSTBOLT | ICON:1392548
+SPELL FLURRY = ID:44614,228354 | NAME:"Шквал","Flurry" | CD:30 | CHARGES:2 | STACKS:+3 | ICON:135847
+SPELL FROZEN_ORB = ID:84714,198149 | NAME:"Мерзлая сфера","Ледяной шар","Frozen Orb" | CD:45 | STACKS:+3 | ICON:629077
+SPELL ICE_LANCE = ID:30455 | NAME:"Ледяное копье","Ice Lance" | CD:0 | STACKS:-4 | CONSUMES_STACKS:true | ICON:135844
+SPELL FROSTBOLT = ID:116 | NAME:"Ледяная стрела","Frostbolt" | CD:0 | STACKS:+1 | ICON:135846
+SPELL ICE_BLOCK = ID:45438,414658 | NAME:"Ледяная глыба","Ice Block" | CD:240 | ICON:135841
+SPELL ICE_BARRIER = ID:11426 | NAME:"Ледяная преграда","Ice Barrier" | CD:25 | ICON:135843
+SPELL MIRROR_IMAGE = ID:55342 | NAME:"Зеркальное изображение","Mirror Image" | CD:120 | ICON:135994
+SPELL GREATER_INVIS = ID:110959,66 | NAME:"Великая невидимость","Greater Invisibility","Невидимость" | CD:120 | ICON:132220
+SPELL COUNTERSPELL = ID:2139 | NAME:"Антимагия","Counterspell" | CD:24 | ICON:135856
+
+## CHANNEL_POLICY
+INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: NONE
+PROTECT_CHANNEL: RAY_OF_FROST
+
+## TRACKERS
+TRACK_SAVES: ICE_BLOCK, ICE_BARRIER, MIRROR_IMAGE, GREATER_INVIS
+TRACK_CDS: RAY_OF_FROST, FROZEN_ORB, FLURRY, COUNTERSPELL
+
+## EMERGENCY_SAVE
+IF player.hp_percent <= 20 AND READY(ICE_BLOCK) THEN
+    RETURN EMERGENCY(ICE_BLOCK)
+ELSE IF player.hp_percent <= 35 AND READY(ICE_BARRIER) THEN
+    RETURN EMERGENCY(ICE_BARRIER)
+END IF
+
+## ROTATION_QUEUE
+IF PROC(COMET_STORM) THEN
+    RETURN CAST(COMET_STORM)
+ELSE IF READY(RAY_OF_FROST) AND NOT READY(FLURRY) THEN
+    RETURN CAST(RAY_OF_FROST)
+ELSE IF READY(FLURRY) THEN
+    RETURN CAST(FLURRY)
+ELSE IF READY(RAY_OF_FROST) THEN
+    RETURN CAST(RAY_OF_FROST)
+ELSE IF READY(FROZEN_ORB) THEN
+    RETURN CAST(FROZEN_ORB)
+ELSE IF PROC(GLACIAL_SPIKE) THEN
+    RETURN CAST(GLACIAL_SPIKE)
+ELSE IF PROC(ICE_LANCE) OR target.freezing_stacks >= 4 THEN
+    RETURN CAST(ICE_LANCE)
 ELSE
-    RETURN CAST(MIND_FLAY)
+    RETURN CAST(FROSTBOLT)
 END IF]]
 
 ---------------------------------------------------------------------------------------
@@ -1179,42 +1336,83 @@ ELSE
 END IF
 ]]
 
-local MAGE_FROST_MD = [[
-## SPELL_BOOK (Frost Mage)
-SPELL ICY_VEINS = ID:12472 | NAME:"Стылая кровь","Icy Veins" | CD:120 | ICON:135838
-SPELL FROZEN_ORB = ID:84714 | NAME:"Мерзлая сфера","Frozen Orb" | CD:60 | ICON:629077
-SPELL COMET_STORM = ID:153595 | NAME:"Кометная буря","Comet Storm" | CD:30 | ICON:1033912
-SPELL GLACIAL_SPIKE = ID:199786,257537 | NAME:"Ледниковый шип","Черная стрела","Glacial Spike","Ebonbolt" | CD:0 | PROC_ONLY:true | ICON:1394891
-SPELL FLURRY = ID:44614 | NAME:"Шквал","Flurry" | CD:30 | CHARGES:2 | ICON:135859
-SPELL ICE_LANCE = ID:30455 | NAME:"Ледяное копье","Ice Lance" | CD:0 | ICON:135844
-SPELL BLIZZARD = ID:190356 | NAME:"Снежная буря","Blizzard" | CD:8 | ICON:135857
+local MAGE_FROST_SPELLBOOK_MD = [[
+## SPELL_BOOK (Frost Mage — Midnight 12.x Overhaul)
+TARGET_DEBUFF: NAME:"Обледенение","Замерзание","Freezing","Зимняя стужа","Winter's Chill"
+SPELL RAY_OF_FROST = ID:205021 | NAME:"Луч холода","Ray of Frost" | CD:60 | CHARGES:1 | STACKS:+3 | LOCK_CHANNEL:true | ICON:1698700
+SPELL COMET_STORM = ID:153595,455396 | NAME:"Кометная буря","Comet Storm" | CD:30 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:RAY_OF_FROST | ICON:1033912
+SPELL GLACIAL_SPIKE = ID:199786,257537 | NAME:"Ледниковый шип","Черная стрела","Glacial Spike","Ebonbolt" | CD:0 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:FROSTBOLT | ICON:1394891
+SPELL FLURRY = ID:44614 | NAME:"Шквал","Flurry" | CD:30 | CHARGES:2 | STACKS:+2 | ICON:135859
+SPELL FROZEN_ORB = ID:84714 | NAME:"Ледяной шар","Мерзлая сфера","Frozen Orb" | CD:60 | STACKS:+2 | ICON:629077
+SPELL ICE_LANCE = ID:30455 | NAME:"Ледяное копье","Ice Lance" | CD:0 | CONSUMES_STACKS:true | STACKS:-4 | ICON:135844
+SPELL BLIZZARD = ID:190356,1248829 | NAME:"Снежная буря","Blizzard" | CD:8 | ICON:135857
+SPELL FROSTBOLT = ID:431044,116 | NAME:"Ледяная стрела","Стрела ледяного огня","Frostbolt","Frostfire Bolt" | CD:0 | STACKS:+1 | ICON:135846
 SPELL SHIFTING_POWER = ID:382440 | NAME:"Переходящая сила","Shifting Power" | CD:60 | ICON:3636843
-SPELL FROSTBOLT = ID:116 | NAME:"Ледяная стрела","Frostbolt" | CD:0 | FILLER_INTERRUPTIBLE:true | ICON:135846
-SPELL ICE_BLOCK = ID:45438,414658 | NAME:"Ледяная глыба","Холодная хватка","Ice Block","Ice Cold" | CD:240 | ICON:135841
-SPELL MIRROR_IMAGE = ID:55342 | NAME:"Зеркальное изображение","Mirror Image" | CD:120 | ICON:135994
-SPELL ALTER_TIME = ID:342245,108978 | NAME:"Путешествие во времени","Alter Time" | CD:60 | ICON:609811
-SPELL ICE_BARRIER = ID:11426 | NAME:"Ледяная преграда","Ice Barrier" | CD:25 | ICON:135988
-TRACK_SAVES: ICE_BLOCK, MIRROR_IMAGE, ALTER_TIME, ICE_BARRIER
-TRACK_CDS: ICY_VEINS, FROZEN_ORB, COMET_STORM, SHIFTING_POWER
+SPELL ICE_BLOCK = ID:45438,414658 | NAME:"Ледяная глыба","Холодная хватка","Ice Block","Ice Cold" | CD:240 | CHARGES:2 | ICON:135841
+SPELL ICE_BARRIER = ID:11426,235313,431038 | NAME:"Ледяная преграда","Пылающая преграда","Пылающий барьер","Ice Barrier","Blazing Barrier" | CD:25 | CHARGES:1 | ICON:135988
+SPELL ALTER_TIME = ID:342245,108978 | NAME:"Манипуляции со временем","Путешествие во времени","Alter Time" | CD:60 | ICON:609811
+SPELL COLD_SNAP = ID:235219,55342 | NAME:"Холодная хватка","Зеркальное изображение","Cold Snap","Mirror Image" | CD:120 | ICON:135865
+
+## CHANNEL_POLICY (Ray of Frost — главный КД, прерывать нельзя!)
+PROTECT_CHANNEL: RAY_OF_FROST
+
+## TRACKERS
+TRACK_SAVES: ICE_BLOCK, ICE_BARRIER, ALTER_TIME, COLD_SNAP
+TRACK_CDS: RAY_OF_FROST, FROZEN_ORB, FLURRY, COMET_STORM
+
+## EMERGENCY_SAVE
 IF player.hp_percent <= 25 AND READY(ICE_BLOCK) THEN
     RETURN EMERGENCY(ICE_BLOCK)
 ELSE IF player.hp_percent <= 25 AND READY(ICE_BARRIER) THEN
     RETURN EMERGENCY(ICE_BARRIER)
 END IF
-IF PROC(GLACIAL_SPIKE) AND READY(GLACIAL_SPIKE) THEN
+]]
+
+local MAGE_FROST_MD = MAGE_FROST_SPELLBOOK_MD .. [[
+## ROTATION_QUEUE (Midnight 12.x — Cleave / Mythic+ / Open World)
+IF PROC(COMET_STORM) AND READY(COMET_STORM) THEN
+    RETURN CAST(COMET_STORM)
+ELSE IF PROC(GLACIAL_SPIKE) AND READY(GLACIAL_SPIKE) THEN
     RETURN CAST(GLACIAL_SPIKE)
-ELSE IF PROC(ICE_LANCE) AND READY(ICE_LANCE) THEN
-    RETURN CAST(ICE_LANCE)
+ELSE IF PROC(FLURRY) AND READY(FLURRY) THEN
+    RETURN CAST(FLURRY)
+ELSE IF CHARGES(RAY_OF_FROST) >= 2 AND READY(RAY_OF_FROST) THEN
+    RETURN CAST(RAY_OF_FROST)
 ELSE IF READY(FROZEN_ORB) THEN
     RETURN CAST(FROZEN_ORB)
-ELSE IF READY(COMET_STORM) THEN
-    RETURN CAST(COMET_STORM)
+ELSE IF READY(RAY_OF_FROST) THEN
+    RETURN CAST(RAY_OF_FROST)
 ELSE IF READY(FLURRY) THEN
     RETURN CAST(FLURRY)
+ELSE IF PROC(ICE_LANCE) AND READY(ICE_LANCE) THEN
+    RETURN CAST(ICE_LANCE)
+ELSE IF target.freezing_stacks >= 4 AND READY(ICE_LANCE) THEN
+    RETURN CAST(ICE_LANCE)
 ELSE IF READY(BLIZZARD) THEN
     RETURN CAST(BLIZZARD)
-ELSE IF READY(SHIFTING_POWER) THEN
-    RETURN CAST(SHIFTING_POWER)
+ELSE
+    RETURN CAST(FROSTBOLT)
+END IF
+]]
+
+local MAGE_FROST_ST_MD = MAGE_FROST_SPELLBOOK_MD .. [[
+## ROTATION_QUEUE (Midnight 12.x — Single Target / Leveling / PvP)
+IF PROC(COMET_STORM) AND READY(COMET_STORM) THEN
+    RETURN CAST(COMET_STORM)
+ELSE IF PROC(GLACIAL_SPIKE) AND READY(GLACIAL_SPIKE) THEN
+    RETURN CAST(GLACIAL_SPIKE)
+ELSE IF READY(RAY_OF_FROST) THEN
+    RETURN CAST(RAY_OF_FROST)
+ELSE IF READY(FLURRY) THEN
+    RETURN CAST(FLURRY)
+ELSE IF READY(FROZEN_ORB) THEN
+    RETURN CAST(FROZEN_ORB)
+ELSE IF PROC(ICE_LANCE) AND READY(ICE_LANCE) THEN
+    RETURN CAST(ICE_LANCE)
+ELSE IF target.freezing_stacks >= 4 AND READY(ICE_LANCE) THEN
+    RETURN CAST(ICE_LANCE)
+ELSE IF PROC(BLIZZARD) AND READY(BLIZZARD) THEN
+    RETURN CAST(BLIZZARD)
 ELSE
     RETURN CAST(FROSTBOLT)
 END IF
@@ -2189,7 +2387,7 @@ local SPEC_PRESET_BODY = {
   MAGE_02_ARCANE_BOSS  = MAGE_ARCANE_MD,
   MAGE_03_FIRE_PVE     = MAGE_FIRE_MD,
   MAGE_04_FROST_PVE    = MAGE_FROST_MD,
-  MAGE_05_FROST_PVP    = MAGE_FROST_MD,
+  MAGE_05_FROST_PVP    = MAGE_FROST_ST_MD,
   WARLOCK_01_AFF_PVE   = WARLOCK_AFF_MD,
   WARLOCK_02_AFF_BOSS  = WARLOCK_AFF_MD,
   WARLOCK_03_DEMO_PVE  = WARLOCK_DEMO_MD,
@@ -2236,8 +2434,8 @@ local OTHER_CLASS_PRESETS = {
   { "MAGE_01_ARCANE_PVE", "MAGE", "11. Маг: Тайная магия — PvE (Icy Veins)", "PVE" },
   { "MAGE_02_ARCANE_BOSS", "MAGE", "12. Маг: Тайная магия — Босс СТ", "BOSS" },
   { "MAGE_03_FIRE_PVE", "MAGE", "13. Маг: Огонь — PvE / Мифик+", "PVE" },
-  { "MAGE_04_FROST_PVE", "MAGE", "14. Маг: Лёд — PvE Cleave", "PVE" },
-  { "MAGE_05_FROST_PVP", "MAGE", "15. Маг: Лёд — PvP Арена", "PVP" },
+  { "MAGE_04_FROST_PVE", "MAGE", "14. Маг: Лёд — PvE Cleave (Midnight)", "PVE" },
+  { "MAGE_05_FROST_PVP", "MAGE", "15. Маг: Лёд — СТ / Босс / PvP (Midnight)", "PVP" },
 
   { "WARLOCK_01_AFF_PVE", "WARLOCK", "16. Чернокнижник: Колдовство — PvE", "PVE" },
   { "WARLOCK_02_AFF_BOSS", "WARLOCK", "17. Чернокнижник: Колдовство — Босс", "BOSS" },

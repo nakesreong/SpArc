@@ -438,6 +438,7 @@ local lastFreelookCentering = nil
 
 local function SyncCursorCenteredYPos(force)
   if not (C_CVar and C_CVar.SetCVar) then return end
+  if InCombatLockdown and InCombatLockdown() then return end
   local db = SpArc:EnsureDB()
   local v = (db and db.visual) or SpArc.DEFAULT_VISUAL or {}
   local offsetY = tonumber(v.camCrosshairOffsetY)
@@ -459,6 +460,7 @@ end
 
 local function SetFreelookCenteringCVar(enabled, force)
   if not (C_CVar and C_CVar.SetCVar) then return end
+  if InCombatLockdown and InCombatLockdown() then return end
   local val = enabled and "1" or "0"
   if not force and lastFreelookCentering == val then return end
   lastFreelookCentering = val
@@ -467,6 +469,7 @@ end
 
 local function EnsureBaseCameraCVars()
   if not (C_CVar and C_CVar.SetCVar) then return end
+  if InCombatLockdown and InCombatLockdown() then return end
   -- Critical fix for WoW 10.2 / 12.x Bug #504:
   -- CursorStickyCentering must ALWAYS stay 0.
   -- CursorFreelookCentering is set to 0 before MouselookStart(), then deferred to 1 after MouselookStart()

@@ -9,8 +9,8 @@ _G.SparkArc = SpArc
 _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
-SpArc.VERSION = "2.8.3"
-SpArc.PROFILE_SCHEMA_VERSION = 10
+SpArc.VERSION = "2.9.0"
+SpArc.PROFILE_SCHEMA_VERSION = 12
 
 local C_AddOns = _G.C_AddOns
 local C_CVar = _G.C_CVar
@@ -394,6 +394,10 @@ SpArc.DEFAULT_VISUAL = {
   camHoldKey = "G",
   camToggleKey = "`",
   camInteractKey = "AUTO",
+  macroGenSkipExisting = true,
+  macroGenIncludeClass = true,
+  macroGenIncludeSpec = true,
+  macroGenTemplate = "#showtooltip\n/stopmacro [flying]\n/cast [@target] spell",
   lang = "AUTO",
 }
 
@@ -401,10 +405,14 @@ SpArc.state = {
   lastCastAt = {},
   lastSlotScanAt = 0,
   targetDoTsUntil = 0,
+  targetDebuffStacks = 0,
+  targetDebuffUntil = 0,
   lastTargetGUID = nil,
   trackedInsanity = 0,
   spellChargesUsed = {},
   spellChargeStart = {},
+  gcdStartTime = 0,
+  gcdDuration = 0,
   mfiProcUntil = 0,
   lastSpellAudit = {},
   lastShouldInterrupt = false,
@@ -527,6 +535,14 @@ function SpArc:EnsureDB()
   db.presets = db.presets or {}
   db.presetOrder = db.presetOrder or {}
   if db.profileSchemaVersion ~= SpArc.PROFILE_SCHEMA_VERSION or #db.presetOrder == 0 then
+    local customOrder = {}
+    local customMap = {}
+    for _, id in ipairs(db.presetOrder) do
+      if not (SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]) and db.presets[id] then
+        customOrder[#customOrder + 1] = id
+        customMap[id] = db.presets[id]
+      end
+    end
     db.presetOrder = {}
     for _, id in ipairs(SpArc.BuiltInPresetOrder or {}) do
       local bp = SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]
@@ -540,6 +556,10 @@ function SpArc:EnsureDB()
           md = bp.md,
         }
       end
+    end
+    for _, cid in ipairs(customOrder) do
+      db.presetOrder[#db.presetOrder + 1] = cid
+      db.presets[cid] = customMap[cid]
     end
     db.profileSchemaVersion = SpArc.PROFILE_SCHEMA_VERSION
   end

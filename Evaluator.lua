@@ -44,6 +44,11 @@ function SpArc:SyncSpellDefsFromProfile(parsed, presetID)
       if spDef.lockChannel ~= nil then dst.lockChannel = spDef.lockChannel end
       if spDef.insanityGain and spDef.insanityGain > 0 then dst.insanityGain = spDef.insanityGain end
       if spDef.insanityCost and spDef.insanityCost > 0 then dst.insanityCost = spDef.insanityCost end
+      if spDef.stacksGain ~= nil then dst.stacksGain = spDef.stacksGain end
+      if spDef.stacksCost ~= nil then dst.stacksCost = spDef.stacksCost end
+      if spDef.consumesStacks ~= nil then dst.consumesStacks = spDef.consumesStacks end
+      if spDef.overrideOf ~= nil then dst.overrideOf = spDef.overrideOf end
+      if spDef.debuffIDs ~= nil then dst.debuffIDs = spDef.debuffIDs end
     end
   end
   if changed then
@@ -60,7 +65,7 @@ local SPEC_ID_TO_PRESETS = {
   -- MAGE
   [62]  = { PVE = "MAGE_01_ARCANE_PVE",    BOSS = "MAGE_02_ARCANE_BOSS",   PVP = "MAGE_01_ARCANE_PVE" },
   [63]  = { PVE = "MAGE_03_FIRE_PVE",      BOSS = "MAGE_03_FIRE_PVE",      PVP = "MAGE_03_FIRE_PVE" },
-  [64]  = { PVE = "MAGE_04_FROST_PVE",     BOSS = "MAGE_04_FROST_PVE",     PVP = "MAGE_05_FROST_PVP" },
+  [64]  = { PVE = "MAGE_04_FROST_PVE",     BOSS = "MAGE_05_FROST_PVP",     PVP = "MAGE_05_FROST_PVP" },
   -- WARLOCK
   [265] = { PVE = "WARLOCK_01_AFF_PVE",    BOSS = "WARLOCK_02_AFF_BOSS",   PVP = "WARLOCK_01_AFF_PVE" },
   [266] = { PVE = "WARLOCK_03_DEMO_PVE",   BOSS = "WARLOCK_03_DEMO_PVE",   PVP = "WARLOCK_03_DEMO_PVE" },
@@ -254,43 +259,97 @@ function SpArc:SelectActiveParsedProfile()
   return parsed, presetID
 end
 
-function SpArc:EvalSingleCondition(condStr, simHasDoTs, simReady, simUsable, simProcs)
+local function CompareNum(lhs, op, rhs)
+  if op == ">=" then return lhs >= rhs
+  elseif op == "<=" then return lhs <= rhs
+  elseif op == "==" or op == "=" then return lhs == rhs
+  elseif op == ">" then return lhs > rhs
+  elseif op == "<" then return lhs < rhs
+  end
+  return false
+end
+
+local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges)
+  if c == "" or c == "ALWAYS" then
+    return true
+  elseif c == "NOT target.has_dots" then
+    return not simHasDoTs
+  elseif c == "target.has_dots" then
+    return simHasDoTs and true or false
+  end
+
+  local readySp = c:match("^READY%(([A-Z0-9_]+)%)$")
+  if readySp then
+    return simReady[readySp] and true or false
+  end
+
+  local notReadySp = c:match("^NOT%s+READY%(([A-Z0-9_]+)%)$")
+  if notReadySp then
+    return not simReady[notReadySp]
+  end
+
+  local usableSp = c:match("^USABLE%(([A-Z0-9_]+)%)$")
+  if usableSp then
+    return (simReady[usableSp] and simUsable[usableSp]) and true or false
+  end
+
+  local procSp = c:match("^PROC%(([A-Z0-9_]+)%)$")
+  if procSp then
+    local pKey = (procSp == "VOID_BLAST") and "MIND_BLAST" or procSp
+    return simProcs[pKey] and true or false
+  end
+
+  local notProcSp = c:match("^NOT%s+PROC%(([A-Z0-9_]+)%)$")
+  if notProcSp then
+    local pKey = (notProcSp == "VOID_BLAST") and "MIND_BLAST" or notProcSp
+    return not simProcs[pKey]
+  end
+
+  local chSp, chOp, chVal = c:match("^CHARGES%(([A-Z0-9_]+)%)%s*([><=]+)%s*(%d+)$")
+  if chSp and chOp and chVal then
+    local curCh = (simCharges and simCharges[chSp]) or 0
+    return CompareNum(curCh, chOp, tonumber(chVal) or 0)
+  end
+
+  local stOp, stVal = c:match("^target%.freezing_stacks%s*([><=]+)%s*(%d+)$")
+  if not stOp then
+    stOp, stVal = c:match("^target%.debuff_stacks%s*([><=]+)%s*(%d+)$")
+  end
+  if not stOp then
+    stOp, stVal = c:match("^target%.shatter_stacks%s*([><=]+)%s*(%d+)$")
+  end
+  if not stOp then
+    stOp, stVal = c:match("^STACKS%s*([><=]+)%s*(%d+)$")
+  end
+  if stOp and stVal then
+    return CompareNum(simStacks or 0, stOp, tonumber(stVal) or 0)
+  end
+
+  return true
+end
+
+function SpArc:EvalSingleCondition(condStr, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges)
   if not condStr or condStr == "ALWAYS" then
     return true
   end
-  local norm = condStr:gsub("%s+AND%s+", "\1")
-  for rawClause in norm:gmatch("([^\1]+)") do
-    local c = rawClause:gsub("^%s+", ""):gsub("%s+$", "")
-    if c ~= "" then
-      if c == "NOT target.has_dots" then
-        if simHasDoTs then return false end
-      elseif c == "target.has_dots" then
-        if not simHasDoTs then return false end
-      else
-        local readySp = c:match("^READY%(([A-Z0-9_]+)%)$")
-        if readySp then
-          if not simReady[readySp] then return false end
-        else
-          local notReadySp = c:match("^NOT%s+READY%(([A-Z0-9_]+)%)$")
-          if notReadySp then
-            if simReady[notReadySp] then return false end
-          else
-            local usableSp = c:match("^USABLE%(([A-Z0-9_]+)%)$")
-            if usableSp then
-              if not simReady[usableSp] or not simUsable[usableSp] then return false end
-            else
-              local procSp = c:match("^PROC%(([A-Z0-9_]+)%)$")
-              if procSp then
-                local pKey = (procSp == "VOID_BLAST") and "MIND_BLAST" or procSp
-                if not simProcs[pKey] then return false end
-              end
-            end
-          end
+  local orNorm = condStr:gsub("%s+OR%s+", "\2")
+  for orBranch in orNorm:gmatch("([^\2]+)") do
+    local branchOk = true
+    local andNorm = orBranch:gsub("%s+AND%s+", "\1")
+    for rawClause in andNorm:gmatch("([^\1]+)") do
+      local c = rawClause:gsub("^%s+", ""):gsub("%s+$", "")
+      if c ~= "" then
+        if not EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges) then
+          branchOk = false
+          break
         end
       end
     end
+    if branchOk then
+      return true
+    end
   end
-  return true
+  return false
 end
 
 function SpArc:GetActiveChannelDefKey(now)
@@ -368,6 +427,7 @@ function SpArc:BuildRotationQueue(maxSlots)
 
   local queue = {}
   local simHasDoTs = SpArc:CheckTargetHasDoTs(assistedKey)
+  local simStacks = (SpArc.GetTargetDebuffStacks and SpArc:GetTargetDebuffStacks(parsed, assistedKey)) or 0
   if states["DEVOURING_PLAGUE"] and not states["DEVOURING_PLAGUE"].isUsable then
     st.trackedInsanity = math.min(st.trackedInsanity, 25)
   elseif states["DEVOURING_PLAGUE"] and states["DEVOURING_PLAGUE"].isUsable and st.trackedInsanity < 50 then
@@ -387,7 +447,7 @@ function SpArc:BuildRotationQueue(maxSlots)
     for _, rule in ipairs(parsed.rules) do
       local sp = rule.spell
       if simReady[sp] and simUsable[sp] then
-        if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs) then
+        if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges) then
           pickedKey = sp
           break
         end
@@ -401,7 +461,7 @@ function SpArc:BuildRotationQueue(maxSlots)
       for _, rule in ipairs(parsed.rules) do
         local sp = rule.spell
         local spD = SPELL_DEFS[sp]
-        if simKnown[sp] and spD and not spD.procOnly and not spD.isExecute and not spD.isSpender then
+        if simKnown[sp] and spD and not spD.procOnly and not spD.isExecute and not spD.isSpender and not spD.consumesStacks then
           local rem = simCD[sp] or 9999
           if rem < bestRem then
             bestRem = rem
@@ -442,11 +502,19 @@ function SpArc:BuildRotationQueue(maxSlots)
         isUnavailable = s.isUnavailable or false,
       }
 
+      local pickedWasProc = simProcs[pickedKey]
       simProcs[pickedKey] = false
       if def then
         if def.appliesDoTs then simHasDoTs = true end
         if def.insanityGain then simInsanity = math.min(100, simInsanity + def.insanityGain) end
         if def.insanityCost then simInsanity = math.max(0, simInsanity - def.insanityCost) end
+        if def.consumesStacks and not pickedWasProc then
+          local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
+          simStacks = math.max(0, (simStacks or 0) - cost)
+        end
+        if def.stacksGain and def.stacksGain > 0 then
+          simStacks = math.min(20, (simStacks or 0) + def.stacksGain)
+        end
         if def.procOnly or def.isSpender or def.isExecute then
           simCD[pickedKey] = 9999
           simReady[pickedKey] = false
@@ -463,7 +531,7 @@ function SpArc:BuildRotationQueue(maxSlots)
         elseif def.baseCD and def.baseCD > 0 then
           simCD[pickedKey] = def.baseCD
           simReady[pickedKey] = false
-        elseif def.fillerInterruptible then
+        elseif def.fillerInterruptible and pickedKey == "MIND_FLAY" then
           simCD[pickedKey] = 4.5
           simReady[pickedKey] = false
         else
@@ -531,8 +599,18 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   if defKey == "MIND_FLAY_INSANITY" then
     st.mfiProcUntil = 0
   end
+  local lastAudit = st.lastSpellAudit and st.lastSpellAudit[defKey]
+  local castWasProc = (lastAudit and lastAudit.isProc) or false
+  if def.consumesStacks and not castWasProc then
+    local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
+    st.targetDebuffStacks = math.max(0, (st.targetDebuffStacks or 0) - cost)
+  end
+  if def.stacksGain and def.stacksGain > 0 then
+    st.targetDebuffStacks = math.min(20, (st.targetDebuffStacks or 0) + def.stacksGain)
+    st.targetDebuffUntil = now + 15.0
+  end
   local maxCh = def.liveMaxCharges or def.maxCharges or 1
-  if maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" then
+  if maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" or defKey == "FLURRY" then
     SpArc:GetTrackedSpellCharges(defKey, now)
     local used = st.spellChargesUsed[defKey] or 0
     if used == 0 then
@@ -610,6 +688,8 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     local newGUID = (okG and not IsSecret(guid) and guid) or nil
     if not newGUID or newGUID ~= st.lastTargetGUID then
       st.targetDoTsUntil = 0
+      st.targetDebuffStacks = 0
+      st.targetDebuffUntil = 0
       st.lastTargetGUID = newGUID
     end
     return
@@ -628,8 +708,12 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
 
   if event == "UNIT_SPELLCAST_START" then
     local defKey = SpArc:MatchSpellToDefKey(spellID, sName)
-    if defKey and SpArc.TriggerSpellPress then
-      SpArc:TriggerSpellPress(defKey, nil, nil)
+    if defKey then
+      st.lastHardCastStartAt = st.lastHardCastStartAt or {}
+      st.lastHardCastStartAt[defKey] = now
+      if SpArc.TriggerSpellPress then
+        SpArc:TriggerSpellPress(defKey, nil, nil)
+      end
     end
     local dur = (sCastMS and sCastMS > 0 and (sCastMS / 1000)) or 1.4
     st.castState.active = true
@@ -641,10 +725,14 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     st.castState.endTime = now + dur
   elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
     local defKey = SpArc:MatchSpellToDefKey(spellID, sName)
-    if defKey and SpArc.TriggerSpellPress then
-      SpArc:TriggerSpellPress(defKey, nil, nil)
+    if defKey then
+      st.lastHardCastStartAt = st.lastHardCastStartAt or {}
+      st.lastHardCastStartAt[defKey] = now
+      if SpArc.TriggerSpellPress then
+        SpArc:TriggerSpellPress(defKey, nil, nil)
+      end
     end
-    local dur = (defKey == "VOID_TORRENT") and 3.0 or 2.8
+    local dur = (defKey == "RAY_OF_FROST") and 4.0 or ((defKey == "VOID_TORRENT") and 3.0 or 2.8)
     st.castState.active = true
     st.castState.isChannel = true
     st.castState.defKey = defKey
@@ -660,10 +748,15 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     st.castState.defKey = nil
   elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
     local defKey = SpArc:MatchSpellToDefKey(spellID, sName)
-    if defKey and SpArc.TriggerSpellPress then
+    local wasHardCast = defKey and st.lastHardCastStartAt and st.lastHardCastStartAt[defKey] and (now - st.lastHardCastStartAt[defKey]) < 4.5
+    if wasHardCast then
+      st.lastHardCastStartAt[defKey] = nil
+    elseif defKey and SpArc.TriggerSpellPress then
       SpArc:TriggerSpellPress(defKey, nil, nil)
     end
-    if defKey and defKey ~= "VOID_TORRENT" and defKey ~= "MIND_FLAY" and defKey ~= "MIND_FLAY_INSANITY" then
+    local d = defKey and SPELL_DEFS[defKey]
+    local isChan = d and (d.lockChannel or d.fillerInterruptible)
+    if defKey and not isChan and defKey ~= "VOID_TORRENT" and defKey ~= "MIND_FLAY" and defKey ~= "MIND_FLAY_INSANITY" and defKey ~= "RAY_OF_FROST" then
       SpArc:RecordSpellCastSuccess(defKey, now)
     end
   end

@@ -69,6 +69,28 @@ local function ParseSpellDefLine(line)
         def.insanityGain = tonumber(val) or 0
       elseif prop == "COST" then
         def.insanityCost = tonumber(val) or 0
+      elseif prop == "STACKS" or prop == "DEBUFF_STACKS" then
+        local n = tonumber(val)
+        if n then
+          if n > 0 then
+            def.stacksGain = n
+          elseif n < 0 then
+            def.stacksCost = -n
+            def.consumesStacks = true
+          end
+        elseif val:upper() == "RESET" or val:upper() == "CONSUME" then
+          def.consumesStacks = true
+        end
+      elseif prop == "CONSUMES_STACKS" then
+        def.consumesStacks = (val:lower() == "true" or val == "1")
+      elseif prop == "OVERRIDE_OF" then
+        def.overrideOf = val:gsub('^"', ''):gsub('"$', '')
+      elseif prop == "DEBUFF_ID" or prop == "DEBUFF_IDS" then
+        def.debuffIDs = {}
+        for _, tok in ipairs(ParseCSVTokens(val)) do
+          local n = tonumber(tok)
+          if n then def.debuffIDs[#def.debuffIDs + 1] = n end
+        end
       elseif prop == "ICON" then
         def.fallbackIcon = tonumber(val) or 134400
       elseif prop == "DOTS" then
@@ -116,6 +138,8 @@ function SpArc:ParseMarkdownFSM(mdText)
     spells = {},
     interruptibleChannels = {},
     protectedChannels = {},
+    targetDebuffIDs = {},
+    targetDebuffNames = {},
     rules = {},
     emergency = {},
     saves = {},
@@ -130,7 +154,7 @@ function SpArc:ParseMarkdownFSM(mdText)
     local line = Trim(rawLine)
     if line ~= "" and not line:match("^```") then
       -- Metadata headers in comments
-      local profTitle = line:match("^#%s*PROFILE:%s*(.+)$")
+      local profTitle = line:match("^#%s*PROFILE:%s*(.+)$") or line:match("^#%s*TITLE:%s*(.+)$")
       if profTitle then parsed.title = Trim(profTitle) end
       local profClass = line:match("^#%s*CLASS:%s*([A-Z]+)")
       if profClass then parsed.class = Trim(profClass) end
@@ -149,8 +173,34 @@ function SpArc:ParseMarkdownFSM(mdText)
           if spDef.lockChannel then
             parsed.protectedChannels[spKey] = true
           end
+          if spDef.debuffIDs then
+            for _, did in ipairs(spDef.debuffIDs) do
+              parsed.targetDebuffIDs[#parsed.targetDebuffIDs + 1] = did
+            end
+          end
         else
+          local debuffLine = line:match("^TARGET_DEBUFF:%s*(.+)$")
+          if debuffLine then
+            for part in debuffLine:gmatch("([^|]+)") do
+              local p = Trim(part)
+              local prop, val = p:match("^([A-Z_]+)%s*:%s*(.+)$")
+              if prop and val then
+                if prop == "ID" or prop == "IDS" then
+                  for _, tok in ipairs(ParseCSVTokens(val)) do
+                    local n = tonumber(tok)
+                    if n then parsed.targetDebuffIDs[#parsed.targetDebuffIDs + 1] = n end
+                  end
+                elseif prop == "NAME" or prop == "NAMES" then
+                  for _, nm in ipairs(ParseCSVTokens(val)) do
+                    parsed.targetDebuffNames[#parsed.targetDebuffNames + 1] = nm
+                  end
+                end
+              end
+            end
+          end
+
           local intList = line:match("^INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY:%s*(.+)$")
+            or line:match("^INTERRUPTIBLE_CHANNELS:%s*(.+)$")
           if intList then
             for token in intList:gmatch("([A-Z0-9_]+)") do
               parsed.interruptibleChannels[token] = true
@@ -158,6 +208,7 @@ function SpArc:ParseMarkdownFSM(mdText)
           end
 
           local protList = line:match("^PROTECT_CHANNEL:%s*(.+)$")
+            or line:match("^PROTECTED_CHANNELS:%s*(.+)$")
           if protList then
             for token in protList:gmatch("([A-Z0-9_]+)") do
               parsed.protectedChannels[token] = true
@@ -178,26 +229,51 @@ function SpArc:ParseMarkdownFSM(mdText)
             end
           end
 
-          local condPart = line:match("^IF%s+(.+)%s+THEN$") or line:match("^ELSE%s+IF%s+(.+)%s+THEN$")
-          if condPart then
-            pendingCond = Trim(condPart)
-          elseif line:match("^ELSE$") then
-            pendingCond = "ALWAYS"
-          elseif line:match("^END%s+IF") then
+          local strippedLine = line:gsub("^%d+%.%s*", "")
+          local inlineCond, inlineSpell = strippedLine:match("^IF%s+(.+)%s+THEN%s+RETURN%s+CAST%(%s*([A-Z0-9_]+)%s*%)$")
+          if not inlineCond then
+            inlineCond, inlineSpell = strippedLine:match("^ELSE%s+IF%s+(.+)%s+THEN%s+RETURN%s+CAST%(%s*([A-Z0-9_]+)%s*%)$")
+          end
+          if not inlineCond then
+            inlineCond, inlineSpell = strippedLine:match("^IF%s+(.+)%s+THEN%s+RETURN%s+([A-Z0-9_]+)$")
+          end
+          local defaultSpell = strippedLine:match("^DEFAULT:%s*RETURN%s+CAST%(%s*([A-Z0-9_]+)%s*%)$")
+            or strippedLine:match("^DEFAULT:%s*RETURN%s+([A-Z0-9_]+)$")
+
+          if inlineCond and inlineSpell then
+            parsed.rules[#parsed.rules + 1] = {
+              cond = Trim(inlineCond),
+              spell = inlineSpell,
+            }
+            pendingCond = nil
+          elseif defaultSpell then
+            parsed.rules[#parsed.rules + 1] = {
+              cond = "ALWAYS",
+              spell = defaultSpell,
+            }
             pendingCond = nil
           else
-            local emSpell = line:match("RETURN%s+EMERGENCY%(%s*([A-Z0-9_]+)%s*%)")
-            if emSpell then
-              parsed.emergency[#parsed.emergency + 1] = emSpell
+            local condPart = strippedLine:match("^IF%s+(.+)%s+THEN$") or strippedLine:match("^ELSE%s+IF%s+(.+)%s+THEN$")
+            if condPart then
+              pendingCond = Trim(condPart)
+            elseif strippedLine:match("^ELSE$") then
+              pendingCond = "ALWAYS"
+            elseif strippedLine:match("^END%s+IF") then
               pendingCond = nil
-            end
-            local castSpell = line:match("RETURN%s+CAST%(%s*([A-Z0-9_]+)%s*%)")
-            if castSpell then
-              parsed.rules[#parsed.rules + 1] = {
-                cond = pendingCond or "ALWAYS",
-                spell = castSpell,
-              }
-              pendingCond = nil
+            else
+              local emSpell = strippedLine:match("RETURN%s+EMERGENCY%(%s*([A-Z0-9_]+)%s*%)")
+              if emSpell then
+                parsed.emergency[#parsed.emergency + 1] = emSpell
+                pendingCond = nil
+              end
+              local castSpell = strippedLine:match("RETURN%s+CAST%(%s*([A-Z0-9_]+)%s*%)")
+              if castSpell then
+                parsed.rules[#parsed.rules + 1] = {
+                  cond = pendingCond or "ALWAYS",
+                  spell = castSpell,
+                }
+                pendingCond = nil
+              end
             end
           end
         end

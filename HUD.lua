@@ -59,7 +59,9 @@ local function CreateStyledIconBox(parent, size, isPrimary)
 
   local cd = CreateFrame("Cooldown", nil, f, "CooldownFrameTemplate")
   cd:SetAllPoints(f)
-  cd:SetDrawEdge(false)
+  if cd.SetDrawSwipe then cd:SetDrawSwipe(true) end
+  if cd.SetDrawEdge then cd:SetDrawEdge(true) end
+  if cd.SetSwipeColor then cd:SetSwipeColor(0, 0, 0, 0.68) end
   cd:SetHideCountdownNumbers(true)
   f.cd = cd
 
@@ -257,7 +259,25 @@ end
 SpArc:RebuildParsedProfiles()
 SpArc:ApplyVisualLayout()
 
-local function UpdateCooldownRow(boxes, spellKeys, states)
+local function SetBoxCooldownSafe(box, startTime, duration, now)
+  if not box or not box.cd then return end
+  if IsSecret(startTime) or IsSecret(duration) then return end
+  if type(startTime) == "number" and type(duration) == "number" and startTime > 0 and duration > 0.1 and (startTime + duration) > now then
+    if math.abs((box.lastCDStart or 0) - startTime) > 0.04 or math.abs((box.lastCDDur or 0) - duration) > 0.04 then
+      box.lastCDStart = startTime
+      box.lastCDDur = duration
+      pcall(box.cd.SetCooldown, box.cd, startTime, duration)
+    end
+  else
+    if box.lastCDStart and box.lastCDStart > 0 then
+      box.lastCDStart = 0
+      box.lastCDDur = 0
+      pcall(box.cd.Clear, box.cd)
+    end
+  end
+end
+
+local function UpdateCooldownRow(boxes, spellKeys, states, now, gcdStart, gcdDur)
   local defs = SpArc.SPELL_DEFS
   for i = 1, #boxes do
     local box = boxes[i]
@@ -275,14 +295,18 @@ local function UpdateCooldownRow(boxes, spellKeys, states)
         box.border:SetColorTexture(0.18, 0.18, 0.22, 0.85)
         box.keybind:SetTextColor(0.52, 0.52, 0.58, 0.80)
         box.timer:SetText("")
-        box.cd:Clear()
+        SetBoxCooldownSafe(box, 0, 0, now)
       elseif s.isReady then
         box.icon:SetDesaturated(false)
         box.icon:SetAlpha(1.0)
         box.border:SetColorTexture(0.18, 0.88, 0.42, 0.95)
         box.keybind:SetTextColor(1, 0.96, 0.80, 1)
         box.timer:SetText("")
-        box.cd:Clear()
+        if gcdStart and gcdStart > 0 and gcdDur and gcdDur > 0 then
+          SetBoxCooldownSafe(box, gcdStart, gcdDur, now)
+        else
+          SetBoxCooldownSafe(box, 0, 0, now)
+        end
       else
         box.icon:SetDesaturated(true)
         box.icon:SetAlpha(0.55)
@@ -294,11 +318,12 @@ local function UpdateCooldownRow(boxes, spellKeys, states)
           else
             box.timer:SetText(string.format("%d", math.ceil(s.remSec)))
           end
-          if s.startTime and s.startTime > 0 and s.durSec and s.durSec > 0 then
-            pcall(box.cd.SetCooldown, box.cd, s.startTime, s.durSec)
-          end
+          local dur = (s.durSec and s.durSec > 0) and s.durSec or s.remSec
+          local stTime = (s.startTime and s.startTime > 0) and s.startTime or (now - math.max(0, dur - s.remSec))
+          SetBoxCooldownSafe(box, stTime, dur, now)
         else
           box.timer:SetText("")
+          SetBoxCooldownSafe(box, 0, 0, now)
         end
       end
       box:Show()
@@ -448,18 +473,77 @@ local function IsSameOrPairedDefKey(a, b)
   if (a == "VOID_ERUPTION" and b == "VOID_BOLT") or (a == "VOID_BOLT" and b == "VOID_ERUPTION") then
     return true
   end
+  local defs = SpArc.SPELL_DEFS
+  if defs then
+    if (defs[a] and defs[a].overrideOf == b) or (defs[b] and defs[b].overrideOf == a) then
+      return true
+    end
+  end
   return false
 end
 
+local lastPressTriggerAt = {}
+
+local function ResolveSlotDefKey(slot)
+  if not slot or IsSecret(slot) or type(slot) ~= "number" or slot <= 0 then
+    return nil
+  end
+  if _G.GetActionInfo then
+    local okA, aType, aID = pcall(_G.GetActionInfo, slot)
+    if okA and not IsSecret(aType) and not IsSecret(aID) and type(aID) == "number" and aID > 0 then
+      if aType == "spell" then
+        return SpArc:MatchSpellToDefKey(aID, nil)
+      elseif aType == "macro" and _G.GetMacroSpell then
+        local okM, mSpellID = pcall(_G.GetMacroSpell, aID)
+        if okM and not IsSecret(mSpellID) and type(mSpellID) == "number" and mSpellID > 0 then
+          return SpArc:MatchSpellToDefKey(mSpellID, nil)
+        end
+      end
+    end
+  end
+  for k, def in pairs(SpArc.SPELL_DEFS or {}) do
+    if def.slot == slot then
+      return k
+    end
+  end
+  return nil
+end
+
 function SpArc:TriggerSpellPress(defKey, slot, keybind)
+  local now = GetTime()
+  local defs = SpArc.SPELL_DEFS
+  if not defKey and slot then
+    defKey = ResolveSlotDefKey(slot)
+  end
+  if not slot and defKey and defs and defs[defKey] then
+    slot = defs[defKey].slot
+  end
+
+  local debounceId = defKey or (slot and ("SLOT_" .. tostring(slot))) or (keybind and ("KEY_" .. tostring(keybind))) or nil
+  if debounceId then
+    local prev = lastPressTriggerAt[debounceId]
+    if prev and (now - prev) < 0.22 then
+      return
+    end
+    lastPressTriggerAt[debounceId] = now
+  end
+
+  if defKey and SpArc.TriggerGCD then
+    SpArc:TriggerGCD(now)
+  end
+  local gcdStart = st.gcdStartTime or 0
+  local gcdDur = st.gcdDuration or 0
+  if gcdStart > 0 and gcdDur > 0.1 then
+    for i = 1, MAX_ARC_SLOTS do
+      if arcSlots[i]:IsShown() then
+        SetBoxCooldownSafe(arcSlots[i], gcdStart, gcdDur, now)
+      end
+    end
+  end
+
   local db = SpArc:EnsureDB()
   if db and db.visual and db.visual.enablePressFeedback == false then
     return
-  end
-  local now = GetTime()
-  local defs = SpArc.SPELL_DEFS
-  if not slot and defKey and defs and defs[defKey] then
-    slot = defs[defKey].slot
   end
 
   local function CheckAndTriggerBox(box)
@@ -473,7 +557,7 @@ function SpArc:TriggerSpellPress(defKey, slot, keybind)
       matched = true
     end
     if matched then
-      if not box.pressStartTime or (now - box.pressStartTime) > 0.10 then
+      if not box.pressStartTime or (now - box.pressStartTime) > 0.18 then
         box.pressStartTime = now
       end
       return true
@@ -482,13 +566,19 @@ function SpArc:TriggerSpellPress(defKey, slot, keybind)
   end
 
   for i = 1, MAX_ARC_SLOTS do
-    CheckAndTriggerBox(arcSlots[i])
+    if CheckAndTriggerBox(arcSlots[i]) then
+      break
+    end
   end
   for i = 1, #savesBoxes do
-    CheckAndTriggerBox(savesBoxes[i])
+    if CheckAndTriggerBox(savesBoxes[i]) then
+      break
+    end
   end
   for i = 1, #cdsBoxes do
-    CheckAndTriggerBox(cdsBoxes[i])
+    if CheckAndTriggerBox(cdsBoxes[i]) then
+      break
+    end
   end
   CheckAndTriggerBox(emergencyBox)
 end
@@ -502,13 +592,7 @@ local function EnsureBT4PressHooks()
         hookedBT4Buttons[slot] = true
         local capturedSlot = slot
         pcall(btn.HookScript, btn, "PostClick", function()
-          local defKey = nil
-          if _G.GetActionInfo then
-            local okA, aType, aID = pcall(_G.GetActionInfo, capturedSlot)
-            if okA and not IsSecret(aType) and not IsSecret(aID) and aType == "spell" and type(aID) == "number" and aID > 0 then
-              defKey = SpArc:MatchSpellToDefKey(aID, nil)
-            end
-          end
+          local defKey = ResolveSlotDefKey(capturedSlot)
           local kb = SpArc.GetSlotKeybind and SpArc:GetSlotKeybind(capturedSlot) or nil
           SpArc:TriggerSpellPress(defKey, capturedSlot, kb)
         end)
@@ -520,13 +604,7 @@ end
 if _G.hooksecurefunc and _G.UseAction then
   _G.hooksecurefunc("UseAction", function(slot)
     if not slot or IsSecret(slot) or type(slot) ~= "number" or slot <= 0 then return end
-    local defKey = nil
-    if _G.GetActionInfo then
-      local okA, aType, aID = pcall(_G.GetActionInfo, slot)
-      if okA and not IsSecret(aType) and not IsSecret(aID) and aType == "spell" and type(aID) == "number" and aID > 0 then
-        defKey = SpArc:MatchSpellToDefKey(aID, nil)
-      end
-    end
+    local defKey = ResolveSlotDefKey(slot)
     local kb = SpArc.GetSlotKeybind and SpArc:GetSlotKeybind(slot) or nil
     SpArc:TriggerSpellPress(defKey, slot, kb)
   end)
@@ -606,6 +684,11 @@ rootFrame:SetScript("OnUpdate", function()
 
   -- 1. Update Top Semicircle Rotation Arc
   local defs = SpArc.SPELL_DEFS
+  local gcdStart, gcdDur = 0, 0
+  if SpArc.GetActiveGCD then
+    gcdStart, gcdDur = SpArc:GetActiveGCD(now)
+  end
+
   if hasHostileTarget and (v.enableArcHUD ~= false) then
     for i = 1, MAX_ARC_SLOTS do
       local box = arcSlots[i]
@@ -617,6 +700,21 @@ rootFrame:SetScript("OnUpdate", function()
         box.icon:SetTexture(item.icon)
         box.keybind:SetText(item.keybind or "")
         box.timer:SetText("")
+
+        local s = states and item.key and states[item.key] or nil
+        if s and not s.isReady and s.remSec and s.remSec > 0 then
+          local dur = (s.durSec and s.durSec > 0) and s.durSec or s.remSec
+          local stTime = (s.startTime and s.startTime > 0) and s.startTime or (now - math.max(0, dur - s.remSec))
+          SetBoxCooldownSafe(box, stTime, dur, now)
+          if i == 1 and s.remSec > 1.6 then
+            box.timer:SetText(string.format("%d", math.ceil(s.remSec)))
+          end
+        elseif gcdStart and gcdStart > 0 and gcdDur and gcdDur > 0 then
+          SetBoxCooldownSafe(box, gcdStart, gcdDur, now)
+        else
+          SetBoxCooldownSafe(box, 0, 0, now)
+        end
+
         local isDisabledArcItem = item.isUnavailable or (i == 1 and (item.isReady == false or item.isUsable == false))
         if isDisabledArcItem then
           box.icon:SetDesaturated(true)
@@ -661,6 +759,7 @@ rootFrame:SetScript("OnUpdate", function()
         box.currentDefKey = nil
         box.currentSlot = nil
         box.currentKeybind = nil
+        SetBoxCooldownSafe(box, 0, 0, now)
         box:Hide()
       end
     end
@@ -669,6 +768,7 @@ rootFrame:SetScript("OnUpdate", function()
       arcSlots[i].currentDefKey = nil
       arcSlots[i].currentSlot = nil
       arcSlots[i].currentKeybind = nil
+      SetBoxCooldownSafe(arcSlots[i], 0, 0, now)
       arcSlots[i]:Hide()
     end
   end
@@ -676,13 +776,13 @@ rootFrame:SetScript("OnUpdate", function()
   -- 2. Update Left Saves Row & Right Offensive CDs Row
   local showWingsNow = hasHostileTarget or inCombat or v.alwaysShowCDs
   if showWingsNow and v.showSavesWing ~= false then
-    UpdateCooldownRow(savesBoxes, parsed and parsed.saves, states)
+    UpdateCooldownRow(savesBoxes, parsed and parsed.saves, states, now, gcdStart, gcdDur)
   else
     for i = 1, #savesBoxes do savesBoxes[i]:Hide() end
   end
 
   if showWingsNow and v.showCDsWing ~= false then
-    UpdateCooldownRow(cdsBoxes, parsed and parsed.cds, states)
+    UpdateCooldownRow(cdsBoxes, parsed and parsed.cds, states, now, gcdStart, gcdDur)
   else
     for i = 1, #cdsBoxes do cdsBoxes[i]:Hide() end
   end

@@ -237,7 +237,7 @@ local function OpenControlCenter(initialTab)
     sidebar:SetWidth(204)
     SetBackdropFlat(sidebar, 0.04, 0.04, 0.06, 0.98, 0.18, 0.18, 0.24, 1.0)
 
-    local navKeys = { "NAV_1", "NAV_2", "NAV_3", "NAV_4", "NAV_5", "NAV_6", "NAV_7", "NAV_8" }
+    local navKeys = { "NAV_1", "NAV_2", "NAV_3", "NAV_4", "NAV_5", "NAV_6", "NAV_7", "NAV_8", "NAV_9" }
     local navButtons = {}
     local pages = {}
     local groupBoxes = {}
@@ -274,13 +274,13 @@ local function OpenControlCenter(initialTab)
     controlFrame.SelectTab = SelectTab
 
     for i, nKey in ipairs(navKeys) do
-      local yPos = -12 - (i - 1) * 35
+      local yPos = -12 - (i - 1) * 33
       if i >= 3 and i <= 6 then
-        yPos = yPos - 6
+        yPos = yPos - 5
       elseif i >= 7 then
-        yPos = yPos - 14
+        yPos = yPos - 12
       end
-      local btn = CreateElvButton(sidebar, 184, 30, SpArc:L(nKey))
+      local btn = CreateElvButton(sidebar, 184, 29, SpArc:L(nKey))
       btn:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 10, yPos)
       btn.fs:ClearAllPoints()
       btn.fs:SetPoint("LEFT", btn, "LEFT", 12, 0)
@@ -480,639 +480,689 @@ local function OpenControlCenter(initialTab)
     -----------------------------------------------------------------------------------
     -- MODULE 1: ROTATION PRESETS (55)
     -----------------------------------------------------------------------------------
-    local p1 = pages[1]
-    ui.p1Summary = p1:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(ui.p1Summary, 13)
-    ui.p1Summary:SetPoint("TOPLEFT", 0, 0)
-    ui.p1Summary:SetJustifyH("LEFT")
-
-    ui.filterBtn = CreateElvButton(p1, 210, 26, "")
-    ui.filterBtn:SetPoint("TOPLEFT", 0, -26)
-    ui.filterBtn:SetScript("OnClick", function()
-      filterClassOnly = not filterClassOnly
+    local function DeleteSelectedPresetNow()
+      if not selectedPresetForEdit or not db.presets[selectedPresetForEdit] then return end
+      if #db.presetOrder <= 1 then return end
+      local delID = selectedPresetForEdit
+      local delTitle = SpArc:GetPresetDisplayTitle(db.presets[delID])
+      db.presets[delID] = nil
+      if SpArc.ParsedPresets then
+        SpArc.ParsedPresets[delID] = nil
+      end
+      for i = #db.presetOrder, 1, -1 do
+        if db.presetOrder[i] == delID then
+          table.remove(db.presetOrder, i)
+        end
+      end
+      local pCls = GetPlayerClassTag()
+      local nextID = nil
+      for _, id in ipairs(db.presetOrder) do
+        if db.presets[id] and db.presets[id].class == pCls then
+          nextID = id
+          break
+        end
+      end
+      nextID = nextID or db.presetOrder[1]
+      selectedPresetForEdit = nextID
+      if db.activePresetID == delID then
+        db.activePresetID = nextID
+      end
+      SpArc:SelectActiveParsedProfile()
       controlFrame:RefreshUI()
-    end)
-
-    ui.autoModeBtn = CreateElvButton(p1, 210, 26, "")
-    ui.autoModeBtn:SetPoint("LEFT", ui.filterBtn, "RIGHT", 8, 0)
-    ui.autoModeBtn:SetScript("OnClick", function()
-      db.mode = (db.mode == "AUTO") and "MANUAL" or "AUTO"
-      controlFrame:RefreshUI()
-    end)
-
-    ui.newPresetBtn = CreateElvButton(p1, 160, 26, "")
-    ui.newPresetBtn:SetPoint("LEFT", ui.autoModeBtn, "RIGHT", 8, 0)
-    ui.newPresetBtn:SetScript("OnClick", function()
-      local newIdx = #db.presetOrder + 1
-      local cls = GetPlayerClassTag()
-      local newID = string.format("%s_CUSTOM_%d", cls, newIdx)
-      local newTitle = string.format(SpArc:L("NEW_PRESET_TITLE"), newIdx, cls, newIdx)
-      local baseMD = (db.presets[selectedPresetForEdit] and db.presets[selectedPresetForEdit].md) or SpArc.DefaultMarkdownProfiles["PVE"]
-      db.presetOrder[#db.presetOrder + 1] = newID
-      db.presets[newID] = { id = newID, class = cls, title = newTitle, mode = "PVE", md = baseMD }
-      selectedPresetForEdit = newID
-      db.activePresetID = newID
-      db.mode = "MANUAL"
-      SpArc:RebuildParsedProfiles()
-      controlFrame:RefreshUI()
-    end)
-
-    local listBoxFrame = CreateFrame("Frame", nil, p1, "BackdropTemplate")
-    listBoxFrame:SetPoint("TOPLEFT", 0, -60)
-    listBoxFrame:SetSize(330, 468)
-    SetBackdropFlat(listBoxFrame, 0.07, 0.07, 0.10, 0.95, 0.20, 0.20, 0.27, 1.0)
-
-    local listScroll = CreateFrame("ScrollFrame", "SpArcPresetListScroll", listBoxFrame, "UIPanelScrollFrameTemplate")
-    listScroll:SetPoint("TOPLEFT", 4, -4)
-    listScroll:SetPoint("BOTTOMRIGHT", -26, 4)
-
-    ui.listContent = CreateFrame("Frame", nil, listScroll)
-    ui.listContent:SetSize(296, 1500)
-    listScroll:SetScrollChild(ui.listContent)
-
-    ui.rowButtons = {}
-    for idx = 1, 65 do
-      local rBtn = CreateElvButton(ui.listContent, 294, 24, "")
-      rBtn:SetPoint("TOPLEFT", 0, -(idx - 1) * 26)
-      rBtn.fs:ClearAllPoints()
-      rBtn.fs:SetPoint("LEFT", rBtn, "LEFT", 8, 0)
-      rBtn.fs:SetPoint("RIGHT", rBtn, "RIGHT", -6, 0)
-      rBtn.fs:SetJustifyH("LEFT")
-      rBtn.fs:SetWordWrap(false)
-      rBtn:Hide()
-      ui.rowButtons[idx] = rBtn
+      print(string.format(SpArc:L("MSG_PRESET_DELETED"), delTitle or delID))
     end
 
-    local detailsBox = CreateFrame("Frame", nil, p1, "BackdropTemplate")
-    detailsBox:SetPoint("TOPLEFT", 342, -60)
-    detailsBox:SetPoint("BOTTOMRIGHT", 0, 0)
-    SetBackdropFlat(detailsBox, 0.08, 0.08, 0.11, 0.95, 0.20, 0.20, 0.27, 1.0)
+    do
+      local p1 = pages[1]
+      ui.p1Summary = p1:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.p1Summary, 13)
+      ui.p1Summary:SetPoint("TOPLEFT", 0, 0)
+      ui.p1Summary:SetJustifyH("LEFT")
 
-    ui.detailsText = detailsBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(ui.detailsText, 12)
-    ui.detailsText:SetPoint("TOPLEFT", 14, -14)
-    ui.detailsText:SetPoint("TOPRIGHT", -14, -14)
-    ui.detailsText:SetJustifyH("LEFT")
-    ui.detailsText:SetJustifyV("TOP")
-    ui.detailsText:SetSpacing(3)
-
-    ui.activateBtn = CreateElvButton(detailsBox, 270, 28, "")
-    ui.activateBtn:SetPoint("BOTTOM", 0, 82)
-    ui.activateBtn:SetScript("OnClick", function()
-      if selectedPresetForEdit and db.presets[selectedPresetForEdit] then
-        db.activePresetID = selectedPresetForEdit
-        db.mode = "MANUAL"
-        SpArc:SelectActiveParsedProfile()
+      ui.filterBtn = CreateElvButton(p1, 180, 26, "")
+      ui.filterBtn:SetPoint("TOPLEFT", 0, -26)
+      ui.filterBtn:SetScript("OnClick", function()
+        filterClassOnly = not filterClassOnly
         controlFrame:RefreshUI()
-        print(string.format(SpArc:L("MSG_ACTIVATED"), SpArc:GetPresetDisplayTitle(db.presets[selectedPresetForEdit])))
+      end)
+
+      ui.autoModeBtn = CreateElvButton(p1, 185, 26, "")
+      ui.autoModeBtn:SetPoint("LEFT", ui.filterBtn, "RIGHT", 6, 0)
+      ui.autoModeBtn:SetScript("OnClick", function()
+        db.mode = (db.mode == "AUTO") and "MANUAL" or "AUTO"
+        controlFrame:RefreshUI()
+      end)
+
+      ui.newPresetBtn = CreateElvButton(p1, 130, 26, "")
+      ui.newPresetBtn:SetPoint("LEFT", ui.autoModeBtn, "RIGHT", 6, 0)
+      ui.newPresetBtn:SetScript("OnClick", function()
+        local newIdx = #db.presetOrder + 1
+        local cls = GetPlayerClassTag()
+        local newID = string.format("%s_CUSTOM_%d", cls, newIdx)
+        local newTitle = string.format(SpArc:L("NEW_PRESET_TITLE"), newIdx, cls, newIdx)
+        local baseMD = (db.presets[selectedPresetForEdit] and db.presets[selectedPresetForEdit].md) or SpArc.DefaultMarkdownProfiles["PVE"]
+        db.presetOrder[#db.presetOrder + 1] = newID
+        db.presets[newID] = { id = newID, class = cls, title = newTitle, mode = "PVE", md = baseMD }
+        selectedPresetForEdit = newID
+        db.activePresetID = newID
+        db.mode = "MANUAL"
+        SpArc:RebuildParsedProfiles()
+        controlFrame:RefreshUI()
+      end)
+
+      ui.delPresetBtn = CreateElvButton(p1, 130, 26, "")
+      ui.delPresetBtn:SetPoint("LEFT", ui.newPresetBtn, "RIGHT", 6, 0)
+      ui.delPresetBtn:SetScript("OnClick", DeleteSelectedPresetNow)
+
+      local listBoxFrame = CreateFrame("Frame", nil, p1, "BackdropTemplate")
+      listBoxFrame:SetPoint("TOPLEFT", 0, -60)
+      listBoxFrame:SetSize(330, 468)
+      SetBackdropFlat(listBoxFrame, 0.07, 0.07, 0.10, 0.95, 0.20, 0.20, 0.27, 1.0)
+
+      local listScroll = CreateFrame("ScrollFrame", "SpArcPresetListScroll", listBoxFrame, "UIPanelScrollFrameTemplate")
+      listScroll:SetPoint("TOPLEFT", 4, -4)
+      listScroll:SetPoint("BOTTOMRIGHT", -26, 4)
+
+      ui.listContent = CreateFrame("Frame", nil, listScroll)
+      ui.listContent:SetSize(296, 1500)
+      listScroll:SetScrollChild(ui.listContent)
+
+      ui.rowButtons = {}
+      for idx = 1, 65 do
+        local rBtn = CreateElvButton(ui.listContent, 294, 24, "")
+        rBtn:SetPoint("TOPLEFT", 0, -(idx - 1) * 26)
+        rBtn.fs:ClearAllPoints()
+        rBtn.fs:SetPoint("LEFT", rBtn, "LEFT", 8, 0)
+        rBtn.fs:SetPoint("RIGHT", rBtn, "RIGHT", -6, 0)
+        rBtn.fs:SetJustifyH("LEFT")
+        rBtn.fs:SetWordWrap(false)
+        rBtn:Hide()
+        ui.rowButtons[idx] = rBtn
       end
-    end)
 
-    ui.openMdBtn = CreateElvButton(detailsBox, 270, 28, "")
-    ui.openMdBtn:SetPoint("BOTTOM", 0, 48)
-    ui.openMdBtn:SetScript("OnClick", function()
-      showingAIPrompt = false
-      SelectTab(2)
-    end)
+      local detailsBox = CreateFrame("Frame", nil, p1, "BackdropTemplate")
+      detailsBox:SetPoint("TOPLEFT", 342, -60)
+      detailsBox:SetPoint("BOTTOMRIGHT", 0, 0)
+      SetBackdropFlat(detailsBox, 0.08, 0.08, 0.11, 0.95, 0.20, 0.20, 0.27, 1.0)
 
-    ui.testModeBtn1 = CreateElvButton(detailsBox, 270, 28, "")
-    ui.testModeBtn1:SetPoint("BOTTOM", 0, 14)
-    ui.testModeBtn1:SetScript("OnClick", function()
-      SpArc.testMode = not SpArc.testMode
-      controlFrame:RefreshUI()
-    end)
+      ui.detailsText = detailsBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.detailsText, 12)
+      ui.detailsText:SetPoint("TOPLEFT", 14, -14)
+      ui.detailsText:SetPoint("TOPRIGHT", -14, -14)
+      ui.detailsText:SetJustifyH("LEFT")
+      ui.detailsText:SetJustifyV("TOP")
+      ui.detailsText:SetSpacing(3)
+
+      ui.activateBtn = CreateElvButton(detailsBox, 270, 26, "")
+      ui.activateBtn:SetPoint("BOTTOM", 0, 110)
+      ui.activateBtn:SetScript("OnClick", function()
+        if selectedPresetForEdit and db.presets[selectedPresetForEdit] then
+          db.activePresetID = selectedPresetForEdit
+          db.mode = "MANUAL"
+          SpArc:SelectActiveParsedProfile()
+          controlFrame:RefreshUI()
+          print(string.format(SpArc:L("MSG_ACTIVATED"), SpArc:GetPresetDisplayTitle(db.presets[selectedPresetForEdit])))
+        end
+      end)
+
+      ui.openMdBtn = CreateElvButton(detailsBox, 270, 26, "")
+      ui.openMdBtn:SetPoint("BOTTOM", 0, 78)
+      ui.openMdBtn:SetScript("OnClick", function()
+        showingAIPrompt = false
+        SelectTab(2)
+      end)
+
+      ui.testModeBtn1 = CreateElvButton(detailsBox, 270, 26, "")
+      ui.testModeBtn1:SetPoint("BOTTOM", 0, 46)
+      ui.testModeBtn1:SetScript("OnClick", function()
+        SpArc.testMode = not SpArc.testMode
+        controlFrame:RefreshUI()
+      end)
+
+      ui.delPresetBtn2 = CreateElvButton(detailsBox, 270, 26, "")
+      ui.delPresetBtn2:SetPoint("BOTTOM", 0, 14)
+      ui.delPresetBtn2:SetScript("OnClick", DeleteSelectedPresetNow)
+    end
 
     -----------------------------------------------------------------------------------
     -- MODULE 2: .MD PSEUDOCODE EDITOR & AI PROMPT GENERATOR
     -----------------------------------------------------------------------------------
-    local p2 = pages[2]
-    local aiBanner = CreateFrame("Frame", nil, p2, "BackdropTemplate")
-    aiBanner:SetPoint("TOPLEFT", 0, 0)
-    aiBanner:SetPoint("TOPRIGHT", 0, 0)
-    aiBanner:SetHeight(48)
-    SetBackdropFlat(aiBanner, 0.09, 0.08, 0.14, 0.96, 0.35, 0.24, 0.55, 1.0)
+    do
+      local p2 = pages[2]
+      local aiBanner = CreateFrame("Frame", nil, p2, "BackdropTemplate")
+      aiBanner:SetPoint("TOPLEFT", 0, 0)
+      aiBanner:SetPoint("TOPRIGHT", 0, 0)
+      aiBanner:SetHeight(48)
+      SetBackdropFlat(aiBanner, 0.09, 0.08, 0.14, 0.96, 0.35, 0.24, 0.55, 1.0)
 
-    ui.aiText = aiBanner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(ui.aiText, 12)
-    ui.aiText:SetPoint("TOPLEFT", 12, -8)
-    ui.aiText:SetPoint("BOTTOMRIGHT", -195, 8)
-    ui.aiText:SetJustifyH("LEFT")
-    ui.aiText:SetTextColor(1, 0.88, 0.30, 1)
+      ui.aiText = aiBanner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.aiText, 12)
+      ui.aiText:SetPoint("TOPLEFT", 12, -8)
+      ui.aiText:SetPoint("BOTTOMRIGHT", -195, 8)
+      ui.aiText:SetJustifyH("LEFT")
+      ui.aiText:SetTextColor(1, 0.88, 0.30, 1)
 
-    ui.aiPromptBtn = CreateElvButton(aiBanner, 175, 28, "")
-    ui.aiPromptBtn:SetPoint("RIGHT", -10, 0)
+      ui.aiPromptBtn = CreateElvButton(aiBanner, 175, 28, "")
+      ui.aiPromptBtn:SetPoint("RIGHT", -10, 0)
 
-    ui.editorStatus = p2:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(ui.editorStatus, 12)
-    ui.editorStatus:SetPoint("TOPLEFT", 0, -56)
+      ui.editorStatus = p2:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.editorStatus, 12)
+      ui.editorStatus:SetPoint("TOPLEFT", 0, -56)
 
-    local editorBoxFrame = CreateFrame("Frame", nil, p2, "BackdropTemplate")
-    editorBoxFrame:SetPoint("TOPLEFT", 0, -78)
-    editorBoxFrame:SetPoint("BOTTOMRIGHT", 0, 40)
-    SetBackdropFlat(editorBoxFrame, 0.04, 0.04, 0.06, 0.98, 0.22, 0.22, 0.30, 1.0)
+      local editorBoxFrame = CreateFrame("Frame", nil, p2, "BackdropTemplate")
+      editorBoxFrame:SetPoint("TOPLEFT", 0, -78)
+      editorBoxFrame:SetPoint("BOTTOMRIGHT", 0, 40)
+      SetBackdropFlat(editorBoxFrame, 0.04, 0.04, 0.06, 0.98, 0.22, 0.22, 0.30, 1.0)
 
-    local mdScroll = CreateFrame("ScrollFrame", "SpArcMDEditorScroll", editorBoxFrame, "UIPanelScrollFrameTemplate")
-    mdScroll:SetPoint("TOPLEFT", 8, -8)
-    mdScroll:SetPoint("BOTTOMRIGHT", -28, 8)
+      local mdScroll = CreateFrame("ScrollFrame", "SpArcMDEditorScroll", editorBoxFrame, "UIPanelScrollFrameTemplate")
+      mdScroll:SetPoint("TOPLEFT", 8, -8)
+      mdScroll:SetPoint("BOTTOMRIGHT", -28, 8)
 
-    ui.editBox = CreateFrame("EditBox", nil, mdScroll)
-    ui.editBox:SetMultiLine(true)
-    ui.editBox:SetFontObject("ChatFontNormal")
-    ApplyCyrFont(ui.editBox, 12)
-    ui.editBox:SetWidth(590)
-    ui.editBox:SetAutoFocus(false)
-    ui.editBox:SetScript("OnEscapePressed", function() ui.editBox:ClearFocus() end)
-    mdScroll:SetScrollChild(ui.editBox)
+      ui.editBox = CreateFrame("EditBox", nil, mdScroll)
+      ui.editBox:SetMultiLine(true)
+      ui.editBox:SetFontObject("ChatFontNormal")
+      ApplyCyrFont(ui.editBox, 12)
+      ui.editBox:SetWidth(590)
+      ui.editBox:SetAutoFocus(false)
+      ui.editBox:SetScript("OnEscapePressed", function() ui.editBox:ClearFocus() end)
+      mdScroll:SetScrollChild(ui.editBox)
 
-    ui.saveMdBtn = CreateElvButton(p2, 230, 30, "")
-    ui.saveMdBtn:SetPoint("BOTTOMLEFT", 0, 2)
-    ui.saveMdBtn:SetScript("OnClick", function()
-      if showingAIPrompt then return end
-      local txt = ui.editBox:GetText() or ""
-      if selectedPresetForEdit and db.presets[selectedPresetForEdit] then
-        db.presets[selectedPresetForEdit].md = txt
-        local compiled = SpArc:ParseMarkdownFSM(txt)
-        SpArc.ParsedPresets[selectedPresetForEdit] = compiled
-        if compiled.title and compiled.title ~= "" then
-          db.presets[selectedPresetForEdit].title = compiled.title
+      ui.saveMdBtn = CreateElvButton(p2, 230, 30, "")
+      ui.saveMdBtn:SetPoint("BOTTOMLEFT", 0, 2)
+      ui.saveMdBtn:SetScript("OnClick", function()
+        if showingAIPrompt then return end
+        local txt = ui.editBox:GetText() or ""
+        if selectedPresetForEdit and db.presets[selectedPresetForEdit] then
+          db.presets[selectedPresetForEdit].md = txt
+          local compiled = SpArc:ParseMarkdownFSM(txt)
+          SpArc.ParsedPresets[selectedPresetForEdit] = compiled
+          if compiled.title and compiled.title ~= "" then
+            db.presets[selectedPresetForEdit].title = compiled.title
+          end
+          if compiled.class and compiled.class ~= "" then
+            db.presets[selectedPresetForEdit].class = compiled.class
+          end
+          if compiled.mode and compiled.mode ~= "" then
+            db.presets[selectedPresetForEdit].mode = compiled.mode
+          end
+          db.activePresetID = selectedPresetForEdit
+          SpArc:SelectActiveParsedProfile()
+          SpArc:ScanActionSlotsAndSpells(true)
+          controlFrame:RefreshUI()
+          print(string.format(SpArc:L("MSG_MD_SAVED"), SpArc:GetPresetDisplayTitle(db.presets[selectedPresetForEdit])))
         end
-        if compiled.class and compiled.class ~= "" then
-          db.presets[selectedPresetForEdit].class = compiled.class
+      end)
+
+      ui.resetMdBtn = CreateElvButton(p2, 210, 30, "")
+      ui.resetMdBtn:SetPoint("LEFT", ui.saveMdBtn, "RIGHT", 10, 0)
+      ui.resetMdBtn:SetScript("OnClick", function()
+        showingAIPrompt = false
+        local bp = SpArc.BuiltInPresets and SpArc.BuiltInPresets[selectedPresetForEdit]
+        if bp and db.presets[selectedPresetForEdit] then
+          db.presets[selectedPresetForEdit].md = bp.md
+          db.presets[selectedPresetForEdit].title = bp.title
+          SpArc:RebuildParsedProfiles()
+          SpArc:SelectActiveParsedProfile()
+          controlFrame:RefreshUI()
         end
-        if compiled.mode and compiled.mode ~= "" then
-          db.presets[selectedPresetForEdit].mode = compiled.mode
-        end
-        db.activePresetID = selectedPresetForEdit
-        SpArc:SelectActiveParsedProfile()
-        SpArc:ScanActionSlotsAndSpells(true)
+      end)
+
+      ui.aiPromptBtn:SetScript("OnClick", function()
+        showingAIPrompt = not showingAIPrompt
         controlFrame:RefreshUI()
-        print(string.format(SpArc:L("MSG_MD_SAVED"), SpArc:GetPresetDisplayTitle(db.presets[selectedPresetForEdit])))
-      end
-    end)
-
-    ui.resetMdBtn = CreateElvButton(p2, 210, 30, "")
-    ui.resetMdBtn:SetPoint("LEFT", ui.saveMdBtn, "RIGHT", 10, 0)
-    ui.resetMdBtn:SetScript("OnClick", function()
-      showingAIPrompt = false
-      local bp = SpArc.BuiltInPresets and SpArc.BuiltInPresets[selectedPresetForEdit]
-      if bp and db.presets[selectedPresetForEdit] then
-        db.presets[selectedPresetForEdit].md = bp.md
-        db.presets[selectedPresetForEdit].title = bp.title
-        SpArc:RebuildParsedProfiles()
-        SpArc:SelectActiveParsedProfile()
-        controlFrame:RefreshUI()
-      end
-    end)
-
-    ui.aiPromptBtn:SetScript("OnClick", function()
-      showingAIPrompt = not showingAIPrompt
-      controlFrame:RefreshUI()
-      if showingAIPrompt then
-        ui.editBox:SetFocus()
-        ui.editBox:HighlightText()
-      end
-    end)
-
-    -----------------------------------------------------------------------------------
-    -- MODULE 3: ROTATION ARC (ДУГА РОТАЦИИ)
-    -----------------------------------------------------------------------------------
-    local p3 = pages[3]
-    ui.m3Title = p3:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(ui.m3Title, 15)
-    ui.m3Title:SetPoint("TOPLEFT", 0, 0)
-    ui.m3Title:SetTextColor(1, 0.85, 0.25, 1)
-
-    CreateElvCheck(p3, "MOD_ENABLE", "enableArcHUD", 0, -24, true, false)
-
-    local m3GeoBox = RegisterGroupBox(p3, "M3_GRP_GEO", 0, -56, 640, 162)
-    CreateElvSlider(m3GeoBox, "SL_ARC_RADIUS", "arcRadius", 50, 260, 5, 18, -14, 280)
-    CreateElvSlider(m3GeoBox, "SL_ARC_SPREAD", "arcSpreadDeg", 60, 180, 5, 336, -14, 280)
-    CreateElvSlider(m3GeoBox, "SL_ARC_OFFSET_Y", "arcOffsetY", -120, 180, 5, 18, -76, 280)
-
-    local m3IconsBox = RegisterGroupBox(p3, "M3_GRP_ICONS", 0, -230, 640, 162)
-    CreateElvSlider(m3IconsBox, "SL_PRIMARY_SCALE", "primaryScale", 1.0, 2.0, 0.05, 18, -14, 280)
-    CreateElvSlider(m3IconsBox, "SL_QUEUE_SCALE", "queueScale", 0.6, 1.4, 0.05, 336, -14, 280)
-    CreateElvSlider(m3IconsBox, "SL_QUEUE_LEN", "queueLength", 3, 6, 1, 18, -76, 280)
-
-    local m3FbBox = RegisterGroupBox(p3, "M3_GRP_FEEDBACK", 0, -404, 640, 96)
-    CreateElvCheck(m3FbBox, "CK_PRESS_FEEDBACK", "enablePressFeedback", 14, -12, false, false)
-    CreateElvCheck(m3FbBox, "CK_TEST_MODE", "testMode", 14, -40, false, true)
-
-    -----------------------------------------------------------------------------------
-    -- MODULE 4: SAVES & CDS WINGS (КРЫЛЬЯ СЕЙВОВ И КД)
-    -----------------------------------------------------------------------------------
-    local p4 = pages[4]
-    ui.m4Title = p4:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(ui.m4Title, 15)
-    ui.m4Title:SetPoint("TOPLEFT", 0, 0)
-    ui.m4Title:SetTextColor(1, 0.85, 0.25, 1)
-
-    local cSavesMaster = CreateElvCheck(p4, "MOD_ENABLE_SAVES", "showSavesWing", 0, -24, true, false)
-    cSavesMaster:SetWidth(290)
-    local cCDsMaster = CreateElvCheck(p4, "MOD_ENABLE_CDS", "showCDsWing", 310, -24, true, false)
-    cCDsMaster:SetWidth(310)
-
-    local m4PosBox = RegisterGroupBox(p4, "M4_GRP_POS", 0, -58, 640, 130)
-    CreateElvSlider(m4PosBox, "SL_WINGS_Y", "wingsOffsetY", -200, 60, 5, 18, -16, 280)
-    CreateElvCheck(m4PosBox, "CK_ALWAYS_CDS", "alwaysShowCDs", 18, -76, false, false)
-
-    local m4EmergBox = RegisterGroupBox(p4, "M4_GRP_EMERG", 0, -204, 640, 130)
-    CreateElvCheck(m4EmergBox, "CK_EMERG_SAVE", "showEmergencySave", 18, -14, false, false)
-    CreateElvSlider(m4EmergBox, "SL_EMERG_HP", "emergencyHP", 15, 50, 5, 18, -46, 280)
-
-    -----------------------------------------------------------------------------------
-    -- MODULE 5: DUAL CASTBAR (ДВОЙНОЙ КАСТБАР)
-    -----------------------------------------------------------------------------------
-    local p5 = pages[5]
-    ui.m5Title = p5:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(ui.m5Title, 15)
-    ui.m5Title:SetPoint("TOPLEFT", 0, 0)
-    ui.m5Title:SetTextColor(1, 0.85, 0.25, 1)
-
-    CreateElvCheck(p5, "MOD_ENABLE", "showCastbar", 0, -24, true, false)
-
-    local m5SizeBox = RegisterGroupBox(p5, "M5_GRP_SIZE", 0, -58, 640, 105)
-    CreateElvSlider(m5SizeBox, "SL_CB_WIDTH", "castbarWidth", 180, 420, 4, 18, -16, 280)
-    CreateElvSlider(m5SizeBox, "SL_CB_OFFSET_Y", "castbarOffsetY", -240, -40, 5, 336, -16, 280)
-
-    local m5ClipBox = RegisterGroupBox(p5, "M5_GRP_CLIP", 0, -180, 640, 75)
-    CreateElvCheck(m5ClipBox, "CK_INTERRUPT", "showInterruptAlert", 18, -14, false, false)
-
-    -----------------------------------------------------------------------------------
-    -- MODULE 6: COMBAT CAMERA (БОЕВАЯ КАМЕРА)
-    -----------------------------------------------------------------------------------
-    local p6 = pages[6]
-    ui.m6Title = p6:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(ui.m6Title, 15)
-    ui.m6Title:SetPoint("TOPLEFT", 0, 0)
-    ui.m6Title:SetTextColor(1, 0.85, 0.25, 1)
-
-    CreateElvCheck(p6, "MOD_ENABLE", "enableCombatCamera", 0, -24, true, false, function()
-      if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
-      if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
-    end)
-
-    local m6KeysBox = RegisterGroupBox(p6, "M6_GRP_KEYS", 0, -58, 640, 180)
-
-    -- Interactive Keybind Capture Overlay
-    local captureFrame = CreateFrame("Button", "SpArcKeyCaptureOverlay", controlFrame)
-    captureFrame:SetAllPoints(controlFrame)
-    captureFrame:SetFrameLevel(controlFrame:GetFrameLevel() + 50)
-    captureFrame:EnableKeyboard(true)
-    captureFrame:EnableMouse(true)
-    captureFrame:RegisterForClicks("AnyDown")
-    captureFrame:Hide()
-
-    local IGNORED_MODIFIERS = {
-      LSHIFT = true, RSHIFT = true, SHIFT = true,
-      LCTRL = true, RCTRL = true, CTRL = true,
-      LALT = true, RALT = true, ALT = true,
-      UNKNOWN = true,
-    }
-
-    local function BuildCapturedBindString(rawKey)
-      if not rawKey or rawKey == "" then return nil end
-      local prefix = ""
-      if IsShiftKeyDown and IsShiftKeyDown() then prefix = prefix .. "SHIFT-" end
-      if IsControlKeyDown and IsControlKeyDown() then prefix = prefix .. "CTRL-" end
-      if IsAltKeyDown and IsAltKeyDown() then prefix = prefix .. "ALT-" end
-      return prefix .. rawKey:upper()
+        if showingAIPrompt then
+          ui.editBox:SetFocus()
+          ui.editBox:HighlightText()
+        end
+      end)
     end
 
-    function captureFrame:CancelCapture()
-      self:Hide()
-      activeKeybindCapture = nil
-      if controlFrame and controlFrame.RefreshUI then
-        controlFrame:RefreshUI()
-      end
+    -----------------------------------------------------------------------------------
+    -- MODULE 3..5: VISUAL MODULES
+    -----------------------------------------------------------------------------------
+    do
+      local p3 = pages[3]
+      ui.m3Title = p3:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.m3Title, 15)
+      ui.m3Title:SetPoint("TOPLEFT", 0, 0)
+      ui.m3Title:SetTextColor(1, 0.85, 0.25, 1)
+
+      CreateElvCheck(p3, "MOD_ENABLE", "enableArcHUD", 0, -24, true, false)
+
+      local m3GeoBox = RegisterGroupBox(p3, "M3_GRP_GEO", 0, -56, 640, 162)
+      CreateElvSlider(m3GeoBox, "SL_ARC_RADIUS", "arcRadius", 50, 260, 5, 18, -14, 280)
+      CreateElvSlider(m3GeoBox, "SL_ARC_SPREAD", "arcSpreadDeg", 60, 180, 5, 336, -14, 280)
+      CreateElvSlider(m3GeoBox, "SL_ARC_OFFSET_Y", "arcOffsetY", -120, 180, 5, 18, -76, 280)
+
+      local m3IconsBox = RegisterGroupBox(p3, "M3_GRP_ICONS", 0, -230, 640, 162)
+      CreateElvSlider(m3IconsBox, "SL_PRIMARY_SCALE", "primaryScale", 1.0, 2.0, 0.05, 18, -14, 280)
+      CreateElvSlider(m3IconsBox, "SL_QUEUE_SCALE", "queueScale", 0.6, 1.4, 0.05, 336, -14, 280)
+      CreateElvSlider(m3IconsBox, "SL_QUEUE_LEN", "queueLength", 3, 6, 1, 18, -76, 280)
+
+      local m3FbBox = RegisterGroupBox(p3, "M3_GRP_FEEDBACK", 0, -404, 640, 96)
+      CreateElvCheck(m3FbBox, "CK_PRESS_FEEDBACK", "enablePressFeedback", 14, -12, false, false)
+      CreateElvCheck(m3FbBox, "CK_TEST_MODE", "testMode", 14, -40, false, true)
+
+      local p4 = pages[4]
+      ui.m4Title = p4:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.m4Title, 15)
+      ui.m4Title:SetPoint("TOPLEFT", 0, 0)
+      ui.m4Title:SetTextColor(1, 0.85, 0.25, 1)
+
+      local cSavesMaster = CreateElvCheck(p4, "MOD_ENABLE_SAVES", "showSavesWing", 0, -24, true, false)
+      cSavesMaster:SetWidth(290)
+      local cCDsMaster = CreateElvCheck(p4, "MOD_ENABLE_CDS", "showCDsWing", 310, -24, true, false)
+      cCDsMaster:SetWidth(310)
+
+      local m4PosBox = RegisterGroupBox(p4, "M4_GRP_POS", 0, -58, 640, 130)
+      CreateElvSlider(m4PosBox, "SL_WINGS_Y", "wingsOffsetY", -200, 60, 5, 18, -16, 280)
+      CreateElvCheck(m4PosBox, "CK_ALWAYS_CDS", "alwaysShowCDs", 18, -76, false, false)
+
+      local m4EmergBox = RegisterGroupBox(p4, "M4_GRP_EMERG", 0, -204, 640, 130)
+      CreateElvCheck(m4EmergBox, "CK_EMERG_SAVE", "showEmergencySave", 18, -14, false, false)
+      CreateElvSlider(m4EmergBox, "SL_EMERG_HP", "emergencyHP", 15, 50, 5, 18, -46, 280)
+
+      local p5 = pages[5]
+      ui.m5Title = p5:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.m5Title, 15)
+      ui.m5Title:SetPoint("TOPLEFT", 0, 0)
+      ui.m5Title:SetTextColor(1, 0.85, 0.25, 1)
+
+      CreateElvCheck(p5, "MOD_ENABLE", "showCastbar", 0, -24, true, false)
+
+      local m5SizeBox = RegisterGroupBox(p5, "M5_GRP_SIZE", 0, -58, 640, 105)
+      CreateElvSlider(m5SizeBox, "SL_CB_WIDTH", "castbarWidth", 180, 420, 4, 18, -16, 280)
+      CreateElvSlider(m5SizeBox, "SL_CB_OFFSET_Y", "castbarOffsetY", -240, -40, 5, 336, -16, 280)
+
+      local m5ClipBox = RegisterGroupBox(p5, "M5_GRP_CLIP", 0, -180, 640, 75)
+      CreateElvCheck(m5ClipBox, "CK_INTERRUPT", "showInterruptAlert", 18, -14, false, false)
     end
 
-    captureFrame:SetScript("OnKeyDown", function(self, key)
-      if key == "ESCAPE" then
-        self:CancelCapture()
-        return
+    -----------------------------------------------------------------------------------
+    -- MODULE 6..8: CAMERA, TELEMETRY & PROFILES
+    -----------------------------------------------------------------------------------
+    do
+      local p6 = pages[6]
+      ui.m6Title = p6:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.m6Title, 15)
+      ui.m6Title:SetPoint("TOPLEFT", 0, 0)
+      ui.m6Title:SetTextColor(1, 0.85, 0.25, 1)
+
+      CreateElvCheck(p6, "MOD_ENABLE", "enableCombatCamera", 0, -24, true, false, function()
+        if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
+        if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
+      end)
+
+      local m6KeysBox = RegisterGroupBox(p6, "M6_GRP_KEYS", 0, -58, 640, 180)
+
+      -- Interactive Keybind Capture Overlay
+      local captureFrame = CreateFrame("Button", "SpArcKeyCaptureOverlay", controlFrame)
+      captureFrame:SetAllPoints(controlFrame)
+      captureFrame:SetFrameLevel(controlFrame:GetFrameLevel() + 50)
+      captureFrame:EnableKeyboard(true)
+      captureFrame:EnableMouse(true)
+      captureFrame:RegisterForClicks("AnyDown")
+      captureFrame:Hide()
+
+      local IGNORED_MODIFIERS = {
+        LSHIFT = true, RSHIFT = true, SHIFT = true,
+        LCTRL = true, RCTRL = true, CTRL = true,
+        LALT = true, RALT = true, ALT = true,
+        UNKNOWN = true,
+      }
+
+      local function BuildCapturedBindString(rawKey)
+        if not rawKey or rawKey == "" then return nil end
+        local prefix = ""
+        if IsShiftKeyDown and IsShiftKeyDown() then prefix = prefix .. "SHIFT-" end
+        if IsControlKeyDown and IsControlKeyDown() then prefix = prefix .. "CTRL-" end
+        if IsAltKeyDown and IsAltKeyDown() then prefix = prefix .. "ALT-" end
+        return prefix .. rawKey:upper()
       end
-      if key == "BACKSPACE" or key == "DELETE" then
-        if self.targetDBKey then
+
+      function captureFrame:CancelCapture()
+        self:Hide()
+        activeKeybindCapture = nil
+        if controlFrame and controlFrame.RefreshUI then
+          controlFrame:RefreshUI()
+        end
+      end
+
+      captureFrame:SetScript("OnKeyDown", function(self, key)
+        if key == "ESCAPE" then
+          self:CancelCapture()
+          return
+        end
+        if key == "BACKSPACE" or key == "DELETE" then
+          if self.targetDBKey then
+            if SpArc.RecordManualCameraBind then
+              SpArc:RecordManualCameraBind(self.targetDBKey, "")
+            else
+              db.visual[self.targetDBKey] = ""
+            end
+            if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings("MANUAL_UNBIND") end
+          end
+          self:CancelCapture()
+          return
+        end
+        if IGNORED_MODIFIERS[key] then
+          return
+        end
+        local bindStr = BuildCapturedBindString(key)
+        if bindStr and self.targetDBKey then
           if SpArc.RecordManualCameraBind then
-            SpArc:RecordManualCameraBind(self.targetDBKey, "")
+            SpArc:RecordManualCameraBind(self.targetDBKey, bindStr)
           else
-            db.visual[self.targetDBKey] = ""
+            db.visual[self.targetDBKey] = bindStr
+          end
+          if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings("MANUAL_BIND") end
+        end
+        self:CancelCapture()
+      end)
+
+      captureFrame:SetScript("OnMouseDown", function(self, mouseBtn)
+        if mouseBtn == "LeftButton" or mouseBtn == "RightButton" then
+          self:CancelCapture()
+          return
+        end
+        local mapped = nil
+        if mouseBtn == "MiddleButton" then mapped = "BUTTON3"
+        elseif mouseBtn == "Button4" then mapped = "BUTTON4"
+        elseif mouseBtn == "Button5" then mapped = "BUTTON5"
+        end
+        if mapped and self.targetDBKey then
+          local bindStr = BuildCapturedBindString(mapped)
+          if SpArc.RecordManualCameraBind then
+            SpArc:RecordManualCameraBind(self.targetDBKey, bindStr)
+          else
+            db.visual[self.targetDBKey] = bindStr
+          end
+          if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings("MANUAL_BIND") end
+        end
+        self:CancelCapture()
+      end)
+
+      ui.keybindRows = {}
+      local function CreateKeybindCaptureRow(parent, labelKey, dbKey, defaultVal, y)
+        local row = CreateFrame("Frame", nil, parent)
+        row:SetSize(610, 30)
+        row:SetPoint("TOPLEFT", parent, "TOPLEFT", 16, y)
+
+        local lbl = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        ApplyCyrFont(lbl, 12)
+        lbl:SetPoint("LEFT", row, "LEFT", 0, 0)
+        lbl:SetTextColor(0.92, 0.92, 0.96, 1)
+        row.lbl = lbl
+        row.labelKey = labelKey
+        row.dbKey = dbKey
+        row.defaultVal = defaultVal
+
+        local bindBtn = CreateElvButton(row, 138, 26, "")
+        bindBtn:SetPoint("LEFT", row, "LEFT", 282, 0)
+        row.bindBtn = bindBtn
+
+        local unbindBtn = CreateElvButton(row, 82, 26, "")
+        unbindBtn:SetPoint("LEFT", bindBtn, "RIGHT", 6, 0)
+        row.unbindBtn = unbindBtn
+
+        local resetBtn = CreateElvButton(row, 95, 26, "")
+        resetBtn:SetPoint("LEFT", unbindBtn, "RIGHT", 6, 0)
+        row.resetBtn = resetBtn
+
+        bindBtn:SetScript("OnClick", function()
+          activeKeybindCapture = captureFrame
+          captureFrame.targetDBKey = dbKey
+          captureFrame:Show()
+          bindBtn:SetSelected(true)
+          bindBtn:SetText("|cff00ffcc" .. SpArc:L("M6_BIND_WAIT") .. "|r")
+        end)
+
+        unbindBtn:SetScript("OnClick", function()
+          if SpArc.RecordManualCameraBind then
+            SpArc:RecordManualCameraBind(dbKey, "")
+          else
+            db.visual[dbKey] = ""
           end
           if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings("MANUAL_UNBIND") end
-        end
-        self:CancelCapture()
-        return
-      end
-      if IGNORED_MODIFIERS[key] then
-        return
-      end
-      local bindStr = BuildCapturedBindString(key)
-      if bindStr and self.targetDBKey then
-        if SpArc.RecordManualCameraBind then
-          SpArc:RecordManualCameraBind(self.targetDBKey, bindStr)
-        else
-          db.visual[self.targetDBKey] = bindStr
-        end
-        if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings("MANUAL_BIND") end
-      end
-      self:CancelCapture()
-    end)
+          controlFrame:RefreshUI()
+        end)
 
-    captureFrame:SetScript("OnMouseDown", function(self, mouseBtn)
-      if mouseBtn == "LeftButton" or mouseBtn == "RightButton" then
-        self:CancelCapture()
-        return
-      end
-      local mapped = nil
-      if mouseBtn == "MiddleButton" then mapped = "BUTTON3"
-      elseif mouseBtn == "Button4" then mapped = "BUTTON4"
-      elseif mouseBtn == "Button5" then mapped = "BUTTON5"
-      end
-      if mapped and self.targetDBKey then
-        local bindStr = BuildCapturedBindString(mapped)
-        if SpArc.RecordManualCameraBind then
-          SpArc:RecordManualCameraBind(self.targetDBKey, bindStr)
-        else
-          db.visual[self.targetDBKey] = bindStr
-        end
-        if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings("MANUAL_BIND") end
-      end
-      self:CancelCapture()
-    end)
-
-    ui.keybindRows = {}
-    local function CreateKeybindCaptureRow(parent, labelKey, dbKey, defaultVal, y)
-      local row = CreateFrame("Frame", nil, parent)
-      row:SetSize(610, 30)
-      row:SetPoint("TOPLEFT", parent, "TOPLEFT", 16, y)
-
-      local lbl = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-      ApplyCyrFont(lbl, 12)
-      lbl:SetPoint("LEFT", row, "LEFT", 0, 0)
-      lbl:SetTextColor(0.92, 0.92, 0.96, 1)
-      row.lbl = lbl
-      row.labelKey = labelKey
-      row.dbKey = dbKey
-      row.defaultVal = defaultVal
-
-      local bindBtn = CreateElvButton(row, 138, 26, "")
-      bindBtn:SetPoint("LEFT", row, "LEFT", 282, 0)
-      row.bindBtn = bindBtn
-
-      local unbindBtn = CreateElvButton(row, 82, 26, "")
-      unbindBtn:SetPoint("LEFT", bindBtn, "RIGHT", 6, 0)
-      row.unbindBtn = unbindBtn
-
-      local resetBtn = CreateElvButton(row, 95, 26, "")
-      resetBtn:SetPoint("LEFT", unbindBtn, "RIGHT", 6, 0)
-      row.resetBtn = resetBtn
-
-      bindBtn:SetScript("OnClick", function()
-        activeKeybindCapture = captureFrame
-        captureFrame.targetDBKey = dbKey
-        captureFrame:Show()
-        bindBtn:SetSelected(true)
-        bindBtn:SetText("|cff00ffcc" .. SpArc:L("M6_BIND_WAIT") .. "|r")
-      end)
-
-      unbindBtn:SetScript("OnClick", function()
-        if SpArc.RecordManualCameraBind then
-          SpArc:RecordManualCameraBind(dbKey, "")
-        else
-          db.visual[dbKey] = ""
-        end
-        if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings("MANUAL_UNBIND") end
-        controlFrame:RefreshUI()
-      end)
-
-      resetBtn:SetScript("OnClick", function()
-        local def = (defaultVal == "AUTO") and SpArc:GetGameInteractKey() or defaultVal
-        if SpArc.RecordManualCameraBind then
-          SpArc:RecordManualCameraBind(dbKey, def)
-          if dbKey == "camInteractKey" then
-            db.visual.camInteractKeyUserSet = false
+        resetBtn:SetScript("OnClick", function()
+          local def = (defaultVal == "AUTO") and SpArc:GetGameInteractKey() or defaultVal
+          if SpArc.RecordManualCameraBind then
+            SpArc:RecordManualCameraBind(dbKey, def)
+            if dbKey == "camInteractKey" then
+              db.visual.camInteractKeyUserSet = false
+            else
+              db.visual[dbKey .. "UserSet"] = false
+            end
           else
-            db.visual[dbKey .. "UserSet"] = false
+            db.visual[dbKey] = def
           end
-        else
-          db.visual[dbKey] = def
+          if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings("MANUAL_RESET") end
+          controlFrame:RefreshUI()
+        end)
+
+        ui.keybindRows[#ui.keybindRows + 1] = row
+        return row
+      end
+
+      CreateKeybindCaptureRow(m6KeysBox, "M6_HOLD_LABEL", "camHoldKey", "G", -10)
+      CreateKeybindCaptureRow(m6KeysBox, "M6_TOGGLE_LABEL", "camToggleKey", "`", -44)
+      CreateKeybindCaptureRow(m6KeysBox, "M6_INTERACT_LABEL", "camInteractKey", "AUTO", -78)
+
+      ui.m6FixCursorBtn = CreateElvButton(m6KeysBox, 360, 26, "")
+      ui.m6FixCursorBtn:SetPoint("TOPLEFT", m6KeysBox, "TOPLEFT", 16, -118)
+      ui.m6FixCursorBtn:SetScript("OnClick", function()
+        if SpArc.FlushHardwareCursor then
+          SpArc:FlushHardwareCursor(true)
         end
-        if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings("MANUAL_RESET") end
+        print(SpArc:L("MSG_CURSOR_FIXED"))
+      end)
+
+      local m6CrossBox = RegisterGroupBox(p6, "M6_GRP_CROSS", 0, -252, 640, 135)
+      CreateElvCheck(m6CrossBox, "CK_CAM_CROSSHAIR", "showCameraCrosshair", 16, -12, false, false, function()
+        if SpArc.ApplyCameraCrosshairLayout then SpArc:ApplyCameraCrosshairLayout() end
+        if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
+      end)
+      CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_Y", "camCrosshairOffsetY", -200, 250, 2, 16, -46, 280)
+      CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_SCALE", "camCrosshairScale", 0.50, 2.50, 0.05, 336, -46, 280)
+
+      local m6ClickBox = RegisterGroupBox(p6, "M6_GRP_CLICK", 0, -402, 640, 75)
+      CreateElvCheck(m6ClickBox, "CK_CAM_CLICKCAST", "enableCamClickCast", 16, -14, false, false, function()
+        if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
+        SpArc:ScanActionSlotsAndSpells(true)
+      end)
+
+      local p7 = pages[7]
+      ui.m7Title = p7:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.m7Title, 15)
+      ui.m7Title:SetPoint("TOPLEFT", 0, 0)
+      ui.m7Title:SetTextColor(1, 0.85, 0.25, 1)
+
+      CreateElvCheck(p7, "MOD_ENABLE", "enableTelemetry", 0, -24, true, false)
+
+      ui.snapBtn = CreateElvButton(p7, 195, 26, "")
+      ui.snapBtn:SetPoint("TOPLEFT", 0, -54)
+
+      ui.copyTelBtn = CreateElvButton(p7, 180, 26, "")
+      ui.copyTelBtn:SetPoint("LEFT", ui.snapBtn, "RIGHT", 8, 0)
+
+      ui.clearTelBtn = CreateElvButton(p7, 195, 26, "")
+      ui.clearTelBtn:SetPoint("LEFT", ui.copyTelBtn, "RIGHT", 8, 0)
+
+      local telBoxFrame = CreateFrame("Frame", nil, p7, "BackdropTemplate")
+      telBoxFrame:SetPoint("TOPLEFT", 0, -88)
+      telBoxFrame:SetPoint("BOTTOMRIGHT", 0, 0)
+      SetBackdropFlat(telBoxFrame, 0.04, 0.04, 0.06, 0.98, 0.22, 0.22, 0.30, 1.0)
+
+      local telScroll = CreateFrame("ScrollFrame", "SpArcTelemetryScroll", telBoxFrame, "UIPanelScrollFrameTemplate")
+      telScroll:SetPoint("TOPLEFT", 8, -8)
+      telScroll:SetPoint("BOTTOMRIGHT", -28, 8)
+
+      ui.telEditBox = CreateFrame("EditBox", nil, telScroll)
+      ui.telEditBox:SetMultiLine(true)
+      ui.telEditBox:SetFontObject("ChatFontNormal")
+      ApplyCyrFont(ui.telEditBox, 11)
+      ui.telEditBox:SetWidth(590)
+      ui.telEditBox:SetAutoFocus(false)
+      ui.telEditBox:SetScript("OnEscapePressed", function() ui.telEditBox:ClearFocus() end)
+      telScroll:SetScrollChild(ui.telEditBox)
+
+      ui.snapBtn:SetScript("OnClick", function()
+        pcall(SpArc.CaptureTelemetrySnapshot, SpArc, "MANUAL_SNAPSHOT")
+        controlFrame:RefreshUI()
+      end)
+      ui.copyTelBtn:SetScript("OnClick", function()
+        ui.telEditBox:SetFocus()
+        ui.telEditBox:HighlightText()
+      end)
+      ui.clearTelBtn:SetScript("OnClick", function()
+        db.telemetryLog = {}
+        db.capturedLuaErrors = {}
+        if _G.BugSack and type(_G.BugSack.Reset) == "function" then
+          pcall(_G.BugSack.Reset, _G.BugSack)
+        elseif _G.BugGrabber and type(_G.BugGrabber.Reset) == "function" then
+          pcall(_G.BugGrabber.Reset, _G.BugGrabber)
+        end
         controlFrame:RefreshUI()
       end)
 
-      ui.keybindRows[#ui.keybindRows + 1] = row
-      return row
-    end
+      local p8 = pages[8]
+      ui.selectedProfileForOps = SpArc:GetActiveProfileName()
 
-    CreateKeybindCaptureRow(m6KeysBox, "M6_HOLD_LABEL", "camHoldKey", "G", -10)
-    CreateKeybindCaptureRow(m6KeysBox, "M6_TOGGLE_LABEL", "camToggleKey", "`", -44)
-    CreateKeybindCaptureRow(m6KeysBox, "M6_INTERACT_LABEL", "camInteractKey", "AUTO", -78)
+      ui.m8Title = p8:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.m8Title, 15)
+      ui.m8Title:SetPoint("TOPLEFT", 0, 0)
+      ui.m8Title:SetTextColor(1, 0.85, 0.25, 1)
 
-    ui.m6FixCursorBtn = CreateElvButton(m6KeysBox, 360, 26, "")
-    ui.m6FixCursorBtn:SetPoint("TOPLEFT", m6KeysBox, "TOPLEFT", 16, -118)
-    ui.m6FixCursorBtn:SetScript("OnClick", function()
-      if SpArc.FlushHardwareCursor then
-        SpArc:FlushHardwareCursor(true)
-      end
-      print(SpArc:L("MSG_CURSOR_FIXED"))
-    end)
+      local m8CurBox = RegisterGroupBox(p8, "M8_GRP_CUR", 0, -34, 640, 102)
+      ui.m8CurSummary = m8CurBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.m8CurSummary, 12)
+      ui.m8CurSummary:SetPoint("TOPLEFT", 16, -12)
+      ui.m8CurSummary:SetPoint("TOPRIGHT", -16, -12)
+      ui.m8CurSummary:SetJustifyH("LEFT")
+      ui.m8CurSummary:SetSpacing(4)
 
-    local m6CrossBox = RegisterGroupBox(p6, "M6_GRP_CROSS", 0, -252, 640, 135)
-    CreateElvCheck(m6CrossBox, "CK_CAM_CROSSHAIR", "showCameraCrosshair", 16, -12, false, false, function()
-      if SpArc.ApplyCameraCrosshairLayout then SpArc:ApplyCameraCrosshairLayout() end
-      if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
-    end)
-    CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_Y", "camCrosshairOffsetY", -200, 250, 2, 16, -46, 280)
-    CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_SCALE", "camCrosshairScale", 0.50, 2.50, 0.05, 336, -46, 280)
-
-    local m6ClickBox = RegisterGroupBox(p6, "M6_GRP_CLICK", 0, -402, 640, 75)
-    CreateElvCheck(m6ClickBox, "CK_CAM_CLICKCAST", "enableCamClickCast", 16, -14, false, false, function()
-      if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
-      SpArc:ScanActionSlotsAndSpells(true)
-    end)
-
-    -----------------------------------------------------------------------------------
-    -- MODULE 7: TELEMETRY & DEBUGGER (ТЕЛЕМЕТРИЯ И ДЕБАГ)
-    -----------------------------------------------------------------------------------
-    local p7 = pages[7]
-    ui.m7Title = p7:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(ui.m7Title, 15)
-    ui.m7Title:SetPoint("TOPLEFT", 0, 0)
-    ui.m7Title:SetTextColor(1, 0.85, 0.25, 1)
-
-    CreateElvCheck(p7, "MOD_ENABLE", "enableTelemetry", 0, -24, true, false)
-
-    ui.snapBtn = CreateElvButton(p7, 195, 26, "")
-    ui.snapBtn:SetPoint("TOPLEFT", 0, -54)
-
-    ui.copyTelBtn = CreateElvButton(p7, 180, 26, "")
-    ui.copyTelBtn:SetPoint("LEFT", ui.snapBtn, "RIGHT", 8, 0)
-
-    ui.clearTelBtn = CreateElvButton(p7, 195, 26, "")
-    ui.clearTelBtn:SetPoint("LEFT", ui.copyTelBtn, "RIGHT", 8, 0)
-
-    local telBoxFrame = CreateFrame("Frame", nil, p7, "BackdropTemplate")
-    telBoxFrame:SetPoint("TOPLEFT", 0, -88)
-    telBoxFrame:SetPoint("BOTTOMRIGHT", 0, 0)
-    SetBackdropFlat(telBoxFrame, 0.04, 0.04, 0.06, 0.98, 0.22, 0.22, 0.30, 1.0)
-
-    local telScroll = CreateFrame("ScrollFrame", "SpArcTelemetryScroll", telBoxFrame, "UIPanelScrollFrameTemplate")
-    telScroll:SetPoint("TOPLEFT", 8, -8)
-    telScroll:SetPoint("BOTTOMRIGHT", -28, 8)
-
-    ui.telEditBox = CreateFrame("EditBox", nil, telScroll)
-    ui.telEditBox:SetMultiLine(true)
-    ui.telEditBox:SetFontObject("ChatFontNormal")
-    ApplyCyrFont(ui.telEditBox, 11)
-    ui.telEditBox:SetWidth(590)
-    ui.telEditBox:SetAutoFocus(false)
-    ui.telEditBox:SetScript("OnEscapePressed", function() ui.telEditBox:ClearFocus() end)
-    telScroll:SetScrollChild(ui.telEditBox)
-
-    ui.snapBtn:SetScript("OnClick", function()
-      pcall(SpArc.CaptureTelemetrySnapshot, SpArc, "MANUAL_SNAPSHOT")
-      controlFrame:RefreshUI()
-    end)
-    ui.copyTelBtn:SetScript("OnClick", function()
-      ui.telEditBox:SetFocus()
-      ui.telEditBox:HighlightText()
-    end)
-    ui.clearTelBtn:SetScript("OnClick", function()
-      db.telemetryLog = {}
-      db.capturedLuaErrors = {}
-      if _G.BugSack and type(_G.BugSack.Reset) == "function" then
-        pcall(_G.BugSack.Reset, _G.BugSack)
-      elseif _G.BugGrabber and type(_G.BugGrabber.Reset) == "function" then
-        pcall(_G.BugGrabber.Reset, _G.BugGrabber)
-      end
-      controlFrame:RefreshUI()
-    end)
-
-    -----------------------------------------------------------------------------------
-    -- MODULE 8: CHARACTER PROFILES (ПРОФИЛИ ПЕРСОНАЖЕЙ)
-    -----------------------------------------------------------------------------------
-    local p8 = pages[8]
-    ui.selectedProfileForOps = SpArc:GetActiveProfileName()
-
-    ui.m8Title = p8:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(ui.m8Title, 15)
-    ui.m8Title:SetPoint("TOPLEFT", 0, 0)
-    ui.m8Title:SetTextColor(1, 0.85, 0.25, 1)
-
-    local m8CurBox = RegisterGroupBox(p8, "M8_GRP_CUR", 0, -34, 640, 102)
-    ui.m8CurSummary = m8CurBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(ui.m8CurSummary, 12)
-    ui.m8CurSummary:SetPoint("TOPLEFT", 16, -12)
-    ui.m8CurSummary:SetPoint("TOPRIGHT", -16, -12)
-    ui.m8CurSummary:SetJustifyH("LEFT")
-    ui.m8CurSummary:SetSpacing(4)
-
-    ui.m8CharProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
-    ui.m8CharProfBtn:SetPoint("BOTTOMLEFT", 16, 12)
-    ui.m8CharProfBtn:SetScript("OnClick", function()
-      local charProf = SpArc:GetCurrentCharKey()
-      SpArc:SetProfile(charProf)
-      ui.selectedProfileForOps = charProf
-      print(string.format(SpArc:L("MSG_PROF_SWITCHED"), charProf))
-      controlFrame:RefreshUI()
-    end)
-
-    ui.m8DefProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
-    ui.m8DefProfBtn:SetPoint("LEFT", ui.m8CharProfBtn, "RIGHT", 8, 0)
-    ui.m8DefProfBtn:SetScript("OnClick", function()
-      SpArc:SetProfile("Default")
-      ui.selectedProfileForOps = "Default"
-      print(string.format(SpArc:L("MSG_PROF_SWITCHED"), "Default"))
-      controlFrame:RefreshUI()
-    end)
-
-    ui.m8ResetProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
-    ui.m8ResetProfBtn:SetPoint("LEFT", ui.m8DefProfBtn, "RIGHT", 8, 0)
-    ui.m8ResetProfBtn:SetScript("OnClick", function()
-      local curProf = SpArc:GetActiveProfileName()
-      SpArc:ResetCurrentProfile()
-      print(string.format(SpArc:L("MSG_PROF_RESET"), curProf))
-      controlFrame:RefreshUI()
-    end)
-
-    local m8ListBox = RegisterGroupBox(p8, "M8_GRP_LIST", 0, -152, 640, 366)
-
-    local profListFrame = CreateFrame("Frame", nil, m8ListBox, "BackdropTemplate")
-    profListFrame:SetPoint("TOPLEFT", 14, -14)
-    profListFrame:SetSize(270, 338)
-    SetBackdropFlat(profListFrame, 0.05, 0.05, 0.07, 0.96, 0.20, 0.20, 0.27, 1.0)
-
-    local profScroll = CreateFrame("ScrollFrame", "SpArcProfileListScroll", profListFrame, "UIPanelScrollFrameTemplate")
-    profScroll:SetPoint("TOPLEFT", 4, -4)
-    profScroll:SetPoint("BOTTOMRIGHT", -26, 4)
-
-    ui.profListContent = CreateFrame("Frame", nil, profScroll)
-    ui.profListContent:SetSize(236, 600)
-    profScroll:SetScrollChild(ui.profListContent)
-
-    ui.profRowButtons = {}
-    for idx = 1, 24 do
-      local prBtn = CreateElvButton(ui.profListContent, 234, 26, "")
-      prBtn:SetPoint("TOPLEFT", 0, -(idx - 1) * 28)
-      prBtn.fs:ClearAllPoints()
-      prBtn.fs:SetPoint("LEFT", prBtn, "LEFT", 8, 0)
-      prBtn.fs:SetPoint("RIGHT", prBtn, "RIGHT", -6, 0)
-      prBtn.fs:SetJustifyH("LEFT")
-      prBtn.fs:SetWordWrap(false)
-      prBtn:Hide()
-      ui.profRowButtons[idx] = prBtn
-    end
-
-    local profDetailsBox = CreateFrame("Frame", nil, m8ListBox, "BackdropTemplate")
-    profDetailsBox:SetPoint("TOPLEFT", 296, -14)
-    profDetailsBox:SetPoint("BOTTOMRIGHT", -14, 14)
-    SetBackdropFlat(profDetailsBox, 0.06, 0.06, 0.09, 0.96, 0.20, 0.20, 0.27, 1.0)
-
-    ui.profDetailsText = profDetailsBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ApplyCyrFont(ui.profDetailsText, 12)
-    ui.profDetailsText:SetPoint("TOPLEFT", 14, -14)
-    ui.profDetailsText:SetPoint("TOPRIGHT", -14, -14)
-    ui.profDetailsText:SetJustifyH("LEFT")
-    ui.profDetailsText:SetJustifyV("TOP")
-    ui.profDetailsText:SetSpacing(3)
-
-    ui.m8ActivateBtn = CreateElvButton(profDetailsBox, 300, 28, "")
-    ui.m8ActivateBtn:SetPoint("BOTTOM", 0, 82)
-    ui.m8ActivateBtn:SetScript("OnClick", function()
-      if ui.selectedProfileForOps and ui.selectedProfileForOps ~= "" then
-        SpArc:SetProfile(ui.selectedProfileForOps)
-        print(string.format(SpArc:L("MSG_PROF_SWITCHED"), ui.selectedProfileForOps))
+      ui.m8CharProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
+      ui.m8CharProfBtn:SetPoint("BOTTOMLEFT", 16, 12)
+      ui.m8CharProfBtn:SetScript("OnClick", function()
+        local charProf = SpArc:GetCurrentCharKey()
+        SpArc:SetProfile(charProf)
+        ui.selectedProfileForOps = charProf
+        print(string.format(SpArc:L("MSG_PROF_SWITCHED"), charProf))
         controlFrame:RefreshUI()
-      end
-    end)
+      end)
 
-    ui.m8CopyBtn = CreateElvButton(profDetailsBox, 300, 28, "")
-    ui.m8CopyBtn:SetPoint("BOTTOM", 0, 48)
-    ui.m8CopyBtn:SetScript("OnClick", function()
-      local curProf = SpArc:GetActiveProfileName()
-      if ui.selectedProfileForOps and ui.selectedProfileForOps ~= "" and ui.selectedProfileForOps ~= curProf then
-        if SpArc:CopyProfileFrom(ui.selectedProfileForOps) then
-          print(string.format(SpArc:L("MSG_PROF_COPIED"), ui.selectedProfileForOps, curProf))
+      ui.m8DefProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
+      ui.m8DefProfBtn:SetPoint("LEFT", ui.m8CharProfBtn, "RIGHT", 8, 0)
+      ui.m8DefProfBtn:SetScript("OnClick", function()
+        SpArc:SetProfile("Default")
+        ui.selectedProfileForOps = "Default"
+        print(string.format(SpArc:L("MSG_PROF_SWITCHED"), "Default"))
+        controlFrame:RefreshUI()
+      end)
+
+      ui.m8ResetProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
+      ui.m8ResetProfBtn:SetPoint("LEFT", ui.m8DefProfBtn, "RIGHT", 8, 0)
+      ui.m8ResetProfBtn:SetScript("OnClick", function()
+        local curProf = SpArc:GetActiveProfileName()
+        SpArc:ResetCurrentProfile()
+        print(string.format(SpArc:L("MSG_PROF_RESET"), curProf))
+        controlFrame:RefreshUI()
+      end)
+
+      local m8ListBox = RegisterGroupBox(p8, "M8_GRP_LIST", 0, -152, 640, 366)
+
+      local profListFrame = CreateFrame("Frame", nil, m8ListBox, "BackdropTemplate")
+      profListFrame:SetPoint("TOPLEFT", 14, -14)
+      profListFrame:SetSize(270, 338)
+      SetBackdropFlat(profListFrame, 0.05, 0.05, 0.07, 0.96, 0.20, 0.20, 0.27, 1.0)
+
+      local profScroll = CreateFrame("ScrollFrame", "SpArcProfileListScroll", profListFrame, "UIPanelScrollFrameTemplate")
+      profScroll:SetPoint("TOPLEFT", 4, -4)
+      profScroll:SetPoint("BOTTOMRIGHT", -26, 4)
+
+      ui.profListContent = CreateFrame("Frame", nil, profScroll)
+      ui.profListContent:SetSize(236, 600)
+      profScroll:SetScrollChild(ui.profListContent)
+
+      ui.profRowButtons = {}
+      for idx = 1, 24 do
+        local prBtn = CreateElvButton(ui.profListContent, 234, 26, "")
+        prBtn:SetPoint("TOPLEFT", 0, -(idx - 1) * 28)
+        prBtn.fs:ClearAllPoints()
+        prBtn.fs:SetPoint("LEFT", prBtn, "LEFT", 8, 0)
+        prBtn.fs:SetPoint("RIGHT", prBtn, "RIGHT", -6, 0)
+        prBtn.fs:SetJustifyH("LEFT")
+        prBtn.fs:SetWordWrap(false)
+        prBtn:Hide()
+        ui.profRowButtons[idx] = prBtn
+      end
+
+      local profDetailsBox = CreateFrame("Frame", nil, m8ListBox, "BackdropTemplate")
+      profDetailsBox:SetPoint("TOPLEFT", 296, -14)
+      profDetailsBox:SetPoint("BOTTOMRIGHT", -14, 14)
+      SetBackdropFlat(profDetailsBox, 0.06, 0.06, 0.09, 0.96, 0.20, 0.20, 0.27, 1.0)
+
+      ui.profDetailsText = profDetailsBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.profDetailsText, 12)
+      ui.profDetailsText:SetPoint("TOPLEFT", 14, -14)
+      ui.profDetailsText:SetPoint("TOPRIGHT", -14, -14)
+      ui.profDetailsText:SetJustifyH("LEFT")
+      ui.profDetailsText:SetJustifyV("TOP")
+      ui.profDetailsText:SetSpacing(3)
+
+      ui.m8ActivateBtn = CreateElvButton(profDetailsBox, 300, 28, "")
+      ui.m8ActivateBtn:SetPoint("BOTTOM", 0, 82)
+      ui.m8ActivateBtn:SetScript("OnClick", function()
+        if ui.selectedProfileForOps and ui.selectedProfileForOps ~= "" then
+          SpArc:SetProfile(ui.selectedProfileForOps)
+          print(string.format(SpArc:L("MSG_PROF_SWITCHED"), ui.selectedProfileForOps))
           controlFrame:RefreshUI()
         end
-      end
-    end)
+      end)
 
-    ui.m8DeleteBtn = CreateElvButton(profDetailsBox, 300, 28, "")
-    ui.m8DeleteBtn:SetPoint("BOTTOM", 0, 14)
-    ui.m8DeleteBtn:SetScript("OnClick", function()
-      local curProf = SpArc:GetActiveProfileName()
-      if ui.selectedProfileForOps and ui.selectedProfileForOps ~= "Default" and ui.selectedProfileForOps ~= curProf then
-        local delName = ui.selectedProfileForOps
-        if SpArc:DeleteProfile(delName) then
-          ui.selectedProfileForOps = curProf
-          print(string.format(SpArc:L("MSG_PROF_DELETED"), delName))
-          controlFrame:RefreshUI()
+      ui.m8CopyBtn = CreateElvButton(profDetailsBox, 300, 28, "")
+      ui.m8CopyBtn:SetPoint("BOTTOM", 0, 48)
+      ui.m8CopyBtn:SetScript("OnClick", function()
+        local curProf = SpArc:GetActiveProfileName()
+        if ui.selectedProfileForOps and ui.selectedProfileForOps ~= "" and ui.selectedProfileForOps ~= curProf then
+          if SpArc:CopyProfileFrom(ui.selectedProfileForOps) then
+            print(string.format(SpArc:L("MSG_PROF_COPIED"), ui.selectedProfileForOps, curProf))
+            controlFrame:RefreshUI()
+          end
         end
-      end
-    end)
+      end)
+
+      ui.m8DeleteBtn = CreateElvButton(profDetailsBox, 300, 28, "")
+      ui.m8DeleteBtn:SetPoint("BOTTOM", 0, 14)
+      ui.m8DeleteBtn:SetScript("OnClick", function()
+        local curProf = SpArc:GetActiveProfileName()
+        if ui.selectedProfileForOps and ui.selectedProfileForOps ~= "Default" and ui.selectedProfileForOps ~= curProf then
+          local delName = ui.selectedProfileForOps
+          if SpArc:DeleteProfile(delName) then
+            ui.selectedProfileForOps = curProf
+            print(string.format(SpArc:L("MSG_PROF_DELETED"), delName))
+            controlFrame:RefreshUI()
+          end
+        end
+      end)
+    end
+
+    -----------------------------------------------------------------------------------
+    -- MODULE 9: SPELLBOOK MACRO GENERATOR (МАКРОСОГЕНЕРАТОР)
+    -----------------------------------------------------------------------------------
+    if SpArc.BuildMacroGenPage and pages[9] then
+      SpArc:BuildMacroGenPage(pages[9], ui, {
+        ApplyCyrFont = ApplyCyrFont,
+        CreateElvButton = CreateElvButton,
+        RegisterGroupBox = RegisterGroupBox,
+        SetBackdropFlat = SetBackdropFlat,
+        CreateElvCheck = CreateElvCheck,
+        controlFrame = controlFrame,
+      })
+    end
 
     -----------------------------------------------------------------------------------
     -- MASTER REFRESH UI
@@ -1198,9 +1248,11 @@ local function OpenControlCenter(initialTab)
       ui.filterBtn:SetText(filterClassOnly and string.format(SpArc:L("FILTER_CLASS"), pClass, classCount) or string.format(SpArc:L("FILTER_ALL"), totalCount))
       ui.autoModeBtn:SetText(db.mode == "AUTO" and SpArc:L("MODE_AUTO") or SpArc:L("MODE_MANUAL"))
       ui.newPresetBtn:SetText(SpArc:L("NEW_PRESET_BTN"))
+      if ui.delPresetBtn then ui.delPresetBtn:SetText("|cffff6666" .. SpArc:L("DEL_PRESET_BTN") .. "|r") end
       ui.activateBtn:SetText(SpArc:L("ACTIVATE_BTN"))
       ui.openMdBtn:SetText(SpArc:L("OPEN_MD_BTN"))
       ui.testModeBtn1:SetText(SpArc:L("TEST_HUD_BTN"))
+      if ui.delPresetBtn2 then ui.delPresetBtn2:SetText("|cffff6666" .. SpArc:L("DEL_PRESET_BTN") .. "|r") end
 
       for idx = 1, #ui.rowButtons do
         local rBtn = ui.rowButtons[idx]
@@ -1362,6 +1414,11 @@ local function OpenControlCenter(initialTab)
       ui.m8ActivateBtn:SetText(SpArc:L("M8_ACTIVATE_BTN"))
       ui.m8CopyBtn:SetText(SpArc:L("M8_COPY_BTN"))
       ui.m8DeleteBtn:SetText(SpArc:L("M8_DELETE_BTN"))
+
+      -- Module 9 (Macro Generator) refresh
+      if SpArc.RefreshMacroGenPage then
+        SpArc:RefreshMacroGenPage(ui)
+      end
 
       isRefreshingUI = false
     end
@@ -1611,6 +1668,8 @@ _G.SlashCmdList["SPARC"] = function(msg)
     OpenControlCenter(6)
   elseif cmd == "prof" or cmd == "profile" or cmd == "profiles" then
     OpenControlCenter(8)
+  elseif cmd == "macro" or cmd == "macros" or cmd == "mgen" or cmd == "gen" then
+    OpenControlCenter(9)
   elseif cmd == "fixcursor" or cmd == "cursor" then
     if SpArc.FlushHardwareCursor then
       SpArc:FlushHardwareCursor(true)

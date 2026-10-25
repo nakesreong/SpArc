@@ -26,10 +26,75 @@ local SafeBool = SpArc.SafeBool
 local SPELL_DEFS = SpArc.SPELL_DEFS
 local st = SpArc.state
 
+function SpArc:GetPlayerSpellHasteMult()
+  if _G.UnitSpellHaste then
+    local ok, h = pcall(_G.UnitSpellHaste, "player")
+    if ok and not IsSecret(h) and type(h) == "number" and h > -90 and h < 500 then
+      return math.max(0.5, 1.0 + (h / 100.0))
+    end
+  end
+  return 1.0
+end
+
+function SpArc:GetPlayerGCDDuration()
+  local mult = SpArc:GetPlayerSpellHasteMult()
+  return math.max(0.75, math.min(1.5, 1.5 / mult))
+end
+
+function SpArc:TriggerGCD(now)
+  now = now or GetTime()
+  if C_Spell and C_Spell.GetSpellCooldown then
+    local ok, cd = pcall(C_Spell.GetSpellCooldown, 61304)
+    if ok and type(cd) == "table" and not IsSecret(cd.startTime) and not IsSecret(cd.duration) then
+      if type(cd.startTime) == "number" and cd.startTime > 0 and type(cd.duration) == "number" and cd.duration >= 0.25 and cd.duration <= 2.0 then
+        if (cd.startTime + cd.duration) > now then
+          st.gcdStartTime = cd.startTime
+          st.gcdDuration = cd.duration
+          return
+        end
+      end
+    end
+  end
+  if (now - (st.gcdStartTime or 0)) > 0.12 then
+    st.gcdStartTime = now
+    st.gcdDuration = SpArc:GetPlayerGCDDuration()
+  end
+end
+
+function SpArc:GetActiveGCD(now)
+  now = now or GetTime()
+  if C_Spell and C_Spell.GetSpellCooldown then
+    local ok, cd = pcall(C_Spell.GetSpellCooldown, 61304)
+    if ok and type(cd) == "table" and not IsSecret(cd.startTime) and not IsSecret(cd.duration) then
+      if type(cd.startTime) == "number" and cd.startTime > 0 and type(cd.duration) == "number" and cd.duration >= 0.25 and cd.duration <= 2.0 then
+        if (cd.startTime + cd.duration) > now then
+          st.gcdStartTime = cd.startTime
+          st.gcdDuration = cd.duration
+          return cd.startTime, cd.duration
+        end
+      end
+    end
+  end
+  local s = st.gcdStartTime or 0
+  local d = st.gcdDuration or 0
+  if s > 0 and d > 0.1 and (s + d) > now then
+    return s, d
+  end
+  return 0, 0
+end
+
 function SpArc:GetTrackedSpellCharges(defKey, now)
   local def = SPELL_DEFS[defKey]
   local maxCh = (def and (def.liveMaxCharges or def.maxCharges)) or 1
-  local cdDur = (def and (def.liveChargeCD or def.baseCD)) or 7.5
+  local rawCD = (def and def.liveChargeCD) or nil
+  if not rawCD and def and def.baseCD and def.baseCD > 0 then
+    if defKey == "FLURRY" or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" then
+      rawCD = def.baseCD / SpArc:GetPlayerSpellHasteMult()
+    else
+      rawCD = def.baseCD
+    end
+  end
+  local cdDur = rawCD or 7.5
   if cdDur <= 0 then cdDur = 7.5 end
   local used = st.spellChargesUsed[defKey] or 0
   local chStart = st.spellChargeStart[defKey] or 0
@@ -132,6 +197,43 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     end
   end
 
+  if def.overrideOf and SPELL_DEFS[def.overrideOf] then
+    local baseDef = SPELL_DEFS[def.overrideOf]
+    if C_Spell and C_Spell.GetOverrideSpell then
+      for _, baseID in ipairs(baseDef.ids or {}) do
+        local okO, over = pcall(C_Spell.GetOverrideSpell, baseID)
+        if okO and not IsSecret(over) and type(over) == "number" and over > 0 and over ~= baseID then
+          for _, myID in ipairs(def.ids or {}) do
+            if over == myID then
+              isProc = true
+              spellID = over
+              overlayRaw = "override(" .. tostring(over) .. ")"
+              break
+            end
+          end
+        end
+        if isProc then break end
+      end
+      if not isProc and baseDef.liveSpellID then
+        local okO, over = pcall(C_Spell.GetOverrideSpell, baseDef.liveSpellID)
+        if okO and not IsSecret(over) and type(over) == "number" and over > 0 then
+          for _, myID in ipairs(def.ids or {}) do
+            if over == myID then
+              isProc = true
+              spellID = over
+              overlayRaw = "override(" .. tostring(over) .. ")"
+              break
+            end
+          end
+        end
+      end
+    end
+    if assistedKey == defKey then
+      isProc = true
+      overlayRaw = "assisted(" .. tostring(defKey) .. ")"
+    end
+  end
+
   local isOnCD = false
   local remSec = 0
   local durSec = def.baseCD or 0
@@ -167,20 +269,30 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         gotCleanCD = true
         charges = ch.currentCharges
         local maxCh = def.liveMaxCharges or def.maxCharges or 1
+        local chCDDur = def.liveChargeCD or def.baseCD or 7.5
         chargesRaw = tostring(ch.currentCharges) .. "/" .. tostring(maxCh)
-        st.spellChargesUsed[defKey] = math.max(0, maxCh - ch.currentCharges)
-        if st.spellChargesUsed[defKey] == 0 then
+        local prevUsed = st.spellChargesUsed[defKey] or 0
+        local newUsed = math.max(0, maxCh - ch.currentCharges)
+        st.spellChargesUsed[defKey] = newUsed
+        if newUsed == 0 then
           st.spellChargeStart[defKey] = 0
         elseif not IsSecret(ch.cooldownStartTime) and type(ch.cooldownStartTime) == "number" and ch.cooldownStartTime > 0 then
           st.spellChargeStart[defKey] = ch.cooldownStartTime
+        elseif (st.spellChargeStart[defKey] or 0) <= 0 or newUsed > prevUsed or (now - (st.spellChargeStart[defKey] or 0)) >= chCDDur then
+          st.spellChargeStart[defKey] = now
         end
         if ch.currentCharges >= 1 then
           isOnCD = false
         else
           isOnCD = true
-          if not IsSecret(ch.cooldownStartTime) and not IsSecret(ch.cooldownDuration) then
-            startTime = ch.cooldownStartTime or 0
-            durSec = ch.cooldownDuration or durSec
+          if not IsSecret(ch.cooldownStartTime) and not IsSecret(ch.cooldownDuration) and type(ch.cooldownStartTime) == "number" and ch.cooldownStartTime > 0 then
+            startTime = ch.cooldownStartTime
+            durSec = ch.cooldownDuration or chCDDur
+            remSec = math.max(0, startTime + durSec - now)
+            cdRaw = string.format("%.1fs/%.1fs", remSec, durSec)
+          else
+            startTime = (st.spellChargeStart[defKey] and st.spellChargeStart[defKey] > 0) and st.spellChargeStart[defKey] or now
+            durSec = chCDDur
             remSec = math.max(0, startTime + durSec - now)
             cdRaw = string.format("%.1fs/%.1fs", remSec, durSec)
           end
@@ -196,15 +308,20 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         cdRaw = "SECRET"
       else
         gotCleanCD = true
-        if cd.duration and cd.duration > 1.6 and cd.startTime and cd.startTime > 0 then
-          local r = cd.startTime + cd.duration - now
-          if r > 0.15 then
-            isOnCD = true
-            remSec = r
-            durSec = cd.duration
-            startTime = cd.startTime
-            charges = 0
-            cdRaw = string.format("%.1fs/%.1fs", remSec, durSec)
+        if cd.duration and cd.startTime and cd.startTime > 0 then
+          if cd.duration >= 0.25 and cd.duration <= 1.6 and (cd.startTime + cd.duration) > now then
+            st.gcdStartTime = cd.startTime
+            st.gcdDuration = cd.duration
+          elseif cd.duration > 1.6 then
+            local r = cd.startTime + cd.duration - now
+            if r > 0.15 then
+              isOnCD = true
+              remSec = r
+              durSec = cd.duration
+              startTime = cd.startTime
+              charges = 0
+              cdRaw = string.format("%.1fs/%.1fs", remSec, durSec)
+            end
           end
         end
       end
@@ -218,15 +335,20 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         if cdRaw == "0s" then cdRaw = "ACT_SECRET" end
       elseif type(d) == "number" then
         gotCleanCD = true
-        if d > 1.6 and s and s > 0 then
-          local r = s + d - now
-          if r > 0.15 then
-            isOnCD = true
-            remSec = r
-            durSec = d
-            startTime = s
-            charges = 0
-            cdRaw = string.format("act:%.1fs/%.1fs", remSec, durSec)
+        if s and s > 0 then
+          if d >= 0.25 and d <= 1.6 and (s + d) > now then
+            st.gcdStartTime = s
+            st.gcdDuration = d
+          elseif d > 1.6 then
+            local r = s + d - now
+            if r > 0.15 then
+              isOnCD = true
+              remSec = r
+              durSec = d
+              startTime = s
+              charges = 0
+              cdRaw = string.format("act:%.1fs/%.1fs", remSec, durSec)
+            end
           end
         end
       end
@@ -240,6 +362,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
 
     if maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" then
       local simCh, simMax, simDur, simStart = SpArc:GetTrackedSpellCharges(defKey, now)
+      cdDur = simDur
       charges = simCh
       chargesRaw = "sim:" .. tostring(simCh) .. "/" .. tostring(simMax)
       if simCh <= 0 then
@@ -297,13 +420,44 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         st.spellChargeStart[defKey] = now - (cdDur * 0.65)
       end
       chargesRaw = "sim:0/" .. tostring(maxCh)
+    elseif assistedKey == "FROSTBOLT" and (defKey == "FLURRY" or defKey == "RAY_OF_FROST" or defKey == "FROZEN_ORB") then
+      isOnCD = true
+      charges = 0
+      if remSec <= 0 then
+        remSec = math.max(2.5, cdDur * 0.45)
+        durSec = cdDur
+      end
+      cdRaw = "AssistSaysOnCD(FB)"
+      if maxCh > 1 or defKey == "FLURRY" then
+        if (st.spellChargesUsed[defKey] or 0) < maxCh then
+          st.spellChargesUsed[defKey] = maxCh
+          st.spellChargeStart[defKey] = now - (cdDur * 0.55)
+        end
+        chargesRaw = "sim:0/" .. tostring(maxCh)
+      end
+    elseif assistedKey == "FROZEN_ORB" and (defKey == "FLURRY" or defKey == "RAY_OF_FROST") then
+      isOnCD = true
+      charges = 0
+      if remSec <= 0 then
+        remSec = math.max(2.5, cdDur * 0.45)
+        durSec = cdDur
+      end
+      cdRaw = "AssistSaysOnCD(FO)"
+      if maxCh > 1 or defKey == "FLURRY" then
+        if (st.spellChargesUsed[defKey] or 0) < maxCh then
+          st.spellChargesUsed[defKey] = maxCh
+          st.spellChargeStart[defKey] = now - (cdDur * 0.55)
+        end
+        chargesRaw = "sim:0/" .. tostring(maxCh)
+      end
     end
   end
 
-  if assistedKey == defKey then
+  local recentlyCast = st.lastCastAt[defKey] and ((now - st.lastCastAt[defKey]) < 2.5) or false
+  if assistedKey == defKey and not recentlyCast then
     isOnCD = false
     local maxCh = def.liveMaxCharges or def.maxCharges or 1
-    if (maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM") and (st.spellChargesUsed[defKey] or 0) >= maxCh then
+    if (maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" or defKey == "FLURRY") and (st.spellChargesUsed[defKey] or 0) >= maxCh then
       st.spellChargesUsed[defKey] = math.max(0, maxCh - 1)
       if st.spellChargesUsed[defKey] > 0 then
         st.spellChargeStart[defKey] = now
@@ -314,6 +468,10 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       chargesRaw = "sim:1/" .. tostring(maxCh)
     end
     if charges < 1 then charges = 1 end
+  end
+
+  if isOnCD and remSec > 0 and durSec > 0 and (not startTime or startTime <= 0) then
+    startTime = now - math.max(0, durSec - remSec)
   end
 
   if defKey == "VOID_BOLT" and isOnCD then
@@ -479,10 +637,22 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
 
   local finalReady = (not isOnCD)
   local isUnavailable = false
+
+  if def.overrideOf and slotActiveSpellID and def.idSet and def.idSet[slotActiveSpellID] then
+    isProc = true
+    isOnCD = false
+    finalReady = true
+    overlayRaw = "slotOverride(" .. tostring(slotActiveSpellID) .. ")"
+  end
+
   if def.procOnly and not isProc then
     finalReady = false
     isUsable = false
     usableSource = "procOnly(false)"
+  elseif def.overrideOf and not isProc and not def.isKnown then
+    finalReady = false
+    isUsable = false
+    usableSource = "overrideInactive(" .. tostring(def.overrideOf) .. ")"
   end
 
   local isStanceWrapper = (
@@ -499,7 +669,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     or (slotActiveSpellID == 34914 and defKey ~= "VAMPIRIC_TOUCH" and defKey ~= "POWER_INFUSION")
   )
 
-  if not SpArc.testMode and not isProc then
+  if not SpArc.testMode and not isProc and not (def.overrideOf and SPELL_DEFS[def.overrideOf] and SPELL_DEFS[def.overrideOf].isKnown) then
     if slotActiveSpellID and not (def.idSet and def.idSet[slotActiveSpellID]) and not isStanceWrapper then
       if not def.isKnown or isExplicitFallback then
         isUnavailable = true
@@ -612,4 +782,91 @@ function SpArc:RefreshTrackedInsanity()
       st.trackedInsanity = p
     end
   end
+end
+
+function SpArc:GetTargetDebuffStacks(parsed, assistedKey)
+  if SpArc.testMode then
+    return 4
+  end
+  local now = GetTime()
+  if st.targetDebuffUntil and st.targetDebuffUntil > 0 and now >= st.targetDebuffUntil then
+    st.targetDebuffStacks = 0
+    st.targetDebuffUntil = 0
+  end
+
+  local debuffIDs = (parsed and parsed.targetDebuffIDs) or {}
+  local debuffNames = (parsed and parsed.targetDebuffNames) or {}
+  local idLookup = {}
+  for _, id in ipairs(debuffIDs) do
+    idLookup[id] = true
+  end
+
+  if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID and #debuffIDs > 0 then
+    for _, debuffID in ipairs(debuffIDs) do
+      local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", debuffID)
+      if ok and type(aura) == "table" then
+        if not IsSecret(aura.applications) and type(aura.applications) == "number" then
+          local apps = math.max(1, aura.applications)
+          st.targetDebuffStacks = apps
+          st.targetDebuffUntil = now + 15.0
+          return apps
+        end
+      end
+    end
+  end
+
+  if C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex then
+    local bestPlayerApps = nil
+    for i = 1, 16 do
+      local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, "target", i, "HARMFUL|PLAYER")
+      if not ok or type(aura) ~= "table" then
+        break
+      end
+      local apps = (not IsSecret(aura.applications) and type(aura.applications) == "number") and aura.applications or nil
+      local sid = (not IsSecret(aura.spellId) and type(aura.spellId) == "number") and aura.spellId or nil
+      local nm = (not IsSecret(aura.name) and type(aura.name) == "string") and aura.name or nil
+
+      if sid and idLookup[sid] and apps then
+        local c = math.max(1, apps)
+        st.targetDebuffStacks = c
+        st.targetDebuffUntil = now + 15.0
+        return c
+      end
+      if nm and #debuffNames > 0 and apps then
+        local lowerNm = nm:lower()
+        for _, wantNm in ipairs(debuffNames) do
+          if nm == wantNm or lowerNm == wantNm:lower() or lowerNm:find(wantNm:lower(), 1, true) then
+            local c = math.max(1, apps)
+            st.targetDebuffStacks = c
+            st.targetDebuffUntil = now + 15.0
+            return c
+          end
+        end
+      end
+      if apps and apps > 0 and (not bestPlayerApps or apps > bestPlayerApps) then
+        bestPlayerApps = apps
+      end
+    end
+    if bestPlayerApps and (#debuffIDs > 0 or #debuffNames > 0) then
+      st.targetDebuffStacks = bestPlayerApps
+      st.targetDebuffUntil = now + 15.0
+      return bestPlayerApps
+    end
+  end
+
+  if assistedKey then
+    local aDef = SPELL_DEFS[assistedKey]
+    local aAudit = st.lastSpellAudit and st.lastSpellAudit[assistedKey]
+    if aDef and aDef.consumesStacks and not (aAudit and aAudit.isProc) then
+      local needed = aDef.stacksCost or 4
+      if (st.targetDebuffStacks or 0) < needed then
+        st.targetDebuffStacks = needed
+        st.targetDebuffUntil = now + 12.0
+      end
+    elseif assistedKey == "FROSTBOLT" and (st.targetDebuffStacks or 0) >= 4 then
+      st.targetDebuffStacks = 3
+    end
+  end
+
+  return st.targetDebuffStacks or 0
 end

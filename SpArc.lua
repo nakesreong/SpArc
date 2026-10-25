@@ -576,6 +576,12 @@ local function OpenControlCenter(initialTab)
         rBtn.fs:SetPoint("RIGHT", rBtn, "RIGHT", -6, 0)
         rBtn.fs:SetJustifyH("LEFT")
         rBtn.fs:SetWordWrap(false)
+        rBtn:SetScript("OnClick", function(self)
+          if self.presetID then
+            selectedPresetForEdit = self.presetID
+            controlFrame:RefreshUI()
+          end
+        end)
         rBtn:Hide()
         ui.rowButtons[idx] = rBtn
       end
@@ -686,6 +692,10 @@ local function OpenControlCenter(initialTab)
             db.presets[selectedPresetForEdit].mode = compiled.mode
           end
           db.activePresetID = selectedPresetForEdit
+          if db.mode == "AUTO" and type(db.autoPresets) == "table" then
+            local pMode = db.presets[selectedPresetForEdit].mode or "PVE"
+            db.autoPresets[pMode] = selectedPresetForEdit
+          end
           SpArc:SelectActiveParsedProfile()
           SpArc:ScanActionSlotsAndSpells(true)
           controlFrame:RefreshUI()
@@ -1096,6 +1106,12 @@ local function OpenControlCenter(initialTab)
         prBtn.fs:SetPoint("RIGHT", prBtn, "RIGHT", -6, 0)
         prBtn.fs:SetJustifyH("LEFT")
         prBtn.fs:SetWordWrap(false)
+        prBtn:SetScript("OnClick", function(self)
+          if self.profileName then
+            ui.selectedProfileForOps = self.profileName
+            controlFrame:RefreshUI()
+          end
+        end)
         prBtn:Hide()
         ui.profRowButtons[idx] = prBtn
       end
@@ -1260,14 +1276,12 @@ local function OpenControlCenter(initialTab)
         if id and db.presets[id] then
           local pr = db.presets[id]
           local prefix = (id == db.activePresetID and SpArc:L("PREFIX_ACTIVE")) or (id == selectedPresetForEdit and SpArc:L("PREFIX_SELECTED")) or ""
+          rBtn.presetID = id
           rBtn:SetText(prefix .. SpArc:GetPresetDisplayTitle(pr))
           rBtn:SetSelected(id == selectedPresetForEdit)
-          rBtn:SetScript("OnClick", function()
-            selectedPresetForEdit = id
-            controlFrame:RefreshUI()
-          end)
           rBtn:Show()
         else
+          rBtn.presetID = nil
           rBtn:Hide()
         end
       end
@@ -1385,14 +1399,12 @@ local function OpenControlCenter(initialTab)
           local prefix = (pName == activeProfName and SpArc:L("PREFIX_ACTIVE"))
             or (pName == ui.selectedProfileForOps and SpArc:L("PREFIX_SELECTED"))
             or ""
+          prBtn.profileName = pName
           prBtn:SetText(prefix .. pName)
           prBtn:SetSelected(pName == ui.selectedProfileForOps)
-          prBtn:SetScript("OnClick", function()
-            ui.selectedProfileForOps = pName
-            controlFrame:RefreshUI()
-          end)
           prBtn:Show()
         else
+          prBtn.profileName = nil
           prBtn:Hide()
         end
       end
@@ -1607,7 +1619,7 @@ local function RegisterSpArcBlizzardSettings()
     b:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
     b:SetText(text)
     b:SetScript("OnClick", function()
-      if _G.HideUIPanel and _G.SettingsPanel and _G.SettingsPanel:IsShown() then
+      if not (_G.InCombatLockdown and _G.InCombatLockdown()) and _G.HideUIPanel and _G.SettingsPanel and _G.SettingsPanel:IsShown() then
         pcall(_G.HideUIPanel, _G.SettingsPanel)
       end
       OpenControlCenter(tabIdx or 1)

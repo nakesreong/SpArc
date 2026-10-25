@@ -584,7 +584,15 @@ function SpArc:TriggerSpellPress(defKey, slot, keybind)
 end
 
 local hookedBT4Buttons = {}
-local function EnsureBT4PressHooks()
+local lastBT4HookCheck = 0
+local function EnsureBT4PressHooks(now)
+  if not _G.Bartender4 and not _G.BT4Button1 then
+    return
+  end
+  if now and (now - lastBT4HookCheck) < 2.0 then
+    return
+  end
+  lastBT4HookCheck = now or GetTime()
   for slot = 1, 180 do
     if not hookedBT4Buttons[slot] then
       local btn = _G["BT4Button" .. slot]
@@ -653,7 +661,7 @@ rootFrame:SetScript("OnUpdate", function()
   end
   lastLogicTick = now
 
-  EnsureBT4PressHooks()
+  EnsureBT4PressHooks(now)
   SpArc:ScanActionSlotsAndSpells(false)
 
   local isMounted = SafeBool(IsMounted) or SafeBool(UnitInVehicle, "player") or SafeBool(HasOverrideActionBar)
@@ -672,6 +680,22 @@ rootFrame:SetScript("OnUpdate", function()
     and not SafeBool(UnitIsDead, "target")
   )
   local inCombat = SafeBool(UnitAffectingCombat, "player")
+  if not hasHostileTarget and not inCombat and not v.alwaysShowCDs and not SpArc.testMode then
+    for i = 1, MAX_ARC_SLOTS do
+      arcSlots[i].currentDefKey = nil
+      arcSlots[i].currentSlot = nil
+      arcSlots[i].currentKeybind = nil
+      SetBoxCooldownSafe(arcSlots[i], 0, 0, now)
+      arcSlots[i]:Hide()
+    end
+    for i = 1, #savesBoxes do savesBoxes[i]:Hide() end
+    for i = 1, #cdsBoxes do cdsBoxes[i]:Hide() end
+    emergencyBox.currentDefKey = nil
+    emergencyBox.currentSlot = nil
+    emergencyBox.currentKeybind = nil
+    emergencyBox:Hide()
+    return
+  end
   local maxQueue = math.max(3, math.min(MAX_ARC_SLOTS, tonumber(v.queueLength) or 5))
 
   local queue, states, parsed, activeChannelKey, shouldInterruptChannel, isProtectedChannel = SpArc:BuildRotationQueue(maxQueue)
@@ -826,7 +850,7 @@ end)
 --                SMART BOSS TAB-TARGETING (@boss1..5 PRIORITY)                      --
 ---------------------------------------------------------------------------------------
 local smartTabBtn = CreateFrame("Button", "SpArcSmartTabButton", UIParent, "SecureActionButtonTemplate")
-smartTabBtn:RegisterForClicks("AnyDown", "AnyUp")
+smartTabBtn:RegisterForClicks("AnyDown")
 smartTabBtn:SetAttribute("type", "macro")
 smartTabBtn:SetAttribute("macrotext", "/targetenemy\n/target [@boss1,harm,nodead][@boss2,harm,nodead][@boss3,harm,nodead][@boss4,harm,nodead][@boss5,harm,nodead]")
 

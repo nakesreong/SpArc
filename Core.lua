@@ -12,15 +12,14 @@ _G.SparkArcLoaded = true
 SpArc.VERSION = "2.9.0"
 SpArc.PROFILE_SCHEMA_VERSION = 12
 
-local C_AddOns = _G.C_AddOns
 local C_CVar = _G.C_CVar
-local UIParent = _G.UIParent
 local issecretvalue = _G.issecretvalue
 local pcall = _G.pcall
 local ipairs = _G.ipairs
 local pairs = _G.pairs
 local type = _G.type
 local table = _G.table
+local string = _G.string
 
 local FONT_PATH = (_G.GameFontNormal and select(1, _G.GameFontNormal:GetFont()))
   or (_G.StandardTextFont and select(1, _G.StandardTextFont:GetFont()))
@@ -49,6 +48,25 @@ end
 function SpArc.Trim(s)
   if not s then return "" end
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local CYR_UPPER_TO_LOWER = {
+  ["\208\129"] = "\209\145", -- Ё -> ё
+}
+for b = 144, 159 do
+  CYR_UPPER_TO_LOWER[string.char(208, b)] = string.char(208, b + 32)
+end
+for b = 160, 175 do
+  CYR_UPPER_TO_LOWER[string.char(208, b)] = string.char(209, b - 32)
+end
+
+function SpArc.UTF8Lower(s)
+  if type(s) ~= "string" or s == "" then return "" end
+  local low = s:lower()
+  if not low:find("\208", 1, true) then
+    return low
+  end
+  return (low:gsub("\208[\129\144-\175]", CYR_UPPER_TO_LOWER))
 end
 
 function SpArc.EnableAssistedCombatEngine()
@@ -398,6 +416,7 @@ SpArc.DEFAULT_VISUAL = {
   macroGenIncludeClass = true,
   macroGenIncludeSpec = true,
   macroGenTemplate = "#showtooltip\n/stopmacro [flying]\n/cast [@target] spell",
+  smartBossTab = true,
   lang = "AUTO",
 }
 
@@ -429,14 +448,22 @@ SpArc.state = {
   },
 }
 
+local cachedCharKey = nil
+local cachedDB = nil
+
 function SpArc:GetCurrentCharKey()
+  if cachedCharKey then
+    return cachedCharKey
+  end
   local uName = _G.UnitName and _G.UnitName("player")
   local rName = _G.GetRealmName and _G.GetRealmName()
   if uName and not SpArc.IsSecret(uName) and type(uName) == "string" and uName ~= "" and uName ~= _G.UNKNOWNOBJECT then
     if rName and not SpArc.IsSecret(rName) and type(rName) == "string" and rName ~= "" then
-      return uName .. " - " .. rName
+      cachedCharKey = uName .. " - " .. rName
+      return cachedCharKey
     end
-    return uName
+    cachedCharKey = uName
+    return cachedCharKey
   end
   return "Default"
 end
@@ -495,7 +522,10 @@ local function EnsureProfileObject(db, profName, templateVisual, keepExplicitInt
   return prof
 end
 
-function SpArc:EnsureDB()
+function SpArc:EnsureDB(forceReinit)
+  if cachedDB and _G.SpArcDB == cachedDB and cachedCharKey and not forceReinit and cachedDB.visual then
+    return cachedDB
+  end
   _G.SpArcDB = _G.SpArcDB or _G.SparkArcDB or {}
   _G.SparkArcDB = _G.SpArcDB
   local db = _G.SpArcDB
@@ -566,6 +596,7 @@ function SpArc:EnsureDB()
 
   db.telemetryLog = db.telemetryLog or {}
   db.lastSpellAudit = db.lastSpellAudit or {}
+  cachedDB = db
   return db
 end
 

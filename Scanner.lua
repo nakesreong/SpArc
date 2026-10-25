@@ -48,7 +48,7 @@ function SpArc:IsPvPActiveNow()
   end
   if _G.IsInInstance then
     local ok, inInst, instType = pcall(_G.IsInInstance)
-    if ok and not IsSecret(inInst) and inInst then
+    if ok and not IsSecret(inInst) and inInst and not IsSecret(instType) then
       return (instType == "pvp" or instType == "arena")
     end
   end
@@ -208,7 +208,7 @@ local function BuildAssistedSlotSet()
       local ok, slots = pcall(C_ActionBar.FindAssistedCombatActionButtons)
       if ok and type(slots) == "table" and not IsSecret(slots) then
         for _, v in pairs(slots) do
-          if type(v) == "number" and v > 0 then
+          if not IsSecret(v) and type(v) == "number" and v > 0 then
             set[v] = true
           end
         end
@@ -446,7 +446,7 @@ function SpArc:ScanActionSlotsAndSpells(force)
         local okF, slots = pcall(C_ActionBar.FindSpellActionButtons, sid)
         if okF and type(slots) == "table" and not IsSecret(slots) then
           for _, s in pairs(slots) do
-            if type(s) == "number" and s > 0 and not assistedSlots[s] and HasKeybind(s) then
+            if not IsSecret(s) and type(s) == "number" and s > 0 and not assistedSlots[s] and HasKeybind(s) then
               if not foundSlot or (HasKeybind(s) and not HasKeybind(foundSlot)) or s < foundSlot then
                 foundSlot = s
               end
@@ -523,7 +523,7 @@ function SpArc:ScanActionSlotsAndSpells(force)
         local okF, slots = pcall(C_ActionBar.FindSpellActionButtons, sid)
         if okF and type(slots) == "table" and not IsSecret(slots) then
           for _, s in pairs(slots) do
-            if type(s) == "number" and s > 0 and not assistedSlots[s] then
+            if not IsSecret(s) and type(s) == "number" and s > 0 and not assistedSlots[s] then
               foundSlot = s
               if IsSpellIDKnown(sid) then
                 def.isKnown = true
@@ -655,9 +655,9 @@ function SpArc:MatchSpellToDefKey(spellID, spellName)
         end
       end
       if spellName and not IsSecret(spellName) and type(spellName) == "string" then
-        local lowerName = spellName:lower()
+        local lowerName = SpArc.UTF8Lower(spellName)
         for _, nm in ipairs(def.names or {}) do
-          if nm == spellName or lowerName == nm:lower() then
+          if nm == spellName or lowerName == SpArc.UTF8Lower(nm) then
             return k
           end
         end

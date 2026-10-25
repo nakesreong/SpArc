@@ -116,8 +116,8 @@ local PRESET_SPEC_IDS = {
   PRIEST_01_SHADOW_PVE      = 258,
   PRIEST_02_SHADOW_BOSS     = 258,
   PRIEST_03_SHADOW_PVP      = 258,
-  PRIEST_04_SHADOW_MYTHIC   = 258,
-  PRIEST_05_SHADOW_ARCHON   = 258,
+  PRIEST_04_SHADOW_ARCHON   = 258,
+  PRIEST_05_SHADOW_VOIDWEAVER = 258,
   PRIEST_06_SHADOW_DELVES   = 258,
   PRIEST_07_SHADOW_SPEEDRUN = 258,
   PRIEST_08_DISC_PVE        = 256,
@@ -220,7 +220,7 @@ function SpArc:SelectActiveParsedProfile()
     if okCls and not IsSecret(playerClass) and type(playerClass) == "string" then
       local curPreset = db.presets and db.presets[presetID]
       local presetSpec = PRESET_SPEC_IDS[presetID]
-      local specMismatch = (specMap and presetSpec and presetSpec ~= specID) or false
+      local specMismatch = (mode == "AUTO" and specMap and presetSpec and presetSpec ~= specID and specMap[targetMode] ~= presetID) or false
 
       if not curPreset or curPreset.class ~= playerClass or specMismatch then
         if specMap then
@@ -328,21 +328,44 @@ local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, si
   return true
 end
 
-function SpArc:EvalSingleCondition(condStr, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges)
-  if not condStr or condStr == "ALWAYS" then
-    return true
+local compiledCondCache = {}
+
+local function GetCompiledConditionBranches(condStr)
+  local cached = compiledCondCache[condStr]
+  if cached then
+    return cached
   end
+  local branches = {}
   local orNorm = condStr:gsub("%s+OR%s+", "\2")
   for orBranch in orNorm:gmatch("([^\2]+)") do
-    local branchOk = true
+    local clauses = {}
     local andNorm = orBranch:gsub("%s+AND%s+", "\1")
     for rawClause in andNorm:gmatch("([^\1]+)") do
       local c = rawClause:gsub("^%s+", ""):gsub("%s+$", "")
       if c ~= "" then
-        if not EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges) then
-          branchOk = false
-          break
-        end
+        clauses[#clauses + 1] = c
+      end
+    end
+    if #clauses > 0 then
+      branches[#branches + 1] = clauses
+    end
+  end
+  compiledCondCache[condStr] = branches
+  return branches
+end
+
+function SpArc:EvalSingleCondition(condStr, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges)
+  if not condStr or condStr == "ALWAYS" then
+    return true
+  end
+  local branches = GetCompiledConditionBranches(condStr)
+  for i = 1, #branches do
+    local clauses = branches[i]
+    local branchOk = true
+    for j = 1, #clauses do
+      if not EvalAtomicClause(clauses[j], simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges) then
+        branchOk = false
+        break
       end
     end
     if branchOk then
@@ -369,6 +392,16 @@ function SpArc:GetActiveChannelDefKey(now)
   return nil
 end
 
+local reusableStates = {}
+local reusableQueue = {}
+local simReady = {}
+local simUsable = {}
+local simProcs = {}
+local simCharges = {}
+local simCD = {}
+local simKnown = {}
+local EMPTY_TABLE = {}
+
 function SpArc:BuildRotationQueue(maxSlots)
   local db = SpArc:EnsureDB()
   maxSlots = maxSlots or (db.visual and db.visual.queueLength) or 5
@@ -380,32 +413,41 @@ function SpArc:BuildRotationQueue(maxSlots)
 
   local parsed = SpArc:SelectActiveParsedProfile()
   if not parsed or not parsed.rules then
-    return {}, {}, parsed, nil, false, false
+    return EMPTY_TABLE, EMPTY_TABLE, parsed, nil, false, false
   end
 
-  local states = {}
-  local simReady = {}
-  local simUsable = {}
-  local simProcs = {}
-  local simCharges = {}
-  local simCD = {}
-  local simKnown = {}
+  local states = reusableStates
+  for k in pairs(states) do
+    if not SPELL_DEFS[k] then
+      states[k] = nil
+      simReady[k] = nil
+      simUsable[k] = nil
+      simProcs[k] = nil
+      simCharges[k] = nil
+      simCD[k] = nil
+      simKnown[k] = nil
+    end
+  end
 
   for k, def in pairs(SPELL_DEFS) do
     local isReady, remSec, durSec, startTime, isUsable, isProc, icon, keybind, charges, isUnavailable = SpArc:EvaluateSpellState(k, assistedKey)
-    states[k] = {
-      key = k,
-      isReady = isReady,
-      remSec = remSec,
-      durSec = durSec,
-      startTime = startTime,
-      isUsable = isUsable,
-      isProc = isProc,
-      isUnavailable = isUnavailable or false,
-      icon = icon,
-      keybind = keybind,
-      charges = charges,
-    }
+    local sObj = states[k]
+    if not sObj then
+      sObj = {}
+      states[k] = sObj
+    end
+    sObj.key = k
+    sObj.isReady = isReady
+    sObj.remSec = remSec
+    sObj.durSec = durSec
+    sObj.startTime = startTime
+    sObj.isUsable = isUsable
+    sObj.isProc = isProc
+    sObj.isUnavailable = isUnavailable or false
+    sObj.icon = icon
+    sObj.keybind = keybind
+    sObj.charges = charges
+
     local known = (not isUnavailable) and (def.isKnown or def.slot ~= nil or SpArc.testMode) and true or false
     simKnown[k] = known
     if not known then
@@ -425,7 +467,8 @@ function SpArc:BuildRotationQueue(maxSlots)
     simCharges[k] = charges or (isReady and 1 or 0)
   end
 
-  local queue = {}
+  local queue = reusableQueue
+  local qCount = 0
   local simHasDoTs = SpArc:CheckTargetHasDoTs(assistedKey)
   local simStacks = (SpArc.GetTargetDebuffStacks and SpArc:GetTargetDebuffStacks(parsed, assistedKey)) or 0
   if states["DEVOURING_PLAGUE"] and not states["DEVOURING_PLAGUE"].isUsable then
@@ -492,15 +535,19 @@ function SpArc:BuildRotationQueue(maxSlots)
     if pickedKey and states[pickedKey] and not states[pickedKey].isUnavailable then
       local s = states[pickedKey]
       local def = SPELL_DEFS[pickedKey]
-      queue[#queue + 1] = {
-        key = pickedKey,
-        icon = s.icon,
-        keybind = s.keybind,
-        isProc = (step == 1 and s.isProc) or false,
-        isReady = (step == 1) and s.isReady or true,
-        isUsable = (step == 1) and s.isUsable or true,
-        isUnavailable = s.isUnavailable or false,
-      }
+      qCount = qCount + 1
+      local qItem = queue[qCount]
+      if not qItem then
+        qItem = {}
+        queue[qCount] = qItem
+      end
+      qItem.key = pickedKey
+      qItem.icon = s.icon
+      qItem.keybind = s.keybind
+      qItem.isProc = (step == 1 and s.isProc) or false
+      qItem.isReady = (step == 1) and s.isReady or true
+      qItem.isUsable = (step == 1) and s.isUsable or true
+      qItem.isUnavailable = s.isUnavailable or false
 
       local pickedWasProc = simProcs[pickedKey]
       simProcs[pickedKey] = false
@@ -508,6 +555,18 @@ function SpArc:BuildRotationQueue(maxSlots)
         if def.appliesDoTs then simHasDoTs = true end
         if def.insanityGain then simInsanity = math.min(100, simInsanity + def.insanityGain) end
         if def.insanityCost then simInsanity = math.max(0, simInsanity - def.insanityCost) end
+        if def.grantsProc and SPELL_DEFS[def.grantsProc] then
+          simProcs[def.grantsProc] = true
+          simCD[def.grantsProc] = 0
+          simReady[def.grantsProc] = true
+          simUsable[def.grantsProc] = true
+        end
+        if def.grantsMFI and SPELL_DEFS["MIND_FLAY_INSANITY"] then
+          simProcs["MIND_FLAY_INSANITY"] = true
+          simCD["MIND_FLAY_INSANITY"] = 0
+          simReady["MIND_FLAY_INSANITY"] = true
+          simUsable["MIND_FLAY_INSANITY"] = true
+        end
         if def.consumesStacks and not pickedWasProc then
           local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
           simStacks = math.max(0, (simStacks or 0) - cost)
@@ -525,7 +584,7 @@ function SpArc:BuildRotationQueue(maxSlots)
             simCD[pickedKey] = def.liveChargeCD or def.baseCD or 7.5
             simReady[pickedKey] = false
           elseif def.baseCD and def.baseCD > 1.6 then
-            simCD[pickedKey] = 1.5
+            simCD[pickedKey] = 1.4
             simReady[pickedKey] = false
           end
         elseif def.baseCD and def.baseCD > 0 then
@@ -556,6 +615,10 @@ function SpArc:BuildRotationQueue(maxSlots)
         end
       end
     end
+  end
+
+  for i = qCount + 1, #queue do
+    queue[i] = nil
   end
 
   local now = GetTime()

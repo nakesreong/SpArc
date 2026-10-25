@@ -33,6 +33,7 @@ local InCombatLockdown = _G.InCombatLockdown
 local C_SpellBook = _G.C_SpellBook
 local C_Spell = _G.C_Spell
 local Enum = _G.Enum
+local IsSecret = SpArc.IsSecret
 
 SpArc.DEFAULT_MACRO_TEMPLATE = "#showtooltip\n/stopmacro [flying]\n/cast [@target] spell"
 
@@ -94,7 +95,7 @@ local SPEC_PREFIX_BY_ID = {
 }
 
 local function TrimStr(s)
-  if type(s) ~= "string" then return "" end
+  if not s or IsSecret(s) or type(s) ~= "string" then return "" end
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
@@ -102,8 +103,8 @@ function SpArc:GetMacroNamingPrefixes()
   local classLoc, classFile = "Class", "WARRIOR"
   if UnitClass then
     local ok, cLoc, cFile = pcall(UnitClass, "player")
-    if ok and type(cFile) == "string" and cFile ~= "" then
-      classLoc = cLoc or cFile
+    if ok and not IsSecret(cFile) and type(cFile) == "string" and cFile ~= "" then
+      classLoc = (not IsSecret(cLoc) and cLoc) or cFile
       classFile = cFile
     end
   end
@@ -113,11 +114,11 @@ function SpArc:GetMacroNamingPrefixes()
   local specLoc = "Spec"
   if GetSpecialization and GetSpecializationInfo then
     local okS, specIdx = pcall(GetSpecialization)
-    if okS and type(specIdx) == "number" and specIdx > 0 then
+    if okS and not IsSecret(specIdx) and type(specIdx) == "number" and specIdx > 0 then
       local okI, id, name = pcall(GetSpecializationInfo, specIdx)
-      if okI and type(id) == "number" then
+      if okI and not IsSecret(id) and type(id) == "number" then
         specID = id
-        if type(name) == "string" and name ~= "" then
+        if not IsSecret(name) and type(name) == "string" and name ~= "" then
           specLoc = name
         end
       end
@@ -162,10 +163,10 @@ function SpArc:FormatMacroFromTemplate(templateStr, spellName)
 end
 
 local function ExtractSpellsFromMacroBody(body, outMap, macroName)
-  if type(body) ~= "string" or body == "" then return end
+  if not body or IsSecret(body) or type(body) ~= "string" or body == "" then return end
   for rawLine in body:gmatch("[^\r\n]+") do
     local line = TrimStr(rawLine)
-    local lowerLine = line:lower()
+    local lowerLine = SpArc.UTF8Lower(line)
     local rest = nil
     if lowerLine:match("^#showtooltip%s+") then
       rest = line:gsub("^#[sS][hH][oO][wW][tT][oO][oO][lL][tT][iI][pP]%s+", "")
@@ -176,7 +177,7 @@ local function ExtractSpellsFromMacroBody(body, outMap, macroName)
     elseif lowerLine:match("^/use%s+") then
       rest = line:gsub("^/[uU][sS][eE]%s+", "")
     elseif lowerLine:find("^/заклинание%s+") then
-      rest = line:gsub("^/заклинание%s+", "")
+      rest = line:gsub("^/[^\32]+%s+", "")
     end
 
     if rest and rest ~= "" then
@@ -187,7 +188,7 @@ local function ExtractSpellsFromMacroBody(body, outMap, macroName)
         for part in cleaned:gmatch("[^,]+") do
           local sName = TrimStr(part)
           if sName ~= "" and not tonumber(sName) then
-            local key = sName:lower()
+            local key = SpArc.UTF8Lower(sName)
             if not outMap[key] then
               outMap[key] = macroName
             end
@@ -312,15 +313,15 @@ function SpArc:ScanSpellBookForMacros(opts)
 
           for slotIdx = offset + 1, offset + count do
             local okItem, itemInfo = pcall(C_SpellBook.GetSpellBookItemInfo, slotIdx, bank)
-            if okItem and type(itemInfo) == "table" then
-              local isPassive = (itemInfo.isPassive == true)
-              local isOffSpec = (itemInfo.isOffSpec == true)
-              local iType = itemInfo.itemType
-              local spellID = itemInfo.spellID or itemInfo.actionID
+            if okItem and type(itemInfo) == "table" and not IsSecret(itemInfo) then
+              local isPassive = (not IsSecret(itemInfo.isPassive) and itemInfo.isPassive == true) or false
+              local isOffSpec = (not IsSecret(itemInfo.isOffSpec) and itemInfo.isOffSpec == true) or false
+              local iType = (not IsSecret(itemInfo.itemType) and itemInfo.itemType) or nil
+              local spellID = (not IsSecret(itemInfo.spellID) and itemInfo.spellID) or (not IsSecret(itemInfo.actionID) and itemInfo.actionID) or nil
 
               if not isPassive and spellID and C_Spell and C_Spell.IsSpellPassive then
                 local okP, pVal = pcall(C_Spell.IsSpellPassive, spellID)
-                if okP and pVal == true then
+                if okP and not IsSecret(pVal) and pVal == true then
                   isPassive = true
                 end
               end
@@ -329,13 +330,13 @@ function SpArc:ScanSpellBookForMacros(opts)
                 local spellName = TrimStr(itemInfo.name)
                 if spellName == "" and spellID and C_Spell and C_Spell.GetSpellName then
                   local okN, nVal = pcall(C_Spell.GetSpellName, spellID)
-                  if okN and type(nVal) == "string" then
+                  if okN and not IsSecret(nVal) and type(nVal) == "string" then
                     spellName = TrimStr(nVal)
                   end
                 end
 
                 if spellName ~= "" then
-                  local lowerSpell = spellName:lower()
+                  local lowerSpell = SpArc.UTF8Lower(spellName)
                   if not seenSpells[lowerSpell] then
                     seenSpells[lowerSpell] = true
                     local existingMacro = spellToMacro[lowerSpell]

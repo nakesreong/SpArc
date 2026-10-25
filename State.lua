@@ -16,6 +16,7 @@ local C_Spell = _G.C_Spell
 local C_UnitAuras = _G.C_UnitAuras
 local pcall = _G.pcall
 local ipairs = _G.ipairs
+local pairs = _G.pairs
 local tostring = _G.tostring
 local type = _G.type
 local math = _G.math
@@ -534,7 +535,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     end
     if btBtn and btBtn.icon and btBtn.icon.GetVertexColor then
       local okV, r, g, b = pcall(btBtn.icon.GetVertexColor, btBtn.icon)
-      if okV and not IsSecret(r) and type(r) == "number" then
+      if okV and not IsSecret(r) and not IsSecret(g) and not IsSecret(b) and type(r) == "number" then
         btColorRaw = string.format("%.2f,%.2f,%.2f", r, g or 1, b or 1)
       end
     end
@@ -604,17 +605,18 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
 
-    if def.isSpender and UnitPower then
+    if def.isSpender and UnitPower and (defKey == "DEVOURING_PLAGUE" or SPELL_DEFS["DEVOURING_PLAGUE"]) then
+      local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 50
       local okP, rawP = pcall(UnitPower, "player", 13)
       if okP and not IsSecret(rawP) and type(rawP) == "number" then
-        if rawP < 45 and not isProc and assistedKey ~= defKey then
+        if rawP < (cost - 5) and not isProc and assistedKey ~= defKey then
           isUsable = false
           gotCleanUsable = true
-          usableSource = "UnitPower(" .. tostring(rawP) .. "<45)"
-        elseif rawP >= 50 and not gotCleanUsable then
+          usableSource = "UnitPower(" .. tostring(rawP) .. "<" .. tostring(cost - 5) .. ")"
+        elseif rawP >= cost and not gotCleanUsable then
           isUsable = true
           gotCleanUsable = true
-          usableSource = "UnitPower(" .. tostring(rawP) .. ">=50)"
+          usableSource = "UnitPower(" .. tostring(rawP) .. ">=" .. tostring(cost) .. ")"
         end
       end
     end
@@ -685,23 +687,26 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     end
   end
 
-  st.lastSpellAudit[defKey] = {
-    key = defKey,
-    spellID = spellID,
-    slot = slot,
-    keybind = def.keybind or "",
-    bookUsableRaw = bookUsableRaw,
-    actUsableRaw = actUsableRaw,
-    btColorRaw = btColorRaw,
-    cdRaw = cdRaw,
-    chargesRaw = chargesRaw,
-    overlayRaw = overlayRaw,
-    isReady = finalReady,
-    isUsable = isUsable,
-    isProc = isProc,
-    isUnavailable = isUnavailable,
-    usableSource = usableSource,
-  }
+  local audit = st.lastSpellAudit[defKey]
+  if not audit then
+    audit = {}
+    st.lastSpellAudit[defKey] = audit
+  end
+  audit.key = defKey
+  audit.spellID = spellID
+  audit.slot = slot
+  audit.keybind = def.keybind or ""
+  audit.bookUsableRaw = bookUsableRaw
+  audit.actUsableRaw = actUsableRaw
+  audit.btColorRaw = btColorRaw
+  audit.cdRaw = cdRaw
+  audit.chargesRaw = chargesRaw
+  audit.overlayRaw = overlayRaw
+  audit.isReady = finalReady
+  audit.isUsable = isUsable
+  audit.isProc = isProc
+  audit.isUnavailable = isUnavailable
+  audit.usableSource = usableSource
 
   if not finalReady and def.procOnly and not isProc then
     return false, remSec, durSec, startTime, false, false, def.liveIcon or def.fallbackIcon, def.keybind or "", 0, isUnavailable
@@ -709,6 +714,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
 
   return finalReady, remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or "", charges, isUnavailable
 end
+
+local DEFAULT_DOT_IDS = { 34914, 589, 772, 388539 }
+local EMPTY_TABLE = {}
 
 function SpArc:CheckTargetHasDoTs(assistedKey)
   local now = GetTime()
@@ -727,7 +735,23 @@ function SpArc:CheckTargetHasDoTs(assistedKey)
   end
 
   if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID then
-    for _, dotID in ipairs({ 34914, 589, 772, 388539 }) do
+    for _, def in pairs(SPELL_DEFS or EMPTY_TABLE) do
+      if def.appliesDoTs and def.ids then
+        for _, dotID in ipairs(def.ids) do
+          local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", dotID)
+          if ok and type(aura) == "table" then
+            if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
+              if (aura.expirationTime - now) > 3.0 then
+                return true
+              end
+            else
+              return true
+            end
+          end
+        end
+      end
+    end
+    for _, dotID in ipairs(DEFAULT_DOT_IDS) do
       local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", dotID)
       if ok and type(aura) == "table" then
         if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
@@ -748,8 +772,11 @@ function SpArc:CheckTargetHasDoTs(assistedKey)
       if not IsSecret(sid) and (sid == 34914 or sid == 589 or sid == 772 or sid == 388539) then
         return true
       end
-      local iconTex = btn.Icon and btn.Icon.GetTexture and btn.Icon:GetTexture()
-      if not IsSecret(iconTex) and (iconTex == 135978 or iconTex == 136207 or iconTex == 132155) then
+      local okTex, iconTex = false, nil
+      if btn.Icon and btn.Icon.GetTexture then
+        okTex, iconTex = pcall(btn.Icon.GetTexture, btn.Icon)
+      end
+      if okTex and not IsSecret(iconTex) and (iconTex == 135978 or iconTex == 136207 or iconTex == 132155) then
         return true
       end
     end
@@ -833,9 +860,10 @@ function SpArc:GetTargetDebuffStacks(parsed, assistedKey)
         return c
       end
       if nm and #debuffNames > 0 and apps then
-        local lowerNm = nm:lower()
+        local lowerNm = SpArc.UTF8Lower(nm)
         for _, wantNm in ipairs(debuffNames) do
-          if nm == wantNm or lowerNm == wantNm:lower() or lowerNm:find(wantNm:lower(), 1, true) then
+          local lowerWant = SpArc.UTF8Lower(wantNm)
+          if nm == wantNm or lowerNm == lowerWant or lowerNm:find(lowerWant, 1, true) then
             local c = math.max(1, apps)
             st.targetDebuffStacks = c
             st.targetDebuffUntil = now + 15.0

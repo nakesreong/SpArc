@@ -23,7 +23,6 @@ local C_CVar = _G.C_CVar
 local C_Timer = _G.C_Timer
 local C_AddOns = _G.C_AddOns
 local C_PetBattles = _G.C_PetBattles
-local GetTime = _G.GetTime
 local GetBindingKey = _G.GetBindingKey
 local GetBindingAction = _G.GetBindingAction
 local GetCursorInfo = _G.GetCursorInfo
@@ -275,14 +274,6 @@ function SpArc:RecordManualCameraBind(dbKey, bindStr)
   end
 end
 
-local function IsActionBarConflictAction(action)
-  if not action or action == "" then return false end
-  if action:find("^ACTIONBUTTON") or action:find("^MULTIACTIONBAR") or action:find("^CLICK%s+BT4Button") or action:find("^CLICK%s+ElvUI_Bar") then
-    return true
-  end
-  return false
-end
-
 local function IsUserKeybindingUIOpen()
   local frames = {
     _G.SettingsPanel,
@@ -438,7 +429,10 @@ local lastFreelookCentering = nil
 
 local function SyncCursorCenteredYPos(force)
   if not (C_CVar and C_CVar.SetCVar) then return end
-  if InCombatLockdown and InCombatLockdown() then return end
+  if InCombatLockdown and InCombatLockdown() then
+    pendingBindingSync = true
+    return
+  end
   local db = SpArc:EnsureDB()
   local v = (db and db.visual) or SpArc.DEFAULT_VISUAL or {}
   local offsetY = tonumber(v.camCrosshairOffsetY)
@@ -460,7 +454,10 @@ end
 
 local function SetFreelookCenteringCVar(enabled, force)
   if not (C_CVar and C_CVar.SetCVar) then return end
-  if InCombatLockdown and InCombatLockdown() then return end
+  if InCombatLockdown and InCombatLockdown() then
+    pendingBindingSync = true
+    return
+  end
   local val = enabled and "1" or "0"
   if not force and lastFreelookCentering == val then return end
   lastFreelookCentering = val
@@ -469,7 +466,10 @@ end
 
 local function EnsureBaseCameraCVars()
   if not (C_CVar and C_CVar.SetCVar) then return end
-  if InCombatLockdown and InCombatLockdown() then return end
+  if InCombatLockdown and InCombatLockdown() then
+    pendingBindingSync = true
+    return
+  end
   -- Critical fix for WoW 10.2 / 12.x Bug #504:
   -- CursorStickyCentering must ALWAYS stay 0.
   -- CursorFreelookCentering is set to 0 before MouselookStart(), then deferred to 1 after MouselookStart()
@@ -542,9 +542,13 @@ function SpArc:FlushHardwareCursor(useGxRestart)
   if IsMouselooking and IsMouselooking() and MouselookStop then
     pcall(MouselookStop)
   end
-  ForceCleanCursorCVars()
   if _G.ResetCursor then pcall(_G.ResetCursor) end
   if _G.SetCursor then pcall(_G.SetCursor, nil) end
+  if InCombatLockdown and InCombatLockdown() then
+    pendingBindingSync = true
+    return
+  end
+  ForceCleanCursorCVars()
   if C_CVar and C_CVar.SetCVar then
     pcall(C_CVar.SetCVar, "gxCursor", "1")
   end
@@ -699,14 +703,11 @@ local function IsAnyWatchedFrameVisible()
 
   for i = 1, #UNLOCK_FRAME_WATCHLIST do
     local f = _G[UNLOCK_FRAME_WATCHLIST[i]]
-    if f and f.IsVisible then
-      local ok, vis = pcall(f.IsVisible, f)
-      if ok and vis then
-        if not f.GetAlpha then return true end
-        local okA, alpha = pcall(f.GetAlpha, f)
-        if not okA or (type(alpha) == "number" and alpha > 0.05) then
-          return true
-        end
+    if f and f.IsVisible and SafeBool(f.IsVisible, f) then
+      if not f.GetAlpha then return true end
+      local okA, alpha = pcall(f.GetAlpha, f)
+      if not okA or (not SpArc.IsSecret(alpha) and type(alpha) == "number" and alpha > 0.05) then
+        return true
       end
     end
   end
@@ -733,7 +734,7 @@ local function ShouldUnlockCamera()
   end
   if GetCursorInfo then
     local ok, infoType = pcall(GetCursorInfo)
-    if ok and infoType ~= nil then
+    if ok and not SpArc.IsSecret(infoType) and infoType ~= nil then
       return true
     end
   end
@@ -853,9 +854,11 @@ local function IsHoldKeyPhysicallyDown()
     return true
   end
   if GetBindingKey then
-    local k1, k2 = GetBindingKey("SpArc - Hold Free Cursor")
-    if k1 and k1 ~= "" and IsBindKeyPhysicallyDown(k1) then return true end
-    if k2 and k2 ~= "" and IsBindKeyPhysicallyDown(k2) then return true end
+    local ok, k1, k2 = pcall(GetBindingKey, "SpArc - Hold Free Cursor")
+    if ok then
+      if k1 and not SpArc.IsSecret(k1) and k1 ~= "" and IsBindKeyPhysicallyDown(k1) then return true end
+      if k2 and not SpArc.IsSecret(k2) and k2 ~= "" and IsBindKeyPhysicallyDown(k2) then return true end
+    end
   end
   return false
 end
@@ -930,7 +933,7 @@ local function ResolveBartenderKeybindCommand(key, fallbackAction)
   local action = fallbackAction or DEFAULT_MOUSE_KEY_TO_ACTION[key]
   if key ~= "BUTTON1" and key ~= "BUTTON2" and GetBindingAction then
     local ok, userBind = pcall(GetBindingAction, key)
-    if ok and userBind and userBind ~= "" and userBind ~= "CAMERAORSELECTORMOVE" and userBind ~= "TURNORACTION" then
+    if ok and userBind and not SpArc.IsSecret(userBind) and userBind ~= "" and userBind ~= "CAMERAORSELECTORMOVE" and userBind ~= "TURNORACTION" then
       action = userBind
     end
   end
@@ -993,13 +996,17 @@ function SpArc:ApplyCombatCameraBindings(reason)
     end
 
     if GetBindingKey then
-      local hk1, hk2 = GetBindingKey("SpArc - Hold Free Cursor")
-      if hk1 and hk1 ~= "" then pcall(SetOverrideBindingClick, bindOwner, true, hk1, "SpArcCamHoldButton") end
-      if hk2 and hk2 ~= "" then pcall(SetOverrideBindingClick, bindOwner, true, hk2, "SpArcCamHoldButton") end
+      local okH, hk1, hk2 = pcall(GetBindingKey, "SpArc - Hold Free Cursor")
+      if okH then
+        if hk1 and not SpArc.IsSecret(hk1) and hk1 ~= "" then pcall(SetOverrideBindingClick, bindOwner, true, hk1, "SpArcCamHoldButton") end
+        if hk2 and not SpArc.IsSecret(hk2) and hk2 ~= "" then pcall(SetOverrideBindingClick, bindOwner, true, hk2, "SpArcCamHoldButton") end
+      end
 
-      local tk1, tk2 = GetBindingKey("SpArc - Toggle Combat Camera")
-      if tk1 and tk1 ~= "" then pcall(SetOverrideBindingClick, bindOwner, true, tk1, "SpArcCamToggleButton") end
-      if tk2 and tk2 ~= "" then pcall(SetOverrideBindingClick, bindOwner, true, tk2, "SpArcCamToggleButton") end
+      local okT, tk1, tk2 = pcall(GetBindingKey, "SpArc - Toggle Combat Camera")
+      if okT then
+        if tk1 and not SpArc.IsSecret(tk1) and tk1 ~= "" then pcall(SetOverrideBindingClick, bindOwner, true, tk1, "SpArcCamToggleButton") end
+        if tk2 and not SpArc.IsSecret(tk2) and tk2 ~= "" then pcall(SetOverrideBindingClick, bindOwner, true, tk2, "SpArcCamToggleButton") end
+      end
     end
   end
 

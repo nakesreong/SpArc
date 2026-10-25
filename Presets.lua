@@ -660,10 +660,6 @@ SpArc.PROFILE_SCHEMA_VERSION = 12
 ---------------------------------------------------------------------------------------
 --                  AI PROMPT TEMPLATE (FOR GEMINI / CHATGPT)                        --
 ---------------------------------------------------------------------------------------
-SpArc.AIPromptHeaderText =
-  "Попросите своего Gemini или ChatGPT написать вам ротацию с Icy Veins / Wowhead "
-  .. "на псевдокоде в формате SpArc .MD и засуньте её сюды!"
-
 SpArc.AIPromptTemplate = [[Привет, Gemini / ChatGPT / Claude!
 Сходи, пожалуйста, на Icy Veins или Wowhead, изучи актуальный гайд по ротации для World of Warcraft: Midnight (12.x) и напиши мне готовый профиль ротации для аддона SpArc строго на языке псевдокода SpArc .MD по правилам ниже.
 
@@ -2491,9 +2487,10 @@ local OTHER_CLASS_PRESETS = {
 
 for _, info in ipairs(OTHER_CLASS_PRESETS) do
   local id, cls, title, mode = info[1], info[2], info[3], info[4]
+  local specTag = id:match("^[^_]+_%d+_([^_]+)") or mode
   local headerMD = string.format(
     "# PROFILE: %s\n# CLASS: %s\n# SPEC: %s\n# MODE: %s\n",
-    title, cls, mode, mode
+    title, cls, specTag, mode
   )
   local bodyMD = SPEC_PRESET_BODY[id] or WARRIOR_ARMS_MD
   RegisterPreset(id, cls, title, mode, headerMD .. bodyMD)

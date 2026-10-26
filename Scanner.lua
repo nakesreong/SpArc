@@ -71,11 +71,11 @@ local function IsSpellIDKnown(id)
 end
 
 local MACRO_NAME_KEYBINDS = {
-  M1 = "M1", M2 = "M2", M3 = "B3", M4 = "M4", M5 = "M5",
+  M1 = "M1", M2 = "M2", M3 = "B3", B3 = "B3", SB3 = "SB3", CB3 = "CB3", AB3 = "AB3", M4 = "M4", M5 = "M5",
   SM1 = "SM1", SM2 = "SM2", CM1 = "CM1", CM2 = "CM2", AM1 = "AM1", AM2 = "AM2",
   ["1"] = "1", ["2"] = "2", ["3"] = "3", ["4"] = "4", ["5"] = "5",
   Q = "Q", SQ = "SQ", E = "E", SE = "SE", R = "R", SR = "SR",
-  F = "F", SF = "SF", T = "T", ST = "ST", C = "C", V = "V", Z = "Z", SZ = "SZ", G = "G",
+  F = "F", SF = "SF", T = "T", ST = "ST", C = "C", V = "V", SV = "SV", Z = "Z", SZ = "SZ", G = "G",
 }
 
 local function CompactKey(raw)
@@ -109,10 +109,64 @@ end
 
 function SpArc:GetSlotKeybind(slot)
   if not slot or slot < 1 then return nil end
-  if SpArc.IsCamClickCastEnabled and SpArc:IsCamClickCastEnabled() and SpArc.COMBAT_CAM_SLOT_KEYBINDS and SpArc.COMBAT_CAM_SLOT_KEYBINDS[slot] then
+  -- Slots 1 & 2 use M1 / M2 via Mouselook override in Combat Camera Click-Cast mode
+  if (slot == 1 or slot == 2) and SpArc.IsCamClickCastEnabled and SpArc:IsCamClickCastEnabled() and SpArc.COMBAT_CAM_SLOT_KEYBINDS and SpArc.COMBAT_CAM_SLOT_KEYBINDS[slot] then
     return SpArc.COMBAT_CAM_SLOT_KEYBINDS[slot]
   end
   local cmd = SlotToBindingCommand(slot)
+
+  -- 1. Check live WoW & Bartender4 bindings FIRST so user changes in /kb always win
+  if cmd and GetBindingKey then
+    local ok, k1, k2 = pcall(GetBindingKey, cmd)
+    if ok then
+      local k = (not IsSecret(k1) and k1) or (not IsSecret(k2) and k2)
+      if k and k ~= "" then
+        local c = CompactKey(k)
+        if c and c ~= "" then return c end
+      end
+    end
+  end
+
+  local btBtn = _G["BT4Button" .. slot]
+  if btBtn then
+    if GetBindingKey then
+      local okK, bk1, bk2 = pcall(GetBindingKey, "CLICK BT4Button" .. slot .. ":Keybind")
+      if okK then
+        local k = (not IsSecret(bk1) and bk1) or (not IsSecret(bk2) and bk2)
+        if k and k ~= "" then
+          local c = CompactKey(k)
+          if c and c ~= "" then return c end
+        end
+      end
+      local okB, k1, k2 = pcall(GetBindingKey, "CLICK BT4Button" .. slot .. ":LeftButton")
+      if okB then
+        local k = (not IsSecret(k1) and k1) or (not IsSecret(k2) and k2)
+        if k and k ~= "" then
+          local c = CompactKey(k)
+          if c and c ~= "" then return c end
+        end
+      end
+    end
+    if btBtn.GetHotkey then
+      local okHK, hk = pcall(btBtn.GetHotkey, btBtn)
+      if okHK and not IsSecret(hk) and type(hk) == "string" and hk ~= "" then
+        local c = CompactKey(hk)
+        if c and c ~= "" then return c end
+      end
+    end
+    if btBtn.HotKey and btBtn.HotKey.GetText then
+      local okT, txt = pcall(btBtn.HotKey.GetText, btBtn.HotKey)
+      if okT and not IsSecret(txt) and type(txt) == "string" and txt ~= "" and txt ~= _G.RANGE_INDICATOR then
+        local c = CompactKey(txt)
+        if c and c ~= "" then return c end
+      end
+    end
+  end
+
+  -- 2. Fallback to Combat Camera default slot keybinds (slots 3..8) or CombatModeDB if unbound
+  if SpArc.IsCamClickCastEnabled and SpArc:IsCamClickCastEnabled() and SpArc.COMBAT_CAM_SLOT_KEYBINDS and SpArc.COMBAT_CAM_SLOT_KEYBINDS[slot] then
+    return SpArc.COMBAT_CAM_SLOT_KEYBINDS[slot]
+  end
 
   if cmd then
     local binds = nil
@@ -138,45 +192,6 @@ function SpArc:GetSlotKeybind(slot)
         if b and b.enabled ~= false and b.value == cmd then
           return shortName
         end
-      end
-    end
-  end
-
-  local btBtn = _G["BT4Button" .. slot]
-  if btBtn then
-    if btBtn.GetHotkey then
-      local okHK, hk = pcall(btBtn.GetHotkey, btBtn)
-      if okHK and not IsSecret(hk) and type(hk) == "string" and hk ~= "" then
-        local c = CompactKey(hk)
-        if c and c ~= "" then return c end
-      end
-    end
-    if GetBindingKey then
-      local okB, k1, k2 = pcall(GetBindingKey, "CLICK BT4Button" .. slot .. ":LeftButton")
-      if okB then
-        local k = (not IsSecret(k1) and k1) or (not IsSecret(k2) and k2)
-        if k and k ~= "" then
-          local c = CompactKey(k)
-          if c and c ~= "" then return c end
-        end
-      end
-    end
-    if btBtn.HotKey and btBtn.HotKey.GetText then
-      local okT, txt = pcall(btBtn.HotKey.GetText, btBtn.HotKey)
-      if okT and not IsSecret(txt) and type(txt) == "string" and txt ~= "" and txt ~= _G.RANGE_INDICATOR then
-        local c = CompactKey(txt)
-        if c and c ~= "" then return c end
-      end
-    end
-  end
-
-  if cmd and GetBindingKey then
-    local ok, k1, k2 = pcall(GetBindingKey, cmd)
-    if ok then
-      local k = (not IsSecret(k1) and k1) or (not IsSecret(k2) and k2)
-      if k and k ~= "" then
-        local c = CompactKey(k)
-        if c and c ~= "" then return c end
       end
     end
   end

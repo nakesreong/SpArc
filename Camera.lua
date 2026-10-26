@@ -89,7 +89,11 @@ local UNLOCK_FRAME_WATCHLIST = {
   "GameMenuFrame",
   "SettingsPanel",
   "EditModeManagerFrame",
+  "KeyBindingFrame",
   "QuickKeybindFrame",
+  "KeyboundDialog",
+  "KeyBoundDialog",
+  "ElvUIBindPopupWindow",
   "MacroFrame",
   "WorldMapFrame",
   "CharacterFrame",
@@ -286,6 +290,7 @@ local function IsUserKeybindingUIOpen()
     _G.SettingsPanel,
     _G.KeyBindingFrame,
     _G.QuickKeybindFrame,
+    _G.KeyboundDialog,
     _G.KeyBoundDialog,
     _G.ElvUIBindPopupWindow,
   }
@@ -723,6 +728,22 @@ local function IsAnyWatchedFrameVisible()
     return true
   end
 
+  if IsUserKeybindingUIOpen() then
+    return true
+  end
+
+  if _G.LibStub then
+    local ok, acd = pcall(_G.LibStub, "AceConfigDialog-3.0", true)
+    if ok and type(acd) == "table" and type(acd.OpenFrames) == "table" then
+      for _, widget in pairs(acd.OpenFrames) do
+        local wf = widget and widget.frame
+        if wf and wf.IsVisible and SafeBool(wf.IsVisible, wf) then
+          return true
+        end
+      end
+    end
+  end
+
   return false
 end
 
@@ -942,8 +963,17 @@ local function ResolveBartenderKeybindCommand(key, fallbackAction)
   local action = fallbackAction or DEFAULT_MOUSE_KEY_TO_ACTION[key]
   if key ~= "BUTTON1" and key ~= "BUTTON2" and GetBindingAction then
     local ok, userBind = pcall(GetBindingAction, key)
-    if ok and userBind and not SpArc.IsSecret(userBind) and userBind ~= "" and userBind ~= "CAMERAORSELECTORMOVE" and userBind ~= "TURNORACTION" then
-      action = userBind
+    if ok and not SpArc.IsSecret(userBind) then
+      if userBind and userBind ~= "" and userBind ~= "CAMERAORSELECTORMOVE" and userBind ~= "TURNORACTION" then
+        action = userBind
+      elseif action and GetBindingKey then
+        -- If the user unbound this modifier-mouse key (e.g. ALT-BUTTON1) and bound another key (e.g. BUTTON3)
+        -- to the default slot (e.g. ACTIONBUTTON7), respect their unbind instead of forcing the fallback!
+        local okK, k1 = pcall(GetBindingKey, action)
+        if okK and k1 and not SpArc.IsSecret(k1) and k1 ~= "" and k1 ~= key then
+          return nil
+        end
+      end
     end
   end
   if not action or action == "" then return nil end

@@ -530,6 +530,7 @@ local function OpenControlCenter(initialTab)
       ui.autoModeBtn:SetPoint("LEFT", ui.filterBtn, "RIGHT", 6, 0)
       ui.autoModeBtn:SetScript("OnClick", function()
         db.mode = (db.mode == "AUTO") and "MANUAL" or "AUTO"
+        if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
         controlFrame:RefreshUI()
       end)
 
@@ -546,6 +547,7 @@ local function OpenControlCenter(initialTab)
         selectedPresetForEdit = newID
         db.activePresetID = newID
         db.mode = "MANUAL"
+        if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
         SpArc:RebuildParsedProfiles()
         controlFrame:RefreshUI()
       end)
@@ -605,6 +607,7 @@ local function OpenControlCenter(initialTab)
         if selectedPresetForEdit and db.presets[selectedPresetForEdit] then
           db.activePresetID = selectedPresetForEdit
           db.mode = "MANUAL"
+          if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
           SpArc:SelectActiveParsedProfile()
           controlFrame:RefreshUI()
           print(string.format(SpArc:L("MSG_ACTIVATED"), SpArc:GetPresetDisplayTitle(db.presets[selectedPresetForEdit])))
@@ -696,6 +699,7 @@ local function OpenControlCenter(initialTab)
             local pMode = db.presets[selectedPresetForEdit].mode or "PVE"
             db.autoPresets[pMode] = selectedPresetForEdit
           end
+          if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
           SpArc:SelectActiveParsedProfile()
           SpArc:ScanActionSlotsAndSpells(true)
           controlFrame:RefreshUI()

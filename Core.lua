@@ -594,10 +594,41 @@ function SpArc:EnsureDB(forceReinit)
     db.profileSchemaVersion = SpArc.PROFILE_SCHEMA_VERSION
   end
 
+  if activeProf.mode then
+    db.mode = activeProf.mode
+  else
+    activeProf.mode = db.mode or "AUTO"
+  end
+  if activeProf.activePresetID and db.presets[activeProf.activePresetID] then
+    db.activePresetID = activeProf.activePresetID
+  end
+  if type(activeProf.autoPresets) == "table" then
+    db.autoPresets = activeProf.autoPresets
+  else
+    activeProf.autoPresets = {
+      PVE  = (db.autoPresets and db.autoPresets.PVE) or "PRIEST_01_SHADOW_PVE",
+      BOSS = (db.autoPresets and db.autoPresets.BOSS) or "PRIEST_02_SHADOW_BOSS",
+      PVP  = (db.autoPresets and db.autoPresets.PVP) or "PRIEST_03_SHADOW_PVP",
+    }
+    db.autoPresets = activeProf.autoPresets
+  end
+
   db.telemetryLog = db.telemetryLog or {}
   db.lastSpellAudit = db.lastSpellAudit or {}
   cachedDB = db
   return db
+end
+
+function SpArc:SaveCharPresetState(db)
+  db = db or cachedDB or _G.SpArcDB
+  if not db then return end
+  local profName = db.activeProfile
+  local prof = profName and db.profiles and db.profiles[profName]
+  if prof then
+    prof.mode = db.mode
+    prof.activePresetID = db.activePresetID
+    prof.autoPresets = db.autoPresets
+  end
 end
 
 function SpArc:GetActiveProfileName()

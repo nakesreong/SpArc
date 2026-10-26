@@ -42,6 +42,8 @@ local ClearOverrideBindings = _G.ClearOverrideBindings
 local SpellIsTargeting = _G.SpellIsTargeting
 local UnitExists = _G.UnitExists
 local UnitCanAttack = _G.UnitCanAttack
+local UnitIsDead = _G.UnitIsDead
+local UnitIsGhost = _G.UnitIsGhost
 local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
 local pcall = _G.pcall
 local ipairs = _G.ipairs
@@ -180,6 +182,11 @@ local UNLOCK_FRAME_WATCHLIST = {
   "StaticPopup2",
   "StaticPopup3",
   "StaticPopup4",
+  "ElvUI_StaticPopup1",
+  "ElvUI_StaticPopup2",
+  "ElvUI_StaticPopup3",
+  "ElvUI_StaticPopup4",
+  "DeathRecapFrame",
   "DropDownList1",
   "DropDownList2",
 }
@@ -747,7 +754,9 @@ local function ShouldUnlockCamera()
   if C_PetBattles and C_PetBattles.IsInBattle and SafeBool(C_PetBattles.IsInBattle) then
     return true
   end
-  if UnitIsDeadOrGhost and SafeBool(UnitIsDeadOrGhost, "player") then
+  -- Unlock cursor when dead on the ground (before releasing spirit),
+  -- but keep Combat Camera active while running in Ghost form!
+  if UnitIsDead and SafeBool(UnitIsDead, "player") and not (UnitIsGhost and SafeBool(UnitIsGhost, "player")) then
     return true
   end
   if IsAnyWatchedFrameVisible() then
@@ -1040,6 +1049,9 @@ local camDriver = CreateFrame("Frame", "SpArcCameraDriver", UIParent)
 camDriver:RegisterEvent("PLAYER_LOGIN")
 camDriver:RegisterEvent("PLAYER_ENTERING_WORLD")
 camDriver:RegisterEvent("PLAYER_REGEN_ENABLED")
+camDriver:RegisterEvent("PLAYER_DEAD")
+camDriver:RegisterEvent("PLAYER_ALIVE")
+camDriver:RegisterEvent("PLAYER_UNGHOST")
 camDriver:RegisterEvent("UPDATE_BINDINGS")
 camDriver:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
 camDriver:RegisterEvent("LOADING_SCREEN_ENABLED")
@@ -1109,6 +1121,18 @@ camDriver:SetScript("OnEvent", function(_, event)
   elseif event == "PLAYER_REGEN_ENABLED" then
     if pendingBindingSync then
       SpArc:ApplyCombatCameraBindings("REGEN_ENABLED")
+    end
+  elseif event == "PLAYER_DEAD" or event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
+    loadingScreenActive = false
+    if pendingBindingSync and not (InCombatLockdown and InCombatLockdown()) then
+      SpArc:ApplyCombatCameraBindings(event)
+    end
+    SpArc:UpdateCameraState()
+    if C_Timer and C_Timer.After then
+      C_Timer.After(0.15, function()
+        loadingScreenActive = false
+        SpArc:UpdateCameraState()
+      end)
     end
   elseif event == "UPDATE_BINDINGS" then
     if not isApplyingBindings then

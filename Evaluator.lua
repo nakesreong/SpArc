@@ -8,6 +8,7 @@ local SpArc = _G.SpArc
 local CreateFrame = _G.CreateFrame
 local GetTime = _G.GetTime
 local UnitIsPlayer = _G.UnitIsPlayer
+local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
 local UnitClassification = _G.UnitClassification
 local UnitLevel = _G.UnitLevel
 local UnitChannelInfo = _G.UnitChannelInfo
@@ -170,23 +171,42 @@ local PRESET_SPEC_IDS = {
   EVOKER_02_AUG_PVE         = 1473,
 }
 
+local lastValidSpecID = nil
+
 function SpArc:GetPlayerSpecID()
   local getSpec = (_G.C_SpecializationInfo and _G.C_SpecializationInfo.GetSpecialization) or _G.GetSpecialization
   local getSpecInfo = (_G.C_SpecializationInfo and _G.C_SpecializationInfo.GetSpecializationInfo) or _G.GetSpecializationInfo
   if getSpec and getSpecInfo then
     local okS, specIdx = pcall(getSpec)
-    if okS and not IsSecret(specIdx) and type(specIdx) == "number" and specIdx > 0 then
+    if okS and not IsSecret(specIdx) and type(specIdx) == "number" and specIdx > 0 and specIdx < 5 then
       local okI, specID = pcall(getSpecInfo, specIdx)
       if okI and not IsSecret(specID) and type(specID) == "number" and specID > 0 then
+        lastValidSpecID = specID
         return specID
       end
     end
   end
-  return nil
+  if _G.GetSpecialization and _G.GetSpecializationInfo then
+    local okS, specIdx = pcall(_G.GetSpecialization)
+    if okS and not IsSecret(specIdx) and type(specIdx) == "number" and specIdx > 0 and specIdx < 5 then
+      local okI, specID = pcall(_G.GetSpecializationInfo, specIdx)
+      if okI and not IsSecret(specID) and type(specID) == "number" and specID > 0 then
+        lastValidSpecID = specID
+        return specID
+      end
+    end
+  end
+  return lastValidSpecID
 end
 
 function SpArc:SelectActiveParsedProfile()
   local db = SpArc:EnsureDB()
+  if UnitIsDeadOrGhost and SafeBool(UnitIsDeadOrGhost, "player") and st.lastSyncedPresetID then
+    local cachedParsed = SpArc.ParsedPresets and SpArc.ParsedPresets[st.lastSyncedPresetID]
+    if cachedParsed then
+      return cachedParsed, st.lastSyncedPresetID
+    end
+  end
   local mode = db.mode or "AUTO"
   local presetID = db.activePresetID or "PRIEST_01_SHADOW_PVE"
   local targetMode = "PVE"
@@ -220,7 +240,7 @@ function SpArc:SelectActiveParsedProfile()
     if okCls and not IsSecret(playerClass) and type(playerClass) == "string" then
       local curPreset = db.presets and db.presets[presetID]
       local presetSpec = PRESET_SPEC_IDS[presetID]
-      local specMismatch = (mode == "AUTO" and specMap and presetSpec and presetSpec ~= specID and specMap[targetMode] ~= presetID) or false
+      local specMismatch = (specMap and presetSpec and presetSpec ~= specID) or false
 
       if not curPreset or curPreset.class ~= playerClass or specMismatch then
         if specMap then
@@ -230,6 +250,7 @@ function SpArc:SelectActiveParsedProfile()
           db.autoPresets.PVP  = specMap.PVP
           presetID = specMap[targetMode] or specMap.PVE
           db.activePresetID = presetID
+          if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
         else
           local fallbackID = nil
           for _, id in ipairs(db.presetOrder or {}) do
@@ -243,12 +264,15 @@ function SpArc:SelectActiveParsedProfile()
             end
           end
           if fallbackID then
+            -- Use fallbackID temporarily while specID is nil, without overwriting SavedVariables
             presetID = fallbackID
-            db.activePresetID = fallbackID
           end
         end
       elseif mode == "AUTO" then
         db.activePresetID = presetID
+        if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
+      else
+        if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
       end
     end
   end

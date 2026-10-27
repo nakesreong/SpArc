@@ -10,7 +10,7 @@ _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
 SpArc.VERSION = "2.9.1"
-SpArc.PROFILE_SCHEMA_VERSION = 19
+SpArc.PROFILE_SCHEMA_VERSION = 20
 
 local C_CVar = _G.C_CVar
 local issecretvalue = _G.issecretvalue
@@ -343,7 +343,7 @@ function SpArc:EnsureDB(forceReinit)
     local preservedPresets = {}
     local preservedCustomOrder = {}
 
-    if prevSchema >= 15 then
+    if prevSchema >= 20 then
       for _, id in ipairs(db.presetOrder) do
         local p = db.presets[id]
         if p then

@@ -597,10 +597,10 @@ function SpArc:GetAIPromptTemplate()
 end
 
 local EN_PRESET_TITLES = {
-  PRIEST_01_SHADOW_PVE = "1. Priest: Shadow (ST / AoE / Misc)",
-  MAGE_04_FROST_PVE    = "2. Mage: Frost (ST / AoE / Misc)",
-  ROGUE_01_ASSA_PVE    = "3. Rogue: Assassination (ST / AoE / Stealth)",
-  WARRIOR_02_ARGS_BOSS = "4. Warrior: Arms (ST / AoE / Misc)",
+  PRIEST_01_SHADOW_PVE = "1. Priest: Shadow (ST / AoE)",
+  MAGE_04_FROST_PVE    = "2. Mage: Frost (ST / AoE)",
+  ROGUE_01_ASSA_PVE    = "3. Rogue: Assassination (ST / AoE)",
+  WARRIOR_02_ARGS_BOSS = "4. Warrior: Arms (ST / AoE)",
 }
 
 function SpArc:GetPresetDisplayTitle(pr)
@@ -614,7 +614,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 19
+SpArc.PROFILE_SCHEMA_VERSION = 20
 
 ---------------------------------------------------------------------------------------
 --             4 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR)              --
@@ -634,7 +634,7 @@ local function RegisterPreset(id, classTag, title, mode, mdBody)
 end
 
 -- ====================================================================================
--- #1: PRIEST — Shadow (Ньарлатхотеп: Leveling / ST / AoE / Misc)
+-- #1: PRIEST — Shadow (Ньарлатхотеп: Leveling / ST / AoE)
 -- ====================================================================================
 RegisterPreset("PRIEST_01_SHADOW_PVE", "PRIEST", "1. Жрец: Тьма (ШП — Левелинг / СТ / АоЕ)", "PVE", [[
 # PROFILE: 1. Жрец: Тьма (ШП — Левелинг / СТ / АоЕ)
@@ -643,7 +643,6 @@ RegisterPreset("PRIEST_01_SHADOW_PVE", "PRIEST", "1. Жрец: Тьма (ШП �
 # MODE: PVE
 
 ## SPELL_BOOK
-SPELL POWER_WORD_FORTITUDE = ID:21562 | NAME:"Слово силы: Стойкость","Power Word: Fortitude" | CD:0 | ICON:135987
 SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | GAIN:15 | DOTS:true | ICON:136201
 SPELL VAMPIRIC_TOUCH = ID:34914 | NAME:"Прикосновение вампира","Vampiric Touch" | CD:0 | CHARGES:1 | GAIN:6 | DOTS:true | ICON:135978
 SPELL VOID_ERUPTION = ID:228260,391109,194249 | NAME:"Вхождение в Бездну","Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | BURST:20 | ICON:537079
@@ -680,9 +679,7 @@ ELSE IF player.hp_percent <= 25 AND READY(VAMPIRIC_EMBRACE) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF NOT player.in_combat AND NOT BUFF(POWER_WORD_FORTITUDE) AND READY(POWER_WORD_FORTITUDE) THEN
-    RETURN CAST(POWER_WORD_FORTITUDE)
-ELSE IF NOT target.has_dots AND READY(TENTACLE_SLAM) THEN
+IF NOT target.has_dots AND READY(TENTACLE_SLAM) THEN
     RETURN CAST(TENTACLE_SLAM)
 ELSE IF NOT target.has_dots AND NOT READY(TENTACLE_SLAM) THEN
     RETURN CAST(VAMPIRIC_TOUCH)
@@ -714,10 +711,10 @@ END IF
 ]])
 
 -- ====================================================================================
--- #2: MAGE — Frost (Калиратри / Морвара: ST + AoE + Misc)
+-- #2: MAGE — Frost (Калиратри / Морвара: ST + AoE)
 -- ====================================================================================
-RegisterPreset("MAGE_04_FROST_PVE", "MAGE", "2. Маг: Лёд (Фрост — СТ / АоЕ / Баффы)", "PVE", [[
-# PROFILE: 2. Маг: Лёд (Фрост — СТ / АоЕ / Баффы)
+RegisterPreset("MAGE_04_FROST_PVE", "MAGE", "2. Маг: Лёд (Фрост — СТ / АоЕ)", "PVE", [[
+# PROFILE: 2. Маг: Лёд (Фрост — СТ / АоЕ)
 # CLASS: MAGE
 # SPEC: Frost
 # MODE: PVE
@@ -732,7 +729,6 @@ SPELL FROZEN_ORB = ID:84714 | NAME:"Ледяной шар","Мерзлая сф�
 SPELL ICE_LANCE = ID:30455 | NAME:"Ледяное копье","Ice Lance" | CD:0 | CONSUMES_STACKS:true | STACKS:-4 | ICON:135844
 SPELL BLIZZARD = ID:190356,1248829 | NAME:"Снежная буря","Blizzard" | CD:12 | ICON:135858
 SPELL FROSTBOLT = ID:431044,116 | NAME:"Ледяная стрела","Стрела ледяного огня","Frostbolt","Frostfire Bolt" | CD:0 | STACKS:+1 | ICON:135846
-SPELL ARCANE_INTELLECT = ID:1459 | NAME:"Чародейский интеллект","Arcane Intellect" | CD:0 | ICON:135932
 SPELL ICE_BLOCK = ID:45438,414658 | NAME:"Ледяная глыба","Холодная хватка","Ice Block","Ice Cold" | CD:240 | CHARGES:2 | ICON:135841
 SPELL ICE_BARRIER = ID:11426,235313,431038 | NAME:"Ледяная преграда","Пылающая преграда","Пылающий барьер","Ice Barrier","Blazing Barrier" | CD:25 | CHARGES:1 | ICON:135988
 SPELL ALTER_TIME = ID:342245,108978 | NAME:"Манипуляции со временем","Путешествие во времени","Alter Time" | CD:60 | ICON:609811
@@ -753,9 +749,7 @@ ELSE IF player.hp_percent <= 25 AND READY(ICE_BARRIER) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF NOT player.in_combat AND NOT BUFF(ARCANE_INTELLECT) AND READY(ARCANE_INTELLECT) THEN
-    RETURN CAST(ARCANE_INTELLECT)
-ELSE IF PROC(COMET_STORM) AND READY(COMET_STORM) THEN
+IF PROC(COMET_STORM) AND READY(COMET_STORM) THEN
     RETURN CAST(COMET_STORM)
 ELSE IF PROC(GLACIAL_SPIKE) AND READY(GLACIAL_SPIKE) THEN
     RETURN CAST(GLACIAL_SPIKE)
@@ -844,16 +838,15 @@ END IF
 ]])
 
 -- ====================================================================================
--- #4: WARRIOR — Arms (Моржовый: ST + AoE Размашистые/Рассекающий + Боевой крик)
+-- #4: WARRIOR — Arms (Моржовый: ST + AoE Размашистые/Рассекающий)
 -- ====================================================================================
-RegisterPreset("WARRIOR_02_ARGS_BOSS", "WARRIOR", "4. Воин: Оружие (Армс — СТ / АоЕ / Баффы)", "PVE", [[
-# PROFILE: 4. Воин: Оружие (Армс — СТ / АоЕ / Баффы)
+RegisterPreset("WARRIOR_02_ARGS_BOSS", "WARRIOR", "4. Воин: Оружие (Армс — СТ / АоЕ)", "PVE", [[
+# PROFILE: 4. Воин: Оружие (Армс — СТ / АоЕ)
 # CLASS: WARRIOR
 # SPEC: Arms
 # MODE: PVE
 
 ## SPELL_BOOK
-SPELL BATTLE_SHOUT = ID:6673 | NAME:"Боевой крик","Battle Shout" | CD:15 | ICON:132333
 SPELL COLOSSUS_SMASH = ID:167105,262161,436358 | NAME:"Удар колосса","Миротворец","Сокрушение","Colossus Smash","Warbreaker","Demolish" | CD:45 | CHARGES:1 | BURST:10 | ICON:132355
 SPELL BLADESTORM = ID:227847,389774,228920 | NAME:"Вихрь клинков","Опустошитель","Bladestorm","Ravager" | CD:90 | CHARGES:1 | ICON:236303
 SPELL EXECUTE = ID:163201,5308,281000 | NAME:"Казнь","Execute" | CD:0 | CHARGES:1 | EXECUTE:true | ICON:135358
@@ -881,9 +874,7 @@ ELSE IF player.hp_percent <= 35 AND READY(IMPENDING_VICTORY) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF NOT player.in_combat AND NOT BUFF(BATTLE_SHOUT) AND READY(BATTLE_SHOUT) THEN
-    RETURN CAST(BATTLE_SHOUT)
-ELSE IF enemies >= 2 AND READY(SWEEPING_STRIKES) THEN
+IF enemies >= 2 AND READY(SWEEPING_STRIKES) THEN
     RETURN CAST(SWEEPING_STRIKES)
 ELSE IF PROC(EXECUTE) AND READY(EXECUTE) THEN
     RETURN CAST(EXECUTE)

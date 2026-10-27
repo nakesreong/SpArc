@@ -196,9 +196,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       isProc = true
       overlayRaw = "assisted(VOID_BOLT)"
     end
-  elseif (defKey == "BLIZZARD" or defKey == "CRIMSON_TEMPEST" or defKey == "FAN_OF_KNIVES") and assistedKey == defKey then
+  elseif defKey == "BLIZZARD" and assistedKey == defKey then
     isProc = true
-    overlayRaw = "assisted(" .. tostring(defKey) .. ")"
+    overlayRaw = "assisted(BLIZZARD)"
   end
 
   local hasSpellOverlayProc = isProc
@@ -1139,4 +1139,342 @@ function SpArc:GetTargetDebuffStacks(parsed, assistedKey)
   end
 
   return st.targetDebuffStacks or 0
+end
+
+local MELEE_RANGE_CHECK_SPELLS = {
+  WARRIOR     = { 12294, 23881, 1464, 7384, 6552, 23922, 163201, 5308 },
+  ROGUE       = { 1329, 1752, 193315, 703, 1943, 32645, 1766, 2098 },
+  PALADIN     = { 35395, 184575, 85256, 96231 },
+  DEATHKNIGHT = { 49998, 49143, 85948, 55090, 47528 },
+  MONK        = { 100780, 100784, 107428, 116705 },
+  DEMONHUNTER = { 162794, 201427, 203782, 183752 },
+  DRUID       = { 5221, 1822, 33917, 106832 },
+  SHAMAN      = { 17364, 60103, 73899 },
+}
+
+local RANGED_RANGE_CHECK_SPELLS = {
+  PRIEST      = { 589, 8092, 34914, 15407 },
+  MAGE        = { 116, 30455, 44614, 133, 30451 },
+  WARLOCK     = { 686, 172, 29722 },
+  HUNTER      = { 193455, 56641, 259489 },
+  EVOKER      = { 361469, 362969 },
+}
+
+local AOE_ASSIST_HINTS = {
+  FAN_OF_KNIVES    = 3,
+  CRIMSON_TEMPEST  = 2,
+  SWEEPING_STRIKES = 2,
+  CLEAVE           = 3,
+  BLADESTORM       = 3,
+  WHIRLWIND        = 3,
+  THUNDER_CLAP     = 3,
+  BLIZZARD         = 3,
+  COMET_STORM      = 2,
+  FROZEN_ORB       = 2,
+}
+
+local function IsUnitDummyOrInCombat(unit)
+  if not unit then return false end
+  if _G.UnitIsUnit and SafeBool(_G.UnitIsUnit, unit, "target") then
+    return true
+  end
+  if _G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, unit) then
+    return true
+  end
+  if _G.UnitThreatSituation then
+    local okT, threat = pcall(_G.UnitThreatSituation, "player", unit)
+    if okT and not IsSecret(threat) and type(threat) == "number" and threat >= 0 then
+      return true
+    end
+  end
+  if _G.UnitName then
+    local okN, nm = pcall(_G.UnitName, unit)
+    if okN and not IsSecret(nm) and type(nm) == "string" then
+      local low = SpArc.UTF8Lower(nm)
+      if low:find("манекен", 1, true) or low:find("dummy", 1, true) or low:find("тренировоч", 1, true) then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+local function IsUnitInClassRange(unit, isMelee, checkSpellIDs, checkSlot)
+  if C_Spell and C_Spell.IsSpellInRange and checkSpellIDs then
+    for _, sid in ipairs(checkSpellIDs) do
+      local okR, inR = pcall(C_Spell.IsSpellInRange, sid, unit)
+      if okR and not IsSecret(inR) and inR ~= nil then
+        if inR == true or inR == 1 then
+          return true
+        elseif inR == false or inR == 0 then
+          return false
+        end
+      end
+    end
+  end
+  if checkSlot and _G.IsActionInRange then
+    local okA, inA = pcall(_G.IsActionInRange, checkSlot, unit)
+    if okA and not IsSecret(inA) and inA ~= nil then
+      if inA == true or inA == 1 then
+        return true
+      elseif inA == false or inA == 0 then
+        return false
+      end
+    end
+  end
+  if isMelee and _G.CheckInteractDistance then
+    local okI, inI = pcall(_G.CheckInteractDistance, unit, 3)
+    if okI and not IsSecret(inI) and type(inI) == "boolean" then
+      return inI
+    end
+  end
+  -- Fallback when WoW 12.0 marks range secret in combat: count only units actively fighting
+  return IsUnitDummyOrInCombat(unit)
+end
+
+-- WeakAuras-style nearby enemy counter using Nameplates + Spell/Action/Interact Range + 2.0s anti-jitter hysteresis
+function SpArc:GetNearbyEnemyCount(now, assistedKey)
+  if SpArc.testMode then
+    return 3
+  end
+  now = now or GetTime()
+  if st.lastEnemyScanAt and (now - st.lastEnemyScanAt) < 0.20 then
+    return st.enemyCount or 1
+  end
+  st.lastEnemyScanAt = now
+
+  local playerClass = "PRIEST"
+  if _G.UnitClass then
+    local okC, _, cls = pcall(_G.UnitClass, "player")
+    if okC and not IsSecret(cls) and type(cls) == "string" then
+      playerClass = cls
+    end
+  end
+
+  local isMelee = (MELEE_RANGE_CHECK_SPELLS[playerClass] ~= nil)
+  local checkSpellIDs = MELEE_RANGE_CHECK_SPELLS[playerClass] or RANGED_RANGE_CHECK_SPELLS[playerClass]
+  local checkSlot = nil
+  for _, def in pairs(SPELL_DEFS or EMPTY_TABLE) do
+    if def.slot and not def.isSpender and (def.baseCD or 0) <= 6 then
+      checkSlot = def.slot
+      break
+    end
+  end
+
+  local rawCount = 0
+  local seenUnits = {}
+
+  if _G.C_NamePlate and _G.C_NamePlate.GetNamePlates then
+    local okNP, plates = pcall(_G.C_NamePlate.GetNamePlates)
+    if okNP and type(plates) == "table" and not IsSecret(plates) then
+      for _, plate in ipairs(plates) do
+        local u = type(plate) == "table" and plate.namePlateUnitToken or nil
+        if u and not IsSecret(u) and type(u) == "string" then
+          seenUnits[u] = true
+          if _G.UnitExists and SafeBool(_G.UnitExists, u)
+            and _G.UnitCanAttack and SafeBool(_G.UnitCanAttack, "player", u)
+            and not (_G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, u)) then
+            if IsUnitDummyOrInCombat(u) and IsUnitInClassRange(u, isMelee, checkSpellIDs, checkSlot) then
+              rawCount = rawCount + 1
+            end
+          end
+        end
+      end
+    end
+  end
+
+  if rawCount == 0 then
+    for i = 1, 40 do
+      local u = "nameplate" .. i
+      if not seenUnits[u] and _G.UnitExists and SafeBool(_G.UnitExists, u) then
+        if _G.UnitCanAttack and SafeBool(_G.UnitCanAttack, "player", u)
+          and not (_G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, u)) then
+          if IsUnitDummyOrInCombat(u) and IsUnitInClassRange(u, isMelee, checkSpellIDs, checkSlot) then
+            rawCount = rawCount + 1
+          end
+        end
+      end
+    end
+  end
+
+  local hasValidTarget = _G.UnitExists and SafeBool(_G.UnitExists, "target")
+    and _G.UnitCanAttack and SafeBool(_G.UnitCanAttack, "player", "target")
+    and not (_G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, "target"))
+  if hasValidTarget and rawCount < 1 then
+    rawCount = 1
+  end
+
+  local aoeHint = assistedKey and AOE_ASSIST_HINTS[assistedKey] or nil
+  if aoeHint and rawCount < aoeHint then
+    rawCount = aoeHint
+  end
+
+  local prev = st.enemyCount or (hasValidTarget and 1 or 0)
+  local inCombat = _G.InCombatLockdown and SafeBool(_G.InCombatLockdown) or false
+
+  if rawCount > prev then
+    if prev <= 1 and rawCount >= 2 then
+      if not st.enemyUpCandidateSince then
+        st.enemyUpCandidateSince = now
+      end
+      if (now - st.enemyUpCandidateSince) >= 0.25 then
+        st.enemyCount = rawCount
+        st.enemyHoldUntil = now + 2.0
+        st.enemyUpCandidateSince = nil
+      end
+    else
+      st.enemyCount = rawCount
+      st.enemyHoldUntil = now + 2.0
+      st.enemyUpCandidateSince = nil
+    end
+  elseif rawCount < prev then
+    st.enemyUpCandidateSince = nil
+    if not inCombat and not hasValidTarget then
+      st.enemyCount = 0
+      st.enemyHoldUntil = 0
+    elseif not st.enemyHoldUntil or now >= st.enemyHoldUntil then
+      st.enemyCount = rawCount
+    end
+  else
+    st.enemyUpCandidateSince = nil
+    if rawCount >= 2 then
+      st.enemyHoldUntil = now + 2.0
+    end
+  end
+
+  return st.enemyCount or rawCount
+end
+
+local EXTRA_BUFF_SPELL_IDS = {
+  DEADLY_POISON        = { 2823, 315584, 8679 },
+  CRIPPLING_POISON     = { 3408, 5761 },
+  SLICE_AND_DICE       = { 315496 },
+  STEALTH              = { 1784, 115191, 115192 },
+  SWEEPING_STRIKES     = { 260708 },
+  BATTLE_SHOUT         = { 6673 },
+  ARCANE_INTELLECT     = { 1459 },
+  ICE_BARRIER          = { 11426, 235313, 431038, 235450 },
+  POWER_WORD_FORTITUDE = { 21562 },
+  SHADOWFORM           = { 232698 },
+  POWER_WORD_SHIELD    = { 17 },
+}
+
+local DEFAULT_BUFF_REM_DUR = {
+  DEADLY_POISON        = 3600,
+  CRIPPLING_POISON     = 3600,
+  BATTLE_SHOUT         = 3600,
+  ARCANE_INTELLECT     = 3600,
+  POWER_WORD_FORTITUDE = 3600,
+  SHADOWFORM           = 3600,
+  ICE_BARRIER          = 60,
+  SLICE_AND_DICE       = 30,
+  SWEEPING_STRIKES     = 15,
+  POWER_WORD_SHIELD    = 15,
+}
+
+function SpArc:PlayerHasBuff(defKey, now)
+  if not defKey then return false end
+  now = now or GetTime()
+  if defKey == "STEALTH" then
+    return _G.IsStealthed and SafeBool(_G.IsStealthed) or false
+  elseif defKey == "SHADOWFORM" and _G.GetShapeshiftForm then
+    local okF, form = pcall(_G.GetShapeshiftForm)
+    if okF and not IsSecret(form) and type(form) == "number" and form > 0 then
+      return true
+    end
+  end
+
+  local def = SPELL_DEFS[defKey]
+  local checkIDs = EXTRA_BUFF_SPELL_IDS[defKey] or (def and def.ids) or {}
+
+  if C_UnitAuras then
+    for _, id in ipairs(checkIDs) do
+      if C_UnitAuras.GetPlayerAuraBySpellID then
+        local okA, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, id)
+        if okA and type(aura) == "table" then
+          return true
+        end
+      end
+      if C_UnitAuras.GetUnitAuraBySpellID then
+        local okU, auraU = pcall(C_UnitAuras.GetUnitAuraBySpellID, "player", id)
+        if okU and type(auraU) == "table" then
+          return true
+        end
+      end
+    end
+  end
+
+  local last = st.lastCastAt and st.lastCastAt[defKey]
+  local remDur = (def and def.burstDuration) or DEFAULT_BUFF_REM_DUR[defKey] or 20
+  if last and (now - last) >= 0 and (now - last) < remDur then
+    return true
+  end
+
+  return false
+end
+
+local PICK_POCKET_CREATURE_TYPES = {
+  ["Гуманоид"]  = true,
+  ["Humanoid"]  = true,
+  ["Нежить"]    = true,
+  ["Undead"]    = true,
+  ["Демон"]     = true,
+  ["Demon"]     = true,
+  ["Аберрация"] = true,
+  ["Aberration"]= true,
+}
+
+function SpArc:CanPickPocketTarget(now)
+  now = now or GetTime()
+  if not (_G.IsStealthed and SafeBool(_G.IsStealthed)) then
+    return false
+  end
+  if not (_G.UnitExists and SafeBool(_G.UnitExists, "target")) then
+    return false
+  end
+  if not (_G.UnitCanAttack and SafeBool(_G.UnitCanAttack, "player", "target")) then
+    return false
+  end
+  if _G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, "target") then
+    return false
+  end
+  if _G.UnitIsPlayer and SafeBool(_G.UnitIsPlayer, "target") then
+    return false
+  end
+
+  local lastPP = st.lastCastAt and st.lastCastAt["PICK_POCKET"]
+  if lastPP and (now - lastPP) < 8.0 then
+    return false
+  end
+
+  if _G.UnitGUID then
+    local okG, guid = pcall(_G.UnitGUID, "target")
+    if okG and not IsSecret(guid) and type(guid) == "string" and st.pickPocketedGUIDs and st.pickPocketedGUIDs[guid] then
+      return false
+    end
+  end
+
+  if _G.UnitCreatureType then
+    local okCT, cType = pcall(_G.UnitCreatureType, "target")
+    if okCT and not IsSecret(cType) and type(cType) == "string" and cType ~= "" then
+      if not PICK_POCKET_CREATURE_TYPES[cType] then
+        return false
+      end
+    end
+  end
+
+  if C_Spell and C_Spell.IsSpellInRange then
+    local okR, inR = pcall(C_Spell.IsSpellInRange, 921, "target")
+    if okR and not IsSecret(inR) and inR ~= nil then
+      return (inR == true or inR == 1)
+    end
+  end
+  if _G.CheckInteractDistance then
+    local okI, inI = pcall(_G.CheckInteractDistance, "target", 3)
+    if okI and not IsSecret(inI) and type(inI) == "boolean" then
+      return inI
+    end
+  end
+
+  return false
 end

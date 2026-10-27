@@ -583,15 +583,8 @@ function SpArc:EnsureDB(forceReinit)
   db.presets = db.presets or {}
   db.presetOrder = db.presetOrder or {}
   if db.profileSchemaVersion ~= SpArc.PROFILE_SCHEMA_VERSION or #db.presetOrder == 0 then
-    local customOrder = {}
-    local customMap = {}
-    for _, id in ipairs(db.presetOrder) do
-      if not (SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]) and db.presets[id] then
-        customOrder[#customOrder + 1] = id
-        customMap[id] = db.presets[id]
-      end
-    end
     db.presetOrder = {}
+    db.presets = {}
     for _, id in ipairs(SpArc.BuiltInPresetOrder or {}) do
       local bp = SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]
       if bp then
@@ -605,9 +598,21 @@ function SpArc:EnsureDB(forceReinit)
         }
       end
     end
-    for _, cid in ipairs(customOrder) do
-      db.presetOrder[#db.presetOrder + 1] = cid
-      db.presets[cid] = customMap[cid]
+    local charDefaultPreset = {
+      ["Ньарлатхотеп - Свежеватель Душ"] = "PRIEST_01_SHADOW_PVE",
+      ["Калиратри - Свежеватель Душ"]    = "MAGE_04_FROST_PVE",
+      ["Морвара - Свежеватель Душ"]      = "MAGE_04_FROST_PVE",
+      ["Улак - Свежеватель Душ"]         = "ROGUE_01_ASSA_PVE",
+      ["Моржовый - Свежеватель Душ"]     = "WARRIOR_02_ARGS_BOSS",
+    }
+    for pName, pObj in pairs(db.profiles or {}) do
+      local wantID = charDefaultPreset[pName]
+      if wantID then
+        pObj.activePresetID = wantID
+        pObj.autoPresets = { PVE = wantID, BOSS = wantID, PVP = wantID }
+      elseif pObj.activePresetID and not db.presets[pObj.activePresetID] then
+        pObj.activePresetID = "PRIEST_01_SHADOW_PVE"
+      end
     end
     db.profileSchemaVersion = SpArc.PROFILE_SCHEMA_VERSION
   end

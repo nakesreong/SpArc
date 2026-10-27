@@ -60,116 +60,29 @@ function SpArc:SyncSpellDefsFromProfile(parsed, presetID)
 end
 
 local SPEC_ID_TO_PRESETS = {
-  -- PRIEST
-  [256] = { PVE = "PRIEST_08_DISC_PVE",    BOSS = "PRIEST_08_DISC_PVE",    PVP = "PRIEST_09_DISC_PVP" },
-  [257] = { PVE = "PRIEST_10_HOLY_PVE",    BOSS = "PRIEST_10_HOLY_PVE",    PVP = "PRIEST_10_HOLY_PVE" },
-  [258] = { PVE = "PRIEST_01_SHADOW_PVE",  BOSS = "PRIEST_02_SHADOW_BOSS", PVP = "PRIEST_03_SHADOW_PVP" },
-  -- MAGE
-  [62]  = { PVE = "MAGE_01_ARCANE_PVE",    BOSS = "MAGE_02_ARCANE_BOSS",   PVP = "MAGE_01_ARCANE_PVE" },
-  [63]  = { PVE = "MAGE_03_FIRE_PVE",      BOSS = "MAGE_03_FIRE_PVE",      PVP = "MAGE_03_FIRE_PVE" },
-  [64]  = { PVE = "MAGE_04_FROST_PVE",     BOSS = "MAGE_05_FROST_PVP",     PVP = "MAGE_05_FROST_PVP" },
-  -- WARLOCK
-  [265] = { PVE = "WARLOCK_01_AFF_PVE",    BOSS = "WARLOCK_02_AFF_BOSS",   PVP = "WARLOCK_01_AFF_PVE" },
-  [266] = { PVE = "WARLOCK_03_DEMO_PVE",   BOSS = "WARLOCK_03_DEMO_PVE",   PVP = "WARLOCK_03_DEMO_PVE" },
-  [267] = { PVE = "WARLOCK_04_DESTRO_PVE", BOSS = "WARLOCK_04_DESTRO_PVE", PVP = "WARLOCK_05_DESTRO_PVP" },
-  -- PALADIN
-  [65]  = { PVE = "PALADIN_01_RET_PVE",    BOSS = "PALADIN_02_RET_BOSS",   PVP = "PALADIN_03_RET_PVP" },
-  [66]  = { PVE = "PALADIN_04_PROT_PVE",   BOSS = "PALADIN_04_PROT_PVE",  PVP = "PALADIN_04_PROT_PVE" },
-  [70]  = { PVE = "PALADIN_01_RET_PVE",    BOSS = "PALADIN_02_RET_BOSS",   PVP = "PALADIN_03_RET_PVP" },
-  -- HUNTER
-  [253] = { PVE = "HUNTER_01_BM_PVE",      BOSS = "HUNTER_02_BM_BOSS",     PVP = "HUNTER_01_BM_PVE" },
-  [254] = { PVE = "HUNTER_03_MM_PVE",      BOSS = "HUNTER_03_MM_PVE",      PVP = "HUNTER_03_MM_PVE" },
-  [255] = { PVE = "HUNTER_04_SURV_PVP",    BOSS = "HUNTER_04_SURV_PVP",    PVP = "HUNTER_04_SURV_PVP" },
-  -- ROGUE
+  -- PRIEST (Shadow)
+  [256] = { PVE = "PRIEST_01_SHADOW_PVE",  BOSS = "PRIEST_01_SHADOW_PVE",  PVP = "PRIEST_01_SHADOW_PVE" },
+  [257] = { PVE = "PRIEST_01_SHADOW_PVE",  BOSS = "PRIEST_01_SHADOW_PVE",  PVP = "PRIEST_01_SHADOW_PVE" },
+  [258] = { PVE = "PRIEST_01_SHADOW_PVE",  BOSS = "PRIEST_01_SHADOW_PVE",  PVP = "PRIEST_01_SHADOW_PVE" },
+  -- MAGE (Frost)
+  [62]  = { PVE = "MAGE_04_FROST_PVE",     BOSS = "MAGE_04_FROST_PVE",     PVP = "MAGE_04_FROST_PVE" },
+  [63]  = { PVE = "MAGE_04_FROST_PVE",     BOSS = "MAGE_04_FROST_PVE",     PVP = "MAGE_04_FROST_PVE" },
+  [64]  = { PVE = "MAGE_04_FROST_PVE",     BOSS = "MAGE_04_FROST_PVE",     PVP = "MAGE_04_FROST_PVE" },
+  -- ROGUE (Assassination)
   [259] = { PVE = "ROGUE_01_ASSA_PVE",     BOSS = "ROGUE_01_ASSA_PVE",     PVP = "ROGUE_01_ASSA_PVE" },
-  [260] = { PVE = "ROGUE_02_OUTLAW_PVE",   BOSS = "ROGUE_02_OUTLAW_PVE",   PVP = "ROGUE_02_OUTLAW_PVE" },
-  [261] = { PVE = "ROGUE_03_SUB_BOSS",     BOSS = "ROGUE_03_SUB_BOSS",     PVP = "ROGUE_04_SUB_PVP" },
-  -- WARRIOR
-  [71]  = { PVE = "WARRIOR_02_ARGS_BOSS",  BOSS = "WARRIOR_02_ARGS_BOSS",  PVP = "WARRIOR_03_ARMS_PVP" },
-  [72]  = { PVE = "WARRIOR_01_FURY_PVE",   BOSS = "WARRIOR_01_FURY_PVE",   PVP = "WARRIOR_01_FURY_PVE" },
-  [73]  = { PVE = "WARRIOR_04_PROT_PVE",   BOSS = "WARRIOR_04_PROT_PVE",   PVP = "WARRIOR_04_PROT_PVE" },
-  -- DRUID
-  [102] = { PVE = "DRUID_01_BAL_PVE",      BOSS = "DRUID_02_BAL_BOSS",     PVP = "DRUID_01_BAL_PVE" },
-  [103] = { PVE = "DRUID_03_FERAL_PVE",    BOSS = "DRUID_03_FERAL_PVE",    PVP = "DRUID_04_FERAL_PVP" },
-  [104] = { PVE = "DRUID_03_FERAL_PVE",    BOSS = "DRUID_03_FERAL_PVE",    PVP = "DRUID_04_FERAL_PVP" },
-  [105] = { PVE = "DRUID_01_BAL_PVE",      BOSS = "DRUID_02_BAL_BOSS",     PVP = "DRUID_01_BAL_PVE" },
-  -- SHAMAN
-  [262] = { PVE = "SHAMAN_01_ELE_PVE",     BOSS = "SHAMAN_02_ELE_BOSS",    PVP = "SHAMAN_01_ELE_PVE" },
-  [263] = { PVE = "SHAMAN_03_ENH_PVE",     BOSS = "SHAMAN_03_ENH_PVE",     PVP = "SHAMAN_04_ENH_PVP" },
-  [264] = { PVE = "SHAMAN_01_ELE_PVE",     BOSS = "SHAMAN_02_ELE_BOSS",    PVP = "SHAMAN_01_ELE_PVE" },
-  -- DEATH KNIGHT
-  [250] = { PVE = "DK_03_BLOOD_PVE",       BOSS = "DK_03_BLOOD_PVE",       PVP = "DK_03_BLOOD_PVE" },
-  [251] = { PVE = "DK_02_FROST_PVE",       BOSS = "DK_02_FROST_PVE",       PVP = "DK_02_FROST_PVE" },
-  [252] = { PVE = "DK_01_UNHOLY_PVE",      BOSS = "DK_01_UNHOLY_PVE",      PVP = "DK_01_UNHOLY_PVE" },
-  -- MONK
-  [268] = { PVE = "MONK_03_BM_PVE",        BOSS = "MONK_03_BM_PVE",        PVP = "MONK_03_BM_PVE" },
-  [269] = { PVE = "MONK_01_WW_PVE",        BOSS = "MONK_01_WW_PVE",        PVP = "MONK_02_WW_PVP" },
-  [270] = { PVE = "MONK_01_WW_PVE",        BOSS = "MONK_01_WW_PVE",        PVP = "MONK_02_WW_PVP" },
-  -- DEMON HUNTER
-  [577] = { PVE = "DH_01_HAVOC_PVE",       BOSS = "DH_01_HAVOC_PVE",       PVP = "DH_02_HAVOC_PVP" },
-  [581] = { PVE = "DH_03_VENG_PVE",        BOSS = "DH_03_VENG_PVE",        PVP = "DH_03_VENG_PVE" },
-  -- EVOKER
-  [1467] = { PVE = "EVOKER_01_DEV_PVE",    BOSS = "EVOKER_01_DEV_PVE",     PVP = "EVOKER_01_DEV_PVE" },
-  [1468] = { PVE = "EVOKER_01_DEV_PVE",    BOSS = "EVOKER_01_DEV_PVE",     PVP = "EVOKER_01_DEV_PVE" },
-  [1473] = { PVE = "EVOKER_02_AUG_PVE",    BOSS = "EVOKER_02_AUG_PVE",     PVP = "EVOKER_02_AUG_PVE" },
+  [260] = { PVE = "ROGUE_01_ASSA_PVE",     BOSS = "ROGUE_01_ASSA_PVE",     PVP = "ROGUE_01_ASSA_PVE" },
+  [261] = { PVE = "ROGUE_01_ASSA_PVE",     BOSS = "ROGUE_01_ASSA_PVE",     PVP = "ROGUE_01_ASSA_PVE" },
+  -- WARRIOR (Arms)
+  [71]  = { PVE = "WARRIOR_02_ARGS_BOSS",  BOSS = "WARRIOR_02_ARGS_BOSS",  PVP = "WARRIOR_02_ARGS_BOSS" },
+  [72]  = { PVE = "WARRIOR_02_ARGS_BOSS",  BOSS = "WARRIOR_02_ARGS_BOSS",  PVP = "WARRIOR_02_ARGS_BOSS" },
+  [73]  = { PVE = "WARRIOR_02_ARGS_BOSS",  BOSS = "WARRIOR_02_ARGS_BOSS",  PVP = "WARRIOR_02_ARGS_BOSS" },
 }
 
 local PRESET_SPEC_IDS = {
-  PRIEST_01_SHADOW_PVE      = 258,
-  PRIEST_02_SHADOW_BOSS     = 258,
-  PRIEST_03_SHADOW_PVP      = 258,
-  PRIEST_04_SHADOW_ARCHON   = 258,
-  PRIEST_05_SHADOW_VOIDWEAVER = 258,
-  PRIEST_06_SHADOW_DELVES   = 258,
-  PRIEST_07_SHADOW_SPEEDRUN = 258,
-  PRIEST_08_DISC_PVE        = 256,
-  PRIEST_09_DISC_PVP        = 256,
-  PRIEST_10_HOLY_PVE        = 257,
-  MAGE_01_ARCANE_PVE        = 62,
-  MAGE_02_ARCANE_BOSS       = 62,
-  MAGE_03_FIRE_PVE          = 63,
-  MAGE_04_FROST_PVE         = 64,
-  MAGE_05_FROST_PVP         = 64,
-  WARLOCK_01_AFF_PVE        = 265,
-  WARLOCK_02_AFF_BOSS       = 265,
-  WARLOCK_03_DEMO_PVE       = 266,
-  WARLOCK_04_DESTRO_PVE     = 267,
-  WARLOCK_05_DESTRO_PVP     = 267,
-  PALADIN_01_RET_PVE        = 70,
-  PALADIN_02_RET_BOSS       = 70,
-  PALADIN_03_RET_PVP        = 70,
-  PALADIN_04_PROT_PVE       = 66,
-  HUNTER_01_BM_PVE          = 253,
-  HUNTER_02_BM_BOSS         = 253,
-  HUNTER_03_MM_PVE          = 254,
-  HUNTER_04_SURV_PVP        = 255,
-  ROGUE_01_ASSA_PVE         = 259,
-  ROGUE_02_OUTLAW_PVE       = 260,
-  ROGUE_03_SUB_BOSS         = 261,
-  ROGUE_04_SUB_PVP          = 261,
-  WARRIOR_01_FURY_PVE       = 72,
-  WARRIOR_02_ARGS_BOSS      = 71,
-  WARRIOR_03_ARMS_PVP       = 71,
-  WARRIOR_04_PROT_PVE       = 73,
-  DRUID_01_BAL_PVE          = 102,
-  DRUID_02_BAL_BOSS         = 102,
-  DRUID_03_FERAL_PVE        = 103,
-  DRUID_04_FERAL_PVP        = 103,
-  SHAMAN_01_ELE_PVE         = 262,
-  SHAMAN_02_ELE_BOSS        = 262,
-  SHAMAN_03_ENH_PVE         = 263,
-  SHAMAN_04_ENH_PVP         = 263,
-  DK_01_UNHOLY_PVE          = 252,
-  DK_02_FROST_PVE           = 251,
-  DK_03_BLOOD_PVE           = 250,
-  MONK_01_WW_PVE            = 269,
-  MONK_02_WW_PVP            = 269,
-  MONK_03_BM_PVE            = 268,
-  DH_01_HAVOC_PVE           = 577,
-  DH_02_HAVOC_PVP           = 577,
-  DH_03_VENG_PVE            = 581,
-  EVOKER_01_DEV_PVE         = 1467,
-  EVOKER_02_AUG_PVE         = 1473,
+  PRIEST_01_SHADOW_PVE = 258,
+  MAGE_04_FROST_PVE    = 64,
+  ROGUE_01_ASSA_PVE    = 259,
+  WARRIOR_02_ARGS_BOSS = 71,
 }
 
 local lastValidSpecID = nil
@@ -294,7 +207,7 @@ local function CompareNum(lhs, op, rhs)
   return false
 end
 
-local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive)
+local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx)
   if c == "" or c == "ALWAYS" then
     return true
   elseif c == "NOT target.has_dots" then
@@ -305,6 +218,26 @@ local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, si
     return simBurst and true or false
   elseif c == "NOT player.in_burst" or c == "NOT BURST" then
     return not simBurst
+  elseif c == "player.stealthed" or c == "STEALTH" then
+    return (simCtx and simCtx.stealthed) and true or false
+  elseif c == "NOT player.stealthed" or c == "NOT STEALTH" then
+    return not (simCtx and simCtx.stealthed)
+  elseif c == "player.in_combat" or c == "COMBAT" then
+    return (simCtx and simCtx.inCombat) and true or false
+  elseif c == "NOT player.in_combat" or c == "NOT COMBAT" then
+    return not (simCtx and simCtx.inCombat)
+  elseif c == "target.can_pick_pocket" or c == "PICK_POCKET_READY" then
+    return (simCtx and simCtx.canPickPocket) and true or false
+  elseif c == "NOT target.can_pick_pocket" then
+    return not (simCtx and simCtx.canPickPocket)
+  elseif c == "AOE" then
+    return ((simCtx and simCtx.enemies) or 1) >= 3
+  elseif c == "NOT AOE" then
+    return ((simCtx and simCtx.enemies) or 1) < 3
+  elseif c == "CLEAVE" then
+    return ((simCtx and simCtx.enemies) or 1) >= 2
+  elseif c == "SINGLE_TARGET" then
+    return ((simCtx and simCtx.enemies) or 1) <= 1
   end
 
   local activeSp = c:match("^ACTIVE%(([A-Z0-9_]+)%)$")
@@ -315,6 +248,16 @@ local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, si
   local notActiveSp = c:match("^NOT%s+ACTIVE%(([A-Z0-9_]+)%)$")
   if notActiveSp then
     return not (simActive and simActive[notActiveSp])
+  end
+
+  local buffSp = c:match("^BUFF%(([A-Z0-9_]+)%)$")
+  if buffSp then
+    return (simCtx and simCtx.buffs and simCtx.buffs[buffSp]) and true or false
+  end
+
+  local notBuffSp = c:match("^NOT%s+BUFF%(([A-Z0-9_]+)%)$")
+  if notBuffSp then
+    return not (simCtx and simCtx.buffs and simCtx.buffs[notBuffSp])
   end
 
   local readySp = c:match("^READY%(([A-Z0-9_]+)%)$")
@@ -348,6 +291,36 @@ local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, si
   if chSp and chOp and chVal then
     local curCh = (simCharges and simCharges[chSp]) or 0
     return CompareNum(curCh, chOp, tonumber(chVal) or 0)
+  end
+
+  local enOp, enVal = c:match("^enemies%s*([><=]+)%s*(%d+)$")
+  if not enOp then enOp, enVal = c:match("^enemies_around%s*([><=]+)%s*(%d+)$") end
+  if not enOp then enOp, enVal = c:match("^active_enemies%s*([><=]+)%s*(%d+)$") end
+  if not enOp then enOp, enVal = c:match("^player%.enemies%s*([><=]+)%s*(%d+)$") end
+  if not enOp then enOp, enVal = c:match("^target%.enemies%s*([><=]+)%s*(%d+)$") end
+  if enOp and enVal then
+    local curEnemies = (simCtx and simCtx.enemies) or 1
+    return CompareNum(curEnemies, enOp, tonumber(enVal) or 0)
+  end
+
+  local cpOp, cpVal = c:match("^player%.combo_points%s*([><=]+)%s*(%d+)$")
+  if not cpOp then cpOp, cpVal = c:match("^COMBO_POINTS%s*([><=]+)%s*(%d+)$") end
+  if not cpOp then cpOp, cpVal = c:match("^cp%s*([><=]+)%s*(%d+)$") end
+  if cpOp and cpVal then
+    local curCP = (simCtx and simCtx.comboPoints) or 0
+    return CompareNum(curCP, cpOp, tonumber(cpVal) or 0)
+  end
+
+  local pHpOp, pHpVal = c:match("^player%.hp_percent%s*([><=]+)%s*(%d+)$")
+  if pHpOp and pHpVal then
+    local curPHP = (simCtx and simCtx.playerHP) or 100
+    return CompareNum(curPHP, pHpOp, tonumber(pHpVal) or 0)
+  end
+
+  local tHpOp, tHpVal = c:match("^target%.hp_percent%s*([><=]+)%s*(%d+)$")
+  if tHpOp and tHpVal then
+    local curTHP = (simCtx and simCtx.targetHP) or 100
+    return CompareNum(curTHP, tHpOp, tonumber(tHpVal) or 0)
   end
 
   local stOp, stVal = c:match("^target%.freezing_stacks%s*([><=]+)%s*(%d+)$")
@@ -393,7 +366,7 @@ local function GetCompiledConditionBranches(condStr)
   return branches
 end
 
-function SpArc:EvalSingleCondition(condStr, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive)
+function SpArc:EvalSingleCondition(condStr, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx)
   if not condStr or condStr == "ALWAYS" then
     return true
   end
@@ -402,7 +375,7 @@ function SpArc:EvalSingleCondition(condStr, simHasDoTs, simReady, simUsable, sim
     local clauses = branches[i]
     local branchOk = true
     for j = 1, #clauses do
-      if not EvalAtomicClause(clauses[j], simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive) then
+      if not EvalAtomicClause(clauses[j], simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
         branchOk = false
         break
       end
@@ -441,6 +414,8 @@ local simCD = {}
 local simKnown = {}
 local simActive = {}
 local simNoResource = {}
+local simBuffs = {}
+local simCtx = { buffs = simBuffs }
 local EMPTY_TABLE = {}
 
 function SpArc:BuildRotationQueue(maxSlots)
@@ -470,6 +445,7 @@ function SpArc:BuildRotationQueue(maxSlots)
       simKnown[k] = nil
       simActive[k] = nil
       simNoResource[k] = nil
+      simBuffs[k] = nil
     end
   end
 
@@ -513,6 +489,7 @@ function SpArc:BuildRotationQueue(maxSlots)
     simCharges[k] = charges or (isReady and 1 or 0)
     simActive[k] = (SpArc.IsSpellBurstActive and SpArc:IsSpellBurstActive(k, sObj, now)) or false
     simNoResource[k] = isNoResource or false
+    simBuffs[k] = (SpArc.PlayerHasBuff and SpArc:PlayerHasBuff(k, now)) or false
   end
 
   local queue = reusableQueue
@@ -536,6 +513,15 @@ function SpArc:BuildRotationQueue(maxSlots)
   end
   local simInsanity = st.trackedInsanity
 
+  simCtx.enemies = (SpArc.GetNearbyEnemyCount and SpArc:GetNearbyEnemyCount(now, assistedKey)) or 1
+  simCtx.stealthed = (_G.IsStealthed and SafeBool(_G.IsStealthed)) or false
+  simCtx.inCombat = (_G.InCombatLockdown and SafeBool(_G.InCombatLockdown)) or (_G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player")) or false
+  simCtx.canPickPocket = (SpArc.CanPickPocketTarget and SpArc:CanPickPocketTarget(now)) or false
+  simCtx.comboPoints = math.floor(simInsanity / 20)
+  simCtx.playerHP = (SpArc.GetPlayerHPPercent and SpArc:GetPlayerHPPercent()) or 100
+  simCtx.targetHP = (SpArc.GetTargetHPPercent and SpArc:GetTargetHPPercent()) or 100
+  simCtx.buffs = simBuffs
+
   for step = 1, maxSlots do
     for spK, spD in pairs(SPELL_DEFS) do
       simReady[spK] = simKnown[spK] and (simCD[spK] <= 0.05) or false
@@ -549,7 +535,7 @@ function SpArc:BuildRotationQueue(maxSlots)
     for _, rule in ipairs(parsed.rules) do
       local sp = rule.spell
       if simReady[sp] and simUsable[sp] and not (step == 1 and simNoResource[sp]) then
-        if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive) then
+        if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
           pickedKey = sp
           break
         end
@@ -560,7 +546,7 @@ function SpArc:BuildRotationQueue(maxSlots)
       for _, rule in ipairs(parsed.rules) do
         local sp = rule.spell
         if simReady[sp] and simUsable[sp] and simNoResource[sp] then
-          if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive) then
+          if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
             pickedKey = sp
             pickedIsNoResource = true
             break
@@ -646,10 +632,25 @@ function SpArc:BuildRotationQueue(maxSlots)
 
       local pickedWasProc = simProcs[pickedKey]
       simProcs[pickedKey] = false
-      if simProcs["AMBUSH"] then
-        simProcs["AMBUSH"] = false
-        simReady["AMBUSH"] = false
-        simUsable["AMBUSH"] = false
+      simBuffs[pickedKey] = true
+      if pickedKey == "PICK_POCKET" then
+        simCtx.canPickPocket = false
+        simCD[pickedKey] = 9999
+        simReady[pickedKey] = false
+        simUsable[pickedKey] = false
+      elseif pickedKey == "STEALTH" or pickedKey == "VANISH" then
+        simCtx.stealthed = true
+        simCD[pickedKey] = 9999
+        simReady[pickedKey] = false
+        simUsable[pickedKey] = false
+      else
+        simCtx.stealthed = false
+        simCtx.inCombat = true
+        if simProcs["AMBUSH"] then
+          simProcs["AMBUSH"] = false
+          simReady["AMBUSH"] = false
+          simUsable["AMBUSH"] = false
+        end
       end
       if def then
         if def.appliesDoTs then simHasDoTs = true end
@@ -659,6 +660,7 @@ function SpArc:BuildRotationQueue(maxSlots)
         end
         if def.insanityGain then simInsanity = math.min(100, simInsanity + def.insanityGain) end
         if def.insanityCost then simInsanity = math.max(0, simInsanity - def.insanityCost) end
+        simCtx.comboPoints = math.floor(simInsanity / 20)
         if def.grantsProc and SPELL_DEFS[def.grantsProc] then
           simProcs[def.grantsProc] = true
           simCD[def.grantsProc] = 0
@@ -697,7 +699,7 @@ function SpArc:BuildRotationQueue(maxSlots)
         elseif def.fillerInterruptible and pickedKey == "MIND_FLAY" then
           simCD[pickedKey] = 4.5
           simReady[pickedKey] = false
-        else
+        elseif pickedKey ~= "PICK_POCKET" and pickedKey ~= "STEALTH" then
           simCD[pickedKey] = 0
         end
       end
@@ -759,6 +761,13 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   st.lockedTopCandidateKey = nil
   if not defKey then return end
   st.lastCastAt[defKey] = now
+  if defKey == "PICK_POCKET" and UnitGUID then
+    local okG, guid = pcall(UnitGUID, "target")
+    if okG and not IsSecret(guid) and type(guid) == "string" then
+      st.pickPocketedGUIDs = st.pickPocketedGUIDs or {}
+      st.pickPocketedGUIDs[guid] = true
+    end
+  end
   local def = SPELL_DEFS[defKey]
   if not def then return end
   if def.appliesDoTs then

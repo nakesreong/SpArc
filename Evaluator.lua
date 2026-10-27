@@ -575,7 +575,7 @@ function SpArc:BuildRotationQueue(maxSlots)
         local spD = SPELL_DEFS[sp]
         if simKnown[sp] and spD and not spD.procOnly and not spD.isExecute and not spD.isSpender and not spD.consumesStacks then
           local rem = simCD[sp] or 9999
-          if rem < bestRem then
+          if rem > 0.05 and rem < bestRem then
             local prevR, prevU = simReady[sp], simUsable[sp]
             simReady[sp] = true
             simUsable[sp] = true

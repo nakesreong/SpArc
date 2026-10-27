@@ -759,6 +759,38 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     end
   end
 
+  local isNoResource = false
+  local resWaitSec = 0
+  local isPriestSpender = (defKey == "DEVOURING_PLAGUE") or (def.isSpender and SPELL_DEFS["DEVOURING_PLAGUE"] ~= nil)
+  if isUsable and not isUnavailable and not isPriestSpender then
+    if bookNoPowerVal == true or (useSlotActionState and actNoManaVal == true) then
+      isNoResource = true
+      resWaitSec = 2.6
+      usableSource = usableSource .. "+NoResource"
+    end
+    local eCost = SpArc.DEFAULT_ENERGY_COST and SpArc.DEFAULT_ENERGY_COST[defKey]
+    if eCost and UnitPower then
+      local okE, curE = pcall(UnitPower, "player", 3)
+      if okE and not IsSecret(curE) and type(curE) == "number" then
+        if curE < eCost then
+          isNoResource = true
+          local regen = 12.0
+          if _G.GetPowerRegen then
+            local okR, rVal = pcall(_G.GetPowerRegen)
+            if okR and not IsSecret(rVal) and type(rVal) == "number" and rVal > 1 then
+              regen = rVal
+            end
+          end
+          resWaitSec = math.max(1.4, math.min(5.0, (eCost - curE) / regen))
+          usableSource = string.format("NoEnergy(%d<%d,%.1fs)", curE, eCost, resWaitSec)
+        elseif not bookNoPowerVal and not (useSlotActionState and actNoManaVal) then
+          isNoResource = false
+          resWaitSec = 0
+        end
+      end
+    end
+  end
+
   local audit = st.lastSpellAudit[defKey]
   if not audit then
     audit = {}
@@ -776,16 +808,43 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   audit.overlayRaw = overlayRaw
   audit.isReady = finalReady
   audit.isUsable = isUsable
+  audit.isNoResource = isNoResource
   audit.isProc = isProc
   audit.isUnavailable = isUnavailable
   audit.usableSource = usableSource
 
   if not finalReady and def.procOnly and not isProc then
-    return false, remSec, durSec, startTime, false, false, def.liveIcon or def.fallbackIcon, def.keybind or "", 0, isUnavailable
+    return false, remSec, durSec, startTime, false, false, def.liveIcon or def.fallbackIcon, def.keybind or "", 0, isUnavailable, false, 0
   end
 
-  return finalReady, remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or "", charges, isUnavailable
+  return finalReady, remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or "", charges, isUnavailable, isNoResource, resWaitSec
 end
+
+SpArc.DEFAULT_ENERGY_COST = {
+  MUTILATE = 50,
+  AMBUSH = 50,
+  GARROTE = 45,
+  FAN_OF_KNIVES = 35,
+  ENVENOM = 35,
+  CRIMSON_TEMPEST = 30,
+  RUPTURE = 25,
+  KINGSBANE = 35,
+  SHIV = 20,
+  SINISTER_STRIKE = 45,
+  DISPATCH = 35,
+  BETWEEN_THE_EYES = 25,
+  SHADOWSTRIKE = 40,
+  BACKSTAB = 35,
+  GLOOMBLADE = 35,
+  EVISCERATE = 35,
+  BLACK_POWDER = 35,
+  SHRED = 40,
+  RAKE = 35,
+  SWIPE = 35,
+  BRUTAL_SLASH = 25,
+  RIP = 20,
+  FEROCIOUS_BITE = 25,
+}
 
 local DEFAULT_DOT_IDS = { 34914, 589, 772, 388539, 1943 }
 local EMPTY_TABLE = {}

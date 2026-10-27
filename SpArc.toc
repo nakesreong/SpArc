@@ -20,6 +20,7 @@ Scanner.lua
 State.lua
 Evaluator.lua
 HUD.lua
+ResourceBar.lua
 Camera.lua
 Telemetry.lua
 MacroGen.lua

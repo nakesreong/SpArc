@@ -784,12 +784,21 @@ local function OpenControlCenter(initialTab)
 
       CreateElvCheck(p5, "MOD_ENABLE", "showCastbar", 0, -24, true, false)
 
-      local m5SizeBox = RegisterGroupBox(p5, "M5_GRP_SIZE", 0, -58, 640, 105)
-      CreateElvSlider(m5SizeBox, "SL_CB_WIDTH", "castbarWidth", 180, 420, 4, 18, -16, 280)
-      CreateElvSlider(m5SizeBox, "SL_CB_OFFSET_Y", "castbarOffsetY", -240, -40, 5, 336, -16, 280)
+      local m5SizeBox = RegisterGroupBox(p5, "M5_GRP_SIZE", 0, -56, 640, 96)
+      CreateElvSlider(m5SizeBox, "SL_CB_WIDTH", "castbarWidth", 180, 420, 4, 18, -14, 280)
+      CreateElvSlider(m5SizeBox, "SL_CB_OFFSET_Y", "castbarOffsetY", -240, -40, 5, 336, -14, 280)
 
-      local m5ClipBox = RegisterGroupBox(p5, "M5_GRP_CLIP", 0, -180, 640, 75)
-      CreateElvCheck(m5ClipBox, "CK_INTERRUPT", "showInterruptAlert", 18, -14, false, false)
+      local m5ClipBox = RegisterGroupBox(p5, "M5_GRP_CLIP", 0, -162, 640, 64)
+      CreateElvCheck(m5ClipBox, "CK_INTERRUPT", "showInterruptAlert", 18, -10, false, false)
+
+      local m5ResBox = RegisterGroupBox(p5, "M5_GRP_RES", 0, -238, 640, 276)
+      CreateElvCheck(m5ResBox, "CK_RES_ENABLE", "showResourceBar", 18, -10, true, false)
+      CreateElvCheck(m5ResBox, "CK_RES_ALWAYS", "alwaysShowResourceBar", 18, -36, false, false)
+      CreateElvSlider(m5ResBox, "SL_RES_WIDTH", "resourceBarWidth", 140, 420, 4, 18, -68, 280)
+      CreateElvSlider(m5ResBox, "SL_RES_HEIGHT", "resourceBarHeight", 10, 32, 1, 336, -68, 280)
+      CreateElvSlider(m5ResBox, "SL_RES_OFFSET_X", "resourceBarOffsetX", -300, 300, 2, 18, -130, 280)
+      CreateElvSlider(m5ResBox, "SL_RES_OFFSET_Y", "resourceBarOffsetY", -320, 100, 2, 336, -130, 280)
+      CreateElvSlider(m5ResBox, "SL_RES_SCALE", "resourceBarScale", 0.60, 2.00, 0.05, 18, -192, 280)
     end
 
     -----------------------------------------------------------------------------------
@@ -1680,6 +1689,8 @@ _G.SlashCmdList["SPARC"] = function(msg)
     OpenControlCenter(2)
   elseif cmd == "visual" or cmd == "hud" or cmd == "arc" then
     OpenControlCenter(3)
+  elseif cmd == "res" or cmd == "resource" or cmd == "castbar" or cmd == "cb" then
+    OpenControlCenter(5)
   elseif cmd == "cam" or cmd == "camera" then
     OpenControlCenter(6)
   elseif cmd == "prof" or cmd == "profile" or cmd == "profiles" then

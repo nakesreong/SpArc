@@ -254,6 +254,9 @@ function SpArc:ApplyVisualLayout()
   if emLabel then
     emLabel:SetText(SpArc:L("HUD_SAVE_ALERT"))
   end
+  if SpArc.ApplyResourceBarLayout then
+    SpArc:ApplyResourceBarLayout()
+  end
 end
 
 SpArc:RebuildParsedProfiles()
@@ -627,6 +630,9 @@ rootFrame:SetScript("OnUpdate", function()
   local qScale = tonumber(v.queueScale) or 1.00
 
   UpdateCastbar(now)
+  if SpArc.UpdateResourceBar then
+    SpArc:UpdateResourceBar(now)
+  end
   if arcSlots[1]:IsShown() then
     local speed = st.lastShouldInterrupt and 12.0 or 6.0
     local amp = st.lastShouldInterrupt and 0.08 or 0.04
@@ -685,6 +691,7 @@ rootFrame:SetScript("OnUpdate", function()
       arcSlots[i].currentDefKey = nil
       arcSlots[i].currentSlot = nil
       arcSlots[i].currentKeybind = nil
+      arcSlots[i].resWaitStart = nil
       SetBoxCooldownSafe(arcSlots[i], 0, 0, now)
       arcSlots[i]:Hide()
     end
@@ -726,28 +733,57 @@ rootFrame:SetScript("OnUpdate", function()
         box.timer:SetText("")
 
         local s = states and item.key and states[item.key] or nil
-        if s and not s.isReady and s.remSec and s.remSec > 0 then
-          local dur = (s.durSec and s.durSec > 0) and s.durSec or s.remSec
-          local stTime = (s.startTime and s.startTime > 0) and s.startTime or (now - math.max(0, dur - s.remSec))
-          SetBoxCooldownSafe(box, stTime, dur, now)
-          if i == 1 and s.remSec > 1.6 then
-            box.timer:SetText(string.format("%d", math.ceil(s.remSec)))
+        local isNoRes = (i == 1) and (item.isNoResource or (item.isReady and not item.isUsable))
+        if isNoRes then
+          local waitDur = (item.resWaitSec and item.resWaitSec > 0.5) and item.resWaitSec or 2.8
+          if box.resWaitKey ~= item.key or not box.resWaitStart or (now >= (box.resWaitStart + (box.resWaitDur or 2.8) - 0.08)) then
+            box.resWaitKey = item.key
+            box.resWaitStart = now
+            box.resWaitDur = math.max(1.8, waitDur)
           end
-        elseif gcdStart and gcdStart > 0 and gcdDur and gcdDur > 0 then
-          SetBoxCooldownSafe(box, gcdStart, gcdDur, now)
+          local remWait = math.max(0.1, (box.resWaitStart + box.resWaitDur) - now)
+          SetBoxCooldownSafe(box, box.resWaitStart, box.resWaitDur, now)
+          box.timer:SetTextColor(0.55, 0.82, 1.0, 0.95)
+          box.timer:SetText(string.format("%.1f", remWait))
         else
-          SetBoxCooldownSafe(box, 0, 0, now)
+          box.resWaitKey = nil
+          box.resWaitStart = nil
+          box.timer:SetTextColor(1, 0.88, 0.35, 1)
+          if s and not s.isReady and s.remSec and s.remSec > 0 then
+            local dur = (s.durSec and s.durSec > 0) and s.durSec or s.remSec
+            local stTime = (s.startTime and s.startTime > 0) and s.startTime or (now - math.max(0, dur - s.remSec))
+            SetBoxCooldownSafe(box, stTime, dur, now)
+            if i == 1 and s.remSec > 0.4 then
+              if s.remSec >= 10 then
+                box.timer:SetText(string.format("%d", math.ceil(s.remSec)))
+              else
+                box.timer:SetText(string.format("%.1f", s.remSec))
+              end
+            end
+          elseif gcdStart and gcdStart > 0 and gcdDur and gcdDur > 0 then
+            SetBoxCooldownSafe(box, gcdStart, gcdDur, now)
+          else
+            SetBoxCooldownSafe(box, 0, 0, now)
+          end
         end
 
-        local isDisabledArcItem = item.isUnavailable or (i == 1 and (item.isReady == false or item.isUsable == false))
+        local isDisabledArcItem = item.isUnavailable or isNoRes or (i == 1 and (item.isReady == false or item.isUsable == false))
         if isDisabledArcItem then
           box.icon:SetDesaturated(true)
-          box.icon:SetAlpha(0.45)
-          box.border:SetColorTexture(0.22, 0.22, 0.26, 0.95)
+          if isNoRes then
+            box.icon:SetVertexColor(0.42, 0.48, 0.65)
+            box.icon:SetAlpha(0.62)
+            box.border:SetColorTexture(0.20, 0.34, 0.56, 0.95)
+          else
+            box.icon:SetVertexColor(0.55, 0.55, 0.58)
+            box.icon:SetAlpha(0.45)
+            box.border:SetColorTexture(0.22, 0.22, 0.26, 0.95)
+          end
           box.glow:SetColorTexture(0, 0, 0, 0)
           if box.banner then box.banner:SetText("") end
         else
           box.icon:SetDesaturated(false)
+          box.icon:SetVertexColor(1, 1, 1)
           box.icon:SetAlpha(1.0)
           if i == 1 then
             if st.lastShouldInterrupt then
@@ -783,6 +819,7 @@ rootFrame:SetScript("OnUpdate", function()
         box.currentDefKey = nil
         box.currentSlot = nil
         box.currentKeybind = nil
+        box.resWaitStart = nil
         SetBoxCooldownSafe(box, 0, 0, now)
         box:Hide()
       end
@@ -792,6 +829,7 @@ rootFrame:SetScript("OnUpdate", function()
       arcSlots[i].currentDefKey = nil
       arcSlots[i].currentSlot = nil
       arcSlots[i].currentKeybind = nil
+      arcSlots[i].resWaitStart = nil
       SetBoxCooldownSafe(arcSlots[i], 0, 0, now)
       arcSlots[i]:Hide()
     end

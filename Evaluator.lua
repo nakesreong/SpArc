@@ -440,6 +440,7 @@ local simCharges = {}
 local simCD = {}
 local simKnown = {}
 local simActive = {}
+local simNoResource = {}
 local EMPTY_TABLE = {}
 
 function SpArc:BuildRotationQueue(maxSlots)
@@ -468,11 +469,12 @@ function SpArc:BuildRotationQueue(maxSlots)
       simCD[k] = nil
       simKnown[k] = nil
       simActive[k] = nil
+      simNoResource[k] = nil
     end
   end
 
   for k, def in pairs(SPELL_DEFS) do
-    local isReady, remSec, durSec, startTime, isUsable, isProc, icon, keybind, charges, isUnavailable = SpArc:EvaluateSpellState(k, assistedKey)
+    local isReady, remSec, durSec, startTime, isUsable, isProc, icon, keybind, charges, isUnavailable, isNoResource, resWaitSec = SpArc:EvaluateSpellState(k, assistedKey)
     local sObj = states[k]
     if not sObj then
       sObj = {}
@@ -484,6 +486,8 @@ function SpArc:BuildRotationQueue(maxSlots)
     sObj.durSec = durSec
     sObj.startTime = startTime
     sObj.isUsable = isUsable
+    sObj.isNoResource = isNoResource or false
+    sObj.resWaitSec = resWaitSec or 0
     sObj.isProc = isProc
     sObj.isUnavailable = isUnavailable or false
     sObj.icon = icon
@@ -508,6 +512,7 @@ function SpArc:BuildRotationQueue(maxSlots)
     simProcs[k] = isProc
     simCharges[k] = charges or (isReady and 1 or 0)
     simActive[k] = (SpArc.IsSpellBurstActive and SpArc:IsSpellBurstActive(k, sObj, now)) or false
+    simNoResource[k] = isNoResource or false
   end
 
   local queue = reusableQueue
@@ -540,12 +545,26 @@ function SpArc:BuildRotationQueue(maxSlots)
     end
 
     local pickedKey = nil
+    local pickedIsNoResource = false
     for _, rule in ipairs(parsed.rules) do
       local sp = rule.spell
-      if simReady[sp] and simUsable[sp] then
+      if simReady[sp] and simUsable[sp] and not (step == 1 and simNoResource[sp]) then
         if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive) then
           pickedKey = sp
           break
+        end
+      end
+    end
+
+    if not pickedKey and step == 1 then
+      for _, rule in ipairs(parsed.rules) do
+        local sp = rule.spell
+        if simReady[sp] and simUsable[sp] and simNoResource[sp] then
+          if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive) then
+            pickedKey = sp
+            pickedIsNoResource = true
+            break
+          end
         end
       end
     end
@@ -620,7 +639,9 @@ function SpArc:BuildRotationQueue(maxSlots)
       qItem.keybind = s.keybind
       qItem.isProc = (step == 1 and s.isProc) or false
       qItem.isReady = (step == 1) and s.isReady or true
-      qItem.isUsable = (step == 1) and s.isUsable or true
+      qItem.isUsable = (step == 1) and (s.isUsable and not s.isNoResource) or true
+      qItem.isNoResource = (step == 1 and (pickedIsNoResource or s.isNoResource or (s.isReady and not s.isUsable))) or false
+      qItem.resWaitSec = (qItem.isNoResource and s.resWaitSec and s.resWaitSec > 0) and s.resWaitSec or 2.8
       qItem.isUnavailable = s.isUnavailable or false
 
       local pickedWasProc = simProcs[pickedKey]

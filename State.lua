@@ -196,6 +196,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       isProc = true
       overlayRaw = "assisted(VOID_BOLT)"
     end
+  elseif defKey == "BLIZZARD" and assistedKey == "BLIZZARD" then
+    isProc = true
+    overlayRaw = "assisted(BLIZZARD)"
   end
 
   if def.overrideOf and SPELL_DEFS[def.overrideOf] then
@@ -421,7 +424,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         st.spellChargeStart[defKey] = now - (cdDur * 0.65)
       end
       chargesRaw = "sim:0/" .. tostring(maxCh)
-    elseif assistedKey == "FROSTBOLT" and (defKey == "FLURRY" or defKey == "RAY_OF_FROST" or defKey == "FROZEN_ORB") then
+    elseif assistedKey == "FROSTBOLT" and (defKey == "FLURRY" or defKey == "RAY_OF_FROST" or defKey == "FROZEN_ORB" or defKey == "BLIZZARD") then
       isOnCD = true
       charges = 0
       if remSec <= 0 then
@@ -432,7 +435,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       if maxCh > 1 or defKey == "FLURRY" then
         if (st.spellChargesUsed[defKey] or 0) < maxCh then
           st.spellChargesUsed[defKey] = maxCh
-          st.spellChargeStart[defKey] = now - (cdDur * 0.55)
+          if (st.spellChargeStart[defKey] or 0) <= 0 then
+            st.spellChargeStart[defKey] = now
+          end
         end
         chargesRaw = "sim:0/" .. tostring(maxCh)
       end
@@ -447,10 +452,20 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       if maxCh > 1 or defKey == "FLURRY" then
         if (st.spellChargesUsed[defKey] or 0) < maxCh then
           st.spellChargesUsed[defKey] = maxCh
-          st.spellChargeStart[defKey] = now - (cdDur * 0.55)
+          if (st.spellChargeStart[defKey] or 0) <= 0 then
+            st.spellChargeStart[defKey] = now
+          end
         end
         chargesRaw = "sim:0/" .. tostring(maxCh)
       end
+    elseif assistedKey == "ICE_LANCE" and (defKey == "RAY_OF_FROST" or defKey == "FROZEN_ORB") then
+      isOnCD = true
+      charges = 0
+      if remSec <= 0 then
+        remSec = math.max(2.5, cdDur * 0.45)
+        durSec = cdDur
+      end
+      cdRaw = "AssistSaysOnCD(IL)"
     end
   end
 

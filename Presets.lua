@@ -1335,13 +1335,13 @@ END IF
 local MAGE_FROST_SPELLBOOK_MD = [[
 ## SPELL_BOOK (Frost Mage — Midnight 12.x Overhaul)
 TARGET_DEBUFF: NAME:"Обледенение","Замерзание","Freezing","Зимняя стужа","Winter's Chill"
-SPELL RAY_OF_FROST = ID:205021 | NAME:"Луч холода","Ray of Frost" | CD:60 | CHARGES:1 | STACKS:+3 | LOCK_CHANNEL:true | ICON:1698700
+SPELL RAY_OF_FROST = ID:205021 | NAME:"Морозный луч","Луч холода","Ray of Frost" | CD:60 | CHARGES:1 | STACKS:+3 | LOCK_CHANNEL:true | ICON:1698700
 SPELL COMET_STORM = ID:153595,455396 | NAME:"Кометная буря","Comet Storm" | CD:30 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:RAY_OF_FROST | ICON:1033912
 SPELL GLACIAL_SPIKE = ID:199786,257537 | NAME:"Ледниковый шип","Черная стрела","Glacial Spike","Ebonbolt" | CD:0 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:FROSTBOLT | ICON:1394891
 SPELL FLURRY = ID:44614 | NAME:"Шквал","Flurry" | CD:30 | CHARGES:2 | STACKS:+2 | ICON:135859
 SPELL FROZEN_ORB = ID:84714 | NAME:"Ледяной шар","Мерзлая сфера","Frozen Orb" | CD:60 | STACKS:+2 | ICON:629077
 SPELL ICE_LANCE = ID:30455 | NAME:"Ледяное копье","Ice Lance" | CD:0 | CONSUMES_STACKS:true | STACKS:-4 | ICON:135844
-SPELL BLIZZARD = ID:190356,1248829 | NAME:"Снежная буря","Blizzard" | CD:8 | ICON:135857
+SPELL BLIZZARD = ID:190356,1248829 | NAME:"Снежная буря","Blizzard" | CD:12 | ICON:135858
 SPELL FROSTBOLT = ID:431044,116 | NAME:"Ледяная стрела","Стрела ледяного огня","Frostbolt","Frostfire Bolt" | CD:0 | STACKS:+1 | ICON:135846
 SPELL SHIFTING_POWER = ID:382440 | NAME:"Переходящая сила","Shifting Power" | CD:60 | ICON:3636843
 SPELL ICE_BLOCK = ID:45438,414658 | NAME:"Ледяная глыба","Холодная хватка","Ice Block","Ice Cold" | CD:240 | CHARGES:2 | ICON:135841
@@ -1384,7 +1384,7 @@ ELSE IF PROC(ICE_LANCE) AND READY(ICE_LANCE) THEN
     RETURN CAST(ICE_LANCE)
 ELSE IF target.freezing_stacks >= 4 AND READY(ICE_LANCE) THEN
     RETURN CAST(ICE_LANCE)
-ELSE IF READY(BLIZZARD) THEN
+ELSE IF PROC(BLIZZARD) AND READY(BLIZZARD) THEN
     RETURN CAST(BLIZZARD)
 ELSE
     RETURN CAST(FROSTBOLT)

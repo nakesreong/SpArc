@@ -582,6 +582,9 @@ function SpArc:ScanActionSlotsAndSpells(force)
           def.liveIcon = tex
         end
       end
+      if def.key == "BLIZZARD" and def.liveIcon == 135857 then
+        def.liveIcon = 135858
+      end
     end
   end
 

@@ -294,16 +294,27 @@ local function UpdateCooldownRow(boxes, spellKeys, states, now, gcdStart, gcdDur
       box.keybind:SetText(s.keybind or "")
       if s.isUnavailable or (not s.isUsable and s.isReady) then
         box.icon:SetDesaturated(true)
+        box.icon:SetVertexColor(1, 1, 1)
         box.icon:SetAlpha(0.35)
         box.border:SetColorTexture(0.18, 0.18, 0.22, 0.85)
+        box.glow:SetColorTexture(0, 0, 0, 0)
         box.keybind:SetTextColor(0.52, 0.52, 0.58, 0.80)
         box.timer:SetText("")
         SetBoxCooldownSafe(box, 0, 0, now)
       elseif s.isReady then
         box.icon:SetDesaturated(false)
         box.icon:SetAlpha(1.0)
-        box.border:SetColorTexture(0.18, 0.88, 0.42, 0.95)
-        box.keybind:SetTextColor(1, 0.96, 0.80, 1)
+        if s.isOutOfRange then
+          box.icon:SetVertexColor(1.0, 0.24, 0.24)
+          box.border:SetColorTexture(1.0, 0.12, 0.12, 0.96)
+          box.glow:SetColorTexture(1.0, 0.08, 0.08, 0.45)
+          box.keybind:SetTextColor(1.0, 0.30, 0.30, 1)
+        else
+          box.icon:SetVertexColor(1, 1, 1)
+          box.border:SetColorTexture(0.18, 0.88, 0.42, 0.95)
+          box.glow:SetColorTexture(0, 0, 0, 0)
+          box.keybind:SetTextColor(1, 0.96, 0.80, 1)
+        end
         box.timer:SetText("")
         if gcdStart and gcdStart > 0 and gcdDur and gcdDur > 0 then
           SetBoxCooldownSafe(box, gcdStart, gcdDur, now)
@@ -312,8 +323,10 @@ local function UpdateCooldownRow(boxes, spellKeys, states, now, gcdStart, gcdDur
         end
       else
         box.icon:SetDesaturated(true)
+        box.icon:SetVertexColor(1, 1, 1)
         box.icon:SetAlpha(0.55)
         box.border:SetColorTexture(0.22, 0.22, 0.26, 0.95)
+        box.glow:SetColorTexture(0, 0, 0, 0)
         box.keybind:SetTextColor(0.80, 0.80, 0.85, 1)
         if s.remSec and s.remSec > 0 then
           if s.remSec >= 60 then
@@ -767,9 +780,30 @@ rootFrame:SetScript("OnUpdate", function()
           end
         end
 
+        local isOutOfRange = item.isOutOfRange or (s and s.isOutOfRange) or false
         local isDisabledArcItem = item.isUnavailable or isNoRes or (i == 1 and (item.isReady == false or item.isUsable == false))
-        if isDisabledArcItem then
+        if isOutOfRange then
+          box.icon:SetDesaturated(false)
+          box.icon:SetVertexColor(1.0, 0.24, 0.24)
+          box.icon:SetAlpha(isDisabledArcItem and 0.72 or 0.96)
+          box.border:SetColorTexture(1.0, 0.12, 0.12, 1.0)
+          box.glow:SetColorTexture(1.0, 0.08, 0.08, i == 1 and 0.72 or 0.38)
+          box.keybind:SetTextColor(1.0, 0.30, 0.30, 1)
+          if i == 1 and box.banner then
+            if st.lastShouldInterrupt then
+              box.banner:SetTextColor(1.0, 0.30, 0.68, 1)
+              box.banner:SetText(SpArc:L("HUD_CLIP_BANNER"))
+            elseif isProtectedChannel then
+              box.banner:SetTextColor(0.35, 0.90, 1.0, 1)
+              box.banner:SetText(SpArc:L("HUD_CHANNEL_BANNER"))
+            else
+              box.banner:SetTextColor(1.0, 0.28, 0.28, 1)
+              box.banner:SetText(SpArc:L("HUD_RANGE_BANNER"))
+            end
+          end
+        elseif isDisabledArcItem then
           box.icon:SetDesaturated(true)
+          box.keybind:SetTextColor(1, 0.96, 0.80, 1)
           if isNoRes then
             box.icon:SetVertexColor(0.42, 0.48, 0.65)
             box.icon:SetAlpha(0.62)
@@ -785,6 +819,7 @@ rootFrame:SetScript("OnUpdate", function()
           box.icon:SetDesaturated(false)
           box.icon:SetVertexColor(1, 1, 1)
           box.icon:SetAlpha(1.0)
+          box.keybind:SetTextColor(1, 0.96, 0.80, 1)
           if i == 1 then
             if st.lastShouldInterrupt then
               box.border:SetColorTexture(1.0, 0.18, 0.56, 1.0)

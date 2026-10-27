@@ -653,11 +653,14 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     if useSlotActionState and (not slotActiveSpellID or (def.idSet and def.idSet[slotActiveSpellID])) then
       local btBtn = _G["BT4Button" .. slot]
       if btBtn and btBtn.icon and btBtn.icon.GetVertexColor then
-        local okV, r = pcall(btBtn.icon.GetVertexColor, btBtn.icon)
+        local okV, r, g, b = pcall(btBtn.icon.GetVertexColor, btBtn.icon)
         if okV and not IsSecret(r) and type(r) == "number" and r < 0.85 then
-          isUsable = false
-          gotCleanUsable = true
-          usableSource = "BT4VertexTint(" .. btColorRaw .. ")"
+          local isRedRangeTint = (r > 0.65) and (not IsSecret(g) and (g or 1) < 0.35) and (not IsSecret(b) and (b or 1) < 0.35)
+          if not isRedRangeTint then
+            isUsable = false
+            gotCleanUsable = true
+            usableSource = "BT4VertexTint(" .. btColorRaw .. ")"
+          end
         end
       end
     end
@@ -811,6 +814,12 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     end
   end
 
+  local slotMatchesForRange = useSlotActionState and ((not slotActiveSpellID) or (def.idSet and def.idSet[slotActiveSpellID]) or false)
+  local isOutOfRange = false
+  if not isUnavailable and SpArc.IsSpellOutOfRange then
+    isOutOfRange = SpArc:IsSpellOutOfRange(defKey, def, spellID, slot, slotMatchesForRange)
+  end
+
   local audit = st.lastSpellAudit[defKey]
   if not audit then
     audit = {}
@@ -829,15 +838,16 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   audit.isReady = finalReady
   audit.isUsable = isUsable
   audit.isNoResource = isNoResource
+  audit.isOutOfRange = isOutOfRange
   audit.isProc = isProc
   audit.isUnavailable = isUnavailable
   audit.usableSource = usableSource
 
   if not finalReady and def.procOnly and not isProc then
-    return false, remSec, durSec, startTime, false, false, def.liveIcon or def.fallbackIcon, def.keybind or "", 0, isUnavailable, false, 0
+    return false, remSec, durSec, startTime, false, false, def.liveIcon or def.fallbackIcon, def.keybind or "", 0, isUnavailable, false, 0, isOutOfRange
   end
 
-  return finalReady, remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or "", charges, isUnavailable, isNoResource, resWaitSec
+  return finalReady, remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or "", charges, isUnavailable, isNoResource, resWaitSec, isOutOfRange
 end
 
 SpArc.DEFAULT_ENERGY_COST = {
@@ -1473,6 +1483,141 @@ function SpArc:CanPickPocketTarget(now)
     local okI, inI = pcall(_G.CheckInteractDistance, "target", 3)
     if okI and not IsSecret(inI) and type(inI) == "boolean" then
       return inI
+    end
+  end
+
+  return false
+end
+
+local NO_RANGE_CHECK_SPELLS = {
+  STEALTH              = true,
+  VANISH               = true,
+  SLICE_AND_DICE       = true,
+  CRIMSON_VIAL         = true,
+  EVASION              = true,
+  CLOAK_OF_SHADOWS     = true,
+  FEINT                = true,
+  THISTLE_TEA          = true,
+  SPRINT               = true,
+  SHADOW_DANCE         = true,
+  SYMBOLS_OF_DEATH     = true,
+  ADRENALINE_RUSH      = true,
+  BLADE_FLURRY         = true,
+  DEADLY_POISON        = true,
+  CRIPPLING_POISON     = true,
+  BATTLE_SHOUT         = true,
+  AVATAR               = true,
+  SWEEPING_STRIKES     = true,
+  DIE_BY_THE_SWORD     = true,
+  RALLYING_CRY         = true,
+  SPELL_REFLECTION     = true,
+  ARCANE_INTELLECT     = true,
+  ICE_BARRIER          = true,
+  ICE_BLOCK            = true,
+  ALTER_TIME           = true,
+  COLD_SNAP            = true,
+  ICY_VEINS            = true,
+  MIRROR_IMAGE         = true,
+  SHIFTING_POWER       = true,
+  POWER_WORD_FORTITUDE = true,
+  SHADOWFORM           = true,
+  DISPERSION           = true,
+  DESPERATE_PRAYER     = true,
+  VAMPIRIC_EMBRACE     = true,
+  FADE                 = true,
+  POWER_WORD_SHIELD    = true,
+  POWER_INFUSION       = true,
+  VOIDFORM             = true,
+  DARK_ASCENSION       = true,
+}
+
+local CLASS_RANGE_FALLBACK_SPELLS = {
+  ROGUE   = { 1329, 1752, 53, 8676 },
+  WARRIOR = { 12294, 1464, 23881, 6552 },
+  MAGE    = { 116, 30455, 133, 30451 },
+  PRIEST  = { 8092, 589, 34914, 15407 },
+}
+
+function SpArc:IsSpellOutOfRange(defKey, def, spellID, slot, slotMatchesDef)
+  if SpArc.testMode or not defKey or NO_RANGE_CHECK_SPELLS[defKey] then
+    return false
+  end
+  if not (_G.UnitExists and SafeBool(_G.UnitExists, "target")) then
+    return false
+  end
+  if not (_G.UnitCanAttack and SafeBool(_G.UnitCanAttack, "player", "target")) then
+    return false
+  end
+  if _G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, "target") then
+    return false
+  end
+
+  if C_Spell and C_Spell.IsSpellInRange then
+    if spellID then
+      local okR, inR = pcall(C_Spell.IsSpellInRange, spellID, "target")
+      if okR and not IsSecret(inR) and inR ~= nil then
+        return (inR == false or inR == 0)
+      end
+    end
+    if def and def.ids then
+      for _, id in ipairs(def.ids) do
+        if id ~= spellID then
+          local okR, inR = pcall(C_Spell.IsSpellInRange, id, "target")
+          if okR and not IsSecret(inR) and inR ~= nil then
+            return (inR == false or inR == 0)
+          end
+        end
+      end
+    end
+  end
+
+  if slot and slotMatchesDef and _G.IsActionInRange then
+    local okAR, inAR = pcall(_G.IsActionInRange, slot, "target")
+    if not okAR or inAR == nil then
+      okAR, inAR = pcall(_G.IsActionInRange, slot)
+    end
+    if okAR and not IsSecret(inAR) and inAR ~= nil then
+      return (inAR == false or inAR == 0)
+    end
+  end
+
+  if slot and slotMatchesDef then
+    local btBtn = _G["BT4Button" .. slot]
+    if btBtn then
+      if not IsSecret(btBtn.outOfRange) and type(btBtn.outOfRange) == "boolean" then
+        return btBtn.outOfRange
+      end
+      if btBtn.HotKey and btBtn.HotKey.GetTextColor then
+        local okHK, hr, hg, hb = pcall(btBtn.HotKey.GetTextColor, btBtn.HotKey)
+        if okHK and not IsSecret(hr) and not IsSecret(hg) and not IsSecret(hb) and type(hr) == "number" then
+          if hr > 0.80 and (hg or 1) < 0.25 and (hb or 1) < 0.25 then
+            return true
+          end
+        end
+      end
+      if btBtn.icon and btBtn.icon.GetVertexColor then
+        local okV, vr, vg, vb = pcall(btBtn.icon.GetVertexColor, btBtn.icon)
+        if okV and not IsSecret(vr) and not IsSecret(vg) and not IsSecret(vb) and type(vr) == "number" then
+          if vr > 0.65 and (vg or 1) < 0.30 and (vb or 1) < 0.30 then
+            return true
+          end
+        end
+      end
+    end
+  end
+
+  if _G.UnitClass and C_Spell and C_Spell.IsSpellInRange then
+    local okC, _, playerClass = pcall(_G.UnitClass, "player")
+    if okC and not IsSecret(playerClass) and type(playerClass) == "string" then
+      local fallbackIDs = CLASS_RANGE_FALLBACK_SPELLS[playerClass]
+      if fallbackIDs then
+        for _, fID in ipairs(fallbackIDs) do
+          local okFR, inFR = pcall(C_Spell.IsSpellInRange, fID, "target")
+          if okFR and not IsSecret(inFR) and inFR ~= nil then
+            return (inFR == false or inFR == 0)
+          end
+        end
+      end
     end
   end
 

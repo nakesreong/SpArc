@@ -450,7 +450,7 @@ function SpArc:BuildRotationQueue(maxSlots)
   end
 
   for k, def in pairs(SPELL_DEFS) do
-    local isReady, remSec, durSec, startTime, isUsable, isProc, icon, keybind, charges, isUnavailable, isNoResource, resWaitSec = SpArc:EvaluateSpellState(k, assistedKey)
+    local isReady, remSec, durSec, startTime, isUsable, isProc, icon, keybind, charges, isUnavailable, isNoResource, resWaitSec, isOutOfRange = SpArc:EvaluateSpellState(k, assistedKey)
     local sObj = states[k]
     if not sObj then
       sObj = {}
@@ -464,6 +464,7 @@ function SpArc:BuildRotationQueue(maxSlots)
     sObj.isUsable = isUsable
     sObj.isNoResource = isNoResource or false
     sObj.resWaitSec = resWaitSec or 0
+    sObj.isOutOfRange = isOutOfRange or false
     sObj.isProc = isProc
     sObj.isUnavailable = isUnavailable or false
     sObj.icon = icon
@@ -628,6 +629,7 @@ function SpArc:BuildRotationQueue(maxSlots)
       qItem.isUsable = (step == 1) and (s.isUsable and not s.isNoResource) or true
       qItem.isNoResource = (step == 1 and (pickedIsNoResource or s.isNoResource or (s.isReady and not s.isUsable))) or false
       qItem.resWaitSec = (qItem.isNoResource and s.resWaitSec and s.resWaitSec > 0) and s.resWaitSec or 2.8
+      qItem.isOutOfRange = s.isOutOfRange or false
       qItem.isUnavailable = s.isUnavailable or false
 
       local pickedWasProc = simProcs[pickedKey]

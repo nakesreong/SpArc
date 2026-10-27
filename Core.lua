@@ -10,7 +10,7 @@ _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
 SpArc.VERSION = "2.9.1"
-SpArc.PROFILE_SCHEMA_VERSION = 14
+SpArc.PROFILE_SCHEMA_VERSION = 15
 
 local C_CVar = _G.C_CVar
 local issecretvalue = _G.issecretvalue
@@ -334,6 +334,8 @@ SpArc.ACTIVE_SLOTS = {
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
   61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
   49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
+  25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+  37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
   13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
 }
 
@@ -422,6 +424,7 @@ SpArc.DEFAULT_VISUAL = {
 
 SpArc.state = {
   lastCastAt = {},
+  lastAnyCastAt = 0,
   lastSlotScanAt = 0,
   targetDoTsUntil = 0,
   targetDebuffStacks = 0,
@@ -433,6 +436,14 @@ SpArc.state = {
   gcdStartTime = 0,
   gcdDuration = 0,
   mfiProcUntil = 0,
+  lastStableAssistKey = nil,
+  lastStableAssistID = nil,
+  lastStableAssistAt = 0,
+  assistCandidateKey = nil,
+  assistCandidateSince = 0,
+  lockedTopKey = nil,
+  lockedTopCandidateKey = nil,
+  lockedTopCandidateSince = 0,
   lastSpellAudit = {},
   lastShouldInterrupt = false,
   lastIsProtectedChannel = false,

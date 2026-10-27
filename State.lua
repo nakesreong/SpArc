@@ -196,19 +196,21 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       isProc = true
       overlayRaw = "assisted(VOID_BOLT)"
     end
-  elseif defKey == "BLIZZARD" and assistedKey == "BLIZZARD" then
+  elseif (defKey == "BLIZZARD" or defKey == "CRIMSON_TEMPEST" or defKey == "FAN_OF_KNIVES") and assistedKey == defKey then
     isProc = true
-    overlayRaw = "assisted(BLIZZARD)"
+    overlayRaw = "assisted(" .. tostring(defKey) .. ")"
   end
 
   if def.overrideOf and SPELL_DEFS[def.overrideOf] then
     local baseDef = SPELL_DEFS[def.overrideOf]
+    local overrideActive = false
     if C_Spell and C_Spell.GetOverrideSpell then
       for _, baseID in ipairs(baseDef.ids or {}) do
         local okO, over = pcall(C_Spell.GetOverrideSpell, baseID)
         if okO and not IsSecret(over) and type(over) == "number" and over > 0 and over ~= baseID then
           for _, myID in ipairs(def.ids or {}) do
             if over == myID then
+              overrideActive = true
               isProc = true
               spellID = over
               overlayRaw = "override(" .. tostring(over) .. ")"
@@ -216,13 +218,14 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
             end
           end
         end
-        if isProc then break end
+        if overrideActive then break end
       end
-      if not isProc and baseDef.liveSpellID then
+      if not overrideActive and baseDef.liveSpellID then
         local okO, over = pcall(C_Spell.GetOverrideSpell, baseDef.liveSpellID)
         if okO and not IsSecret(over) and type(over) == "number" and over > 0 then
           for _, myID in ipairs(def.ids or {}) do
             if over == myID then
+              overrideActive = true
               isProc = true
               spellID = over
               overlayRaw = "override(" .. tostring(over) .. ")"
@@ -232,7 +235,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         end
       end
     end
-    if assistedKey == defKey then
+    if def.inheritedBaseSlot and not overrideActive then
+      isProc = false
+    elseif assistedKey == defKey then
       isProc = true
       overlayRaw = "assisted(" .. tostring(defKey) .. ")"
     end
@@ -470,18 +475,32 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   end
 
   local recentlyCast = st.lastCastAt[defKey] and ((now - st.lastCastAt[defKey]) < 2.5) or false
-  if defKey == "GARROTE" and st.lastCastAt["GARROTE"] and assistedKey ~= "GARROTE" then
+  local isPandemicLocked = false
+  if defKey == "GARROTE" and st.lastCastAt["GARROTE"] then
     local gElapsed = now - st.lastCastAt["GARROTE"]
     if gElapsed >= 0 and gElapsed < 13.0 then
       isOnCD = true
+      isPandemicLocked = true
       durSec = 13.0
       startTime = st.lastCastAt["GARROTE"]
       remSec = 13.0 - gElapsed
       charges = 0
       cdRaw = string.format("pandemic:%.1fs", remSec)
     end
+  elseif defKey == "CRIMSON_TEMPEST" and st.lastCastAt["CRIMSON_TEMPEST"] then
+    local ctElapsed = now - st.lastCastAt["CRIMSON_TEMPEST"]
+    if ctElapsed >= 0 and ctElapsed < 12.0 then
+      isOnCD = true
+      isPandemicLocked = true
+      isProc = false
+      durSec = 12.0
+      startTime = st.lastCastAt["CRIMSON_TEMPEST"]
+      remSec = 12.0 - ctElapsed
+      charges = 0
+      cdRaw = string.format("pandemic:%.1fs", remSec)
+    end
   end
-  if assistedKey == defKey and not recentlyCast then
+  if assistedKey == defKey and not recentlyCast and not isPandemicLocked then
     isOnCD = false
     local maxCh = def.liveMaxCharges or def.maxCharges or 1
     if (maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" or defKey == "FLURRY") and (st.spellChargesUsed[defKey] or 0) >= maxCh then
@@ -528,7 +547,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
 
   local actUsableVal, actNoManaVal = nil, nil
   local slotActiveSpellID = nil
-  if slot then
+  local isBonusBarActive = _G.HasBonusActionBar and SafeBool(_G.HasBonusActionBar) or false
+  local useSlotActionState = slot and (not (isBonusBarActive and slot <= 12))
+  if useSlotActionState then
     local btBtn = _G["BT4Button" .. slot]
     if btBtn and btBtn.GetSpellId then
       local okBS, btSID = pcall(btBtn.GetSpellId, btBtn)
@@ -619,7 +640,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
 
-    if slot then
+    if useSlotActionState then
       local btBtn = _G["BT4Button" .. slot]
       if btBtn and btBtn.icon and btBtn.icon.GetVertexColor then
         local okV, r = pcall(btBtn.icon.GetVertexColor, btBtn.icon)
@@ -769,20 +790,104 @@ end
 local DEFAULT_DOT_IDS = { 34914, 589, 772, 388539, 1943 }
 local EMPTY_TABLE = {}
 
+local DEFAULT_BURST_DURATIONS = {
+  DEATHMARK = 16.0,
+  KINGSBANE = 14.0,
+  ICY_VEINS = 25.0,
+  VOIDFORM = 20.0,
+  POWER_INFUSION = 15.0,
+  AVATAR = 20.0,
+  COLOSSUS_SMASH = 10.0,
+  COMBUSTION = 12.0,
+  ARCANE_SURGE = 15.0,
+  SHADOW_BLADES = 16.0,
+  ADRENALINE_RUSH = 20.0,
+}
+
+function SpArc:IsSpellBurstActive(defKey, sObj, now)
+  if not defKey then return false end
+  now = now or GetTime()
+  local def = SPELL_DEFS[defKey]
+  local burstDur = (def and def.burstDuration) or DEFAULT_BURST_DURATIONS[defKey] or 0
+  if burstDur <= 0 then
+    return false
+  end
+
+  local last = st.lastCastAt and st.lastCastAt[defKey]
+  if last and (now - last) >= 0 and (now - last) < burstDur then
+    return true
+  end
+
+  if sObj and (not sObj.ready) and sObj.durSec and sObj.durSec >= 45 and sObj.remSec and sObj.remSec > 0 then
+    local elapsed = sObj.durSec - sObj.remSec
+    if elapsed >= 0 and elapsed < burstDur then
+      return true
+    end
+  end
+
+  if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID and def and def.ids then
+    for _, id in ipairs(def.ids) do
+      local okP, auraP = pcall(C_UnitAuras.GetUnitAuraBySpellID, "player", id)
+      if okP and type(auraP) == "table" then
+        return true
+      end
+      local okT, auraT = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", id)
+      if okT and type(auraT) == "table" then
+        return true
+      end
+    end
+  end
+
+  return false
+end
+
+function SpArc:IsPlayerInBurst(states, now)
+  now = now or GetTime()
+  for defKey, def in pairs(SPELL_DEFS or EMPTY_TABLE) do
+    local burstDur = def.burstDuration or DEFAULT_BURST_DURATIONS[defKey] or 0
+    if burstDur > 0 then
+      local sObj = states and states[defKey] or nil
+      if SpArc:IsSpellBurstActive(defKey, sObj, now) then
+        return true
+      end
+    end
+  end
+  return false
+end
+
 function SpArc:CheckTargetHasDoTs(assistedKey)
   local now = GetTime()
   local aDef = assistedKey and SPELL_DEFS[assistedKey] or nil
-  if assistedKey == "VAMPIRIC_TOUCH" or (aDef and aDef.appliesDoTs and (aDef.baseCD or 0) <= 1.5) then
-    return false
-  end
-  if st.targetDoTsUntil and now < st.targetDoTsUntil then
-    return true
-  end
-  if assistedKey == "TENTACLE_SLAM" or (aDef and aDef.appliesDoTs) then
-    return false
-  end
-  if assistedKey and not (aDef and aDef.appliesDoTs) then
-    return true
+  local hasComboSpenderDoT = (SPELL_DEFS["RUPTURE"] ~= nil) or (SPELL_DEFS["RIP"] ~= nil)
+
+  if hasComboSpenderDoT then
+    if assistedKey == "RUPTURE" or assistedKey == "RIP" then
+      if st.targetDoTsUntil and (st.targetDoTsUntil - now) > 6.0 then
+        return true
+      end
+      return false
+    end
+    if assistedKey == "ENVENOM" or assistedKey == "FEROCIOUS_BITE" then
+      st.targetDoTsUntil = math.max(st.targetDoTsUntil or 0, now + 6.0)
+      return true
+    end
+    if st.targetDoTsUntil and now < st.targetDoTsUntil then
+      return true
+    end
+  else
+    if assistedKey == "VAMPIRIC_TOUCH" or (aDef and aDef.appliesDoTs and (aDef.baseCD or 0) <= 1.5) then
+      return false
+    end
+    if st.targetDoTsUntil and now < st.targetDoTsUntil then
+      return true
+    end
+    if assistedKey == "TENTACLE_SLAM" or (aDef and aDef.appliesDoTs) then
+      return false
+    end
+    if assistedKey and not (aDef and aDef.appliesDoTs) then
+      st.targetDoTsUntil = math.max(st.targetDoTsUntil or 0, now + 2.5)
+      return true
+    end
   end
 
   if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID then

@@ -596,12 +596,14 @@ function SpArc:ScanActionSlotsAndSpells(force)
   end
 
   for _, def in pairs(SPELL_DEFS) do
+    def.inheritedBaseSlot = false
     if def.overrideOf then
       local baseDef = SPELL_DEFS[def.overrideOf]
       if baseDef then
-        if baseDef.slot and not def.isKnown then
+        if baseDef.slot and not def.slot then
           def.slot = baseDef.slot
           def.keybind = baseDef.keybind
+          def.inheritedBaseSlot = true
         elseif not baseDef.slot and def.slot then
           baseDef.slot = def.slot
           baseDef.keybind = def.keybind
@@ -686,18 +688,81 @@ function SpArc:MatchSpellToDefKey(spellID, spellName)
   return nil
 end
 
+local AOE_ASSIST_KEYS = {
+  FAN_OF_KNIVES = true,
+  CRIMSON_TEMPEST = true,
+  BLIZZARD = true,
+  MULTI_SHOT = true,
+  CHAIN_LIGHTNING = true,
+  WHIRLWIND = true,
+}
+
 function SpArc:GetAssistedSuggestedDefKey()
   if not (C_AssistedCombat and C_AssistedCombat.GetNextCastSpell) then
     return nil, nil
   end
+  local now = GetTime()
   local ok, spellID = pcall(C_AssistedCombat.GetNextCastSpell)
   if not ok or IsSecret(spellID) then
     return nil, nil
   end
   spellID = tonumber(spellID)
   if not spellID or spellID <= 0 then
+    if st.lastStableAssistKey and (now - (st.lastStableAssistAt or 0)) < 1.5 then
+      local lastCast = st.lastCastAt[st.lastStableAssistKey] or 0
+      if lastCast < (st.lastStableAssistAt or 0) then
+        return st.lastStableAssistKey, st.lastStableAssistID
+      end
+    end
     return nil, nil
   end
   local defKey = SpArc:MatchSpellToDefKey(spellID, nil)
-  return defKey, spellID
+  if not defKey then
+    -- Ignore transient non-rotational utility/poison prompts (e.g. 5761 Numbing Poison when stepping out of 5yd melee cone)
+    if st.lastStableAssistKey and (now - (st.lastStableAssistAt or 0)) < 1.5 then
+      local lastCast = st.lastCastAt[st.lastStableAssistKey] or 0
+      if lastCast < (st.lastStableAssistAt or 0) then
+        return st.lastStableAssistKey, spellID
+      end
+    end
+    return nil, spellID
+  end
+
+  local prevKey = st.lastStableAssistKey
+  if not prevKey or prevKey == defKey then
+    st.lastStableAssistKey = defKey
+    st.lastStableAssistID = spellID
+    st.lastStableAssistAt = now
+    st.assistCandidateKey = defKey
+    st.assistCandidateSince = now
+    return defKey, spellID
+  end
+
+  local prevCastAt = st.lastCastAt[prevKey] or 0
+  local prevWasJustCast = prevCastAt >= ((st.lastStableAssistAt or 0) - 0.15) or (now - prevCastAt) < 0.8
+  local prevStale = (now - (st.lastStableAssistAt or 0)) > 2.0
+
+  if prevWasJustCast or prevStale then
+    st.lastStableAssistKey = defKey
+    st.lastStableAssistID = spellID
+    st.lastStableAssistAt = now
+    st.assistCandidateKey = defKey
+    st.assistCandidateSince = now
+    return defKey, spellID
+  end
+
+  if st.assistCandidateKey ~= defKey then
+    st.assistCandidateKey = defKey
+    st.assistCandidateSince = now
+  end
+
+  local holdNeeded = (AOE_ASSIST_KEYS[defKey] or AOE_ASSIST_KEYS[prevKey]) and 0.85 or 0.30
+  if (now - (st.assistCandidateSince or now)) >= holdNeeded then
+    st.lastStableAssistKey = defKey
+    st.lastStableAssistID = spellID
+    st.lastStableAssistAt = now
+    return defKey, spellID
+  end
+
+  return prevKey, st.lastStableAssistID or spellID
 end

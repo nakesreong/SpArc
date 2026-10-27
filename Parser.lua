@@ -112,6 +112,8 @@ local function ParseSpellDefLine(line)
         def.fillerInterruptible = (val:lower() == "true" or val == "1")
       elseif prop == "LOCK_CHANNEL" then
         def.lockChannel = (val:lower() == "true" or val == "1")
+      elseif prop == "BURST" or prop == "BURST_DURATION" then
+        def.burstDuration = tonumber(val) or 15
       end
     end
   end

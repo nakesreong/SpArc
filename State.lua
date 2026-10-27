@@ -1424,19 +1424,36 @@ function SpArc:PlayerHasBuff(defKey, now)
 end
 
 local PICK_POCKET_CREATURE_TYPES = {
-  ["Гуманоид"]  = true,
-  ["Humanoid"]  = true,
-  ["Нежить"]    = true,
-  ["Undead"]    = true,
-  ["Демон"]     = true,
-  ["Demon"]     = true,
-  ["Аберрация"] = true,
-  ["Aberration"]= true,
+  ["Гуманоид"] = true,
+  ["Humanoid"] = true,
 }
+
+function SpArc:MarkTargetPickPocketed(markNameToo)
+  local now = GetTime()
+  st.lastCastAt = st.lastCastAt or {}
+  st.lastCastAt["PICK_POCKET"] = now
+  if _G.UnitGUID then
+    local okG, guid = pcall(_G.UnitGUID, "target")
+    if okG and not IsSecret(guid) and type(guid) == "string" and guid ~= "" then
+      st.pickPocketedGUIDs = st.pickPocketedGUIDs or {}
+      st.pickPocketedGUIDs[guid] = true
+    end
+  end
+  if markNameToo and _G.UnitName then
+    local okN, tName = pcall(_G.UnitName, "target")
+    if okN and not IsSecret(tName) and type(tName) == "string" and tName ~= "" then
+      st.noPocketsNames = st.noPocketsNames or {}
+      st.noPocketsNames[tName] = true
+    end
+  end
+end
 
 function SpArc:CanPickPocketTarget(now)
   now = now or GetTime()
   if not (_G.IsStealthed and SafeBool(_G.IsStealthed)) then
+    return false
+  end
+  if _G.InCombatLockdown and SafeBool(_G.InCombatLockdown) then
     return false
   end
   if not (_G.UnitExists and SafeBool(_G.UnitExists, "target")) then
@@ -1453,7 +1470,7 @@ function SpArc:CanPickPocketTarget(now)
   end
 
   local lastPP = st.lastCastAt and st.lastCastAt["PICK_POCKET"]
-  if lastPP and (now - lastPP) < 8.0 then
+  if lastPP and (now - lastPP) < 10.0 then
     return false
   end
 
@@ -1464,13 +1481,32 @@ function SpArc:CanPickPocketTarget(now)
     end
   end
 
-  if _G.UnitCreatureType then
-    local okCT, cType = pcall(_G.UnitCreatureType, "target")
-    if okCT and not IsSecret(cType) and type(cType) == "string" and cType ~= "" then
-      if not PICK_POCKET_CREATURE_TYPES[cType] then
+  if _G.UnitName then
+    local okN, tName = pcall(_G.UnitName, "target")
+    if okN and not IsSecret(tName) and type(tName) == "string" and tName ~= "" then
+      if st.noPocketsNames and st.noPocketsNames[tName] then
+        return false
+      end
+      local lowN = SpArc.UTF8Lower and SpArc.UTF8Lower(tName) or tName:lower()
+      if lowN:find("бездн", 1, true) or lowN:find("void", 1, true) or lowN:find("элементал", 1, true) or lowN:find("elemental", 1, true) or lowN:find("порожден", 1, true) or lowN:find("призрак", 1, true) or lowN:find("дух", 1, true) then
         return false
       end
     end
+  end
+
+  if _G.UnitCreatureType then
+    local okCT, cType = pcall(_G.UnitCreatureType, "target")
+    if not okCT or IsSecret(cType) or type(cType) ~= "string" or not PICK_POCKET_CREATURE_TYPES[cType] then
+      return false
+    end
+  else
+    return false
+  end
+
+  local ppDef = SPELL_DEFS["PICK_POCKET"]
+  local ppSlot = ppDef and ppDef.slot or nil
+  if SpArc.IsSpellOutOfRange and SpArc:IsSpellOutOfRange("PICK_POCKET", ppDef, 921, ppSlot, true) then
+    return false
   end
 
   if C_Spell and C_Spell.IsSpellInRange then
@@ -1538,6 +1574,47 @@ local CLASS_RANGE_FALLBACK_SPELLS = {
   PRIEST  = { 8092, 589, 34914, 15407 },
 }
 
+local function CheckBT4ButtonOutOfRange(btBtn)
+  if not btBtn then return nil end
+  if not IsSecret(btBtn.outOfRange) and type(btBtn.outOfRange) == "boolean" then
+    if btBtn.outOfRange then
+      return true
+    end
+  end
+  if btBtn.HotKey then
+    if btBtn.HotKey.GetVertexColor then
+      local okHV, vr, vg, vb = pcall(btBtn.HotKey.GetVertexColor, btBtn.HotKey)
+      if okHV and not IsSecret(vr) and not IsSecret(vg) and not IsSecret(vb) and type(vr) == "number" then
+        if vr > 0.70 and (vg or 1) < 0.25 and (vb or 1) < 0.25 then
+          return true
+        elseif vr > 0.50 and (vg or 0) > 0.50 and (vb or 0) > 0.50 then
+          return false
+        end
+      end
+    end
+    if btBtn.HotKey.GetTextColor then
+      local okHK, hr, hg, hb = pcall(btBtn.HotKey.GetTextColor, btBtn.HotKey)
+      if okHK and not IsSecret(hr) and not IsSecret(hg) and not IsSecret(hb) and type(hr) == "number" then
+        if hr > 0.70 and (hg or 1) < 0.25 and (hb or 1) < 0.25 then
+          return true
+        end
+      end
+    end
+  end
+  if btBtn.icon and btBtn.icon.GetVertexColor then
+    local okV, vr, vg, vb = pcall(btBtn.icon.GetVertexColor, btBtn.icon)
+    if okV and not IsSecret(vr) and not IsSecret(vg) and not IsSecret(vb) and type(vr) == "number" then
+      if vr > 0.65 and (vg or 1) < 0.30 and (vb or 1) < 0.30 then
+        return true
+      end
+    end
+  end
+  if not IsSecret(btBtn.outOfRange) and btBtn.outOfRange == false then
+    return false
+  end
+  return nil
+end
+
 function SpArc:IsSpellOutOfRange(defKey, def, spellID, slot, slotMatchesDef)
   if SpArc.testMode or not defKey or NO_RANGE_CHECK_SPELLS[defKey] then
     return false
@@ -1571,7 +1648,7 @@ function SpArc:IsSpellOutOfRange(defKey, def, spellID, slot, slotMatchesDef)
     end
   end
 
-  if slot and slotMatchesDef and _G.IsActionInRange then
+  if slot and _G.IsActionInRange then
     local okAR, inAR = pcall(_G.IsActionInRange, slot, "target")
     if not okAR or inAR == nil then
       okAR, inAR = pcall(_G.IsActionInRange, slot)
@@ -1581,28 +1658,11 @@ function SpArc:IsSpellOutOfRange(defKey, def, spellID, slot, slotMatchesDef)
     end
   end
 
-  if slot and slotMatchesDef then
-    local btBtn = _G["BT4Button" .. slot]
-    if btBtn then
-      if not IsSecret(btBtn.outOfRange) and type(btBtn.outOfRange) == "boolean" then
-        return btBtn.outOfRange
-      end
-      if btBtn.HotKey and btBtn.HotKey.GetTextColor then
-        local okHK, hr, hg, hb = pcall(btBtn.HotKey.GetTextColor, btBtn.HotKey)
-        if okHK and not IsSecret(hr) and not IsSecret(hg) and not IsSecret(hb) and type(hr) == "number" then
-          if hr > 0.80 and (hg or 1) < 0.25 and (hb or 1) < 0.25 then
-            return true
-          end
-        end
-      end
-      if btBtn.icon and btBtn.icon.GetVertexColor then
-        local okV, vr, vg, vb = pcall(btBtn.icon.GetVertexColor, btBtn.icon)
-        if okV and not IsSecret(vr) and not IsSecret(vg) and not IsSecret(vb) and type(vr) == "number" then
-          if vr > 0.65 and (vg or 1) < 0.30 and (vb or 1) < 0.30 then
-            return true
-          end
-        end
-      end
+  if slot then
+    local physSlot = (slot >= 73 and slot <= 120) and (((slot - 73) % 12) + 1) or slot
+    local btRes = CheckBT4ButtonOutOfRange(_G["BT4Button" .. physSlot])
+    if btRes ~= nil then
+      return btRes
     end
   end
 
@@ -1616,6 +1676,18 @@ function SpArc:IsSpellOutOfRange(defKey, def, spellID, slot, slotMatchesDef)
           if okFR and not IsSecret(inFR) and inFR ~= nil then
             return (inFR == false or inFR == 0)
           end
+        end
+      end
+    end
+  end
+
+  for otherKey, otherDef in pairs(SPELL_DEFS or EMPTY_TABLE) do
+    if not NO_RANGE_CHECK_SPELLS[otherKey] and otherDef.slot then
+      local pSlot = (otherDef.slot >= 73 and otherDef.slot <= 120) and (((otherDef.slot - 73) % 12) + 1) or otherDef.slot
+      if pSlot > 12 then
+        local btRes = CheckBT4ButtonOutOfRange(_G["BT4Button" .. pSlot])
+        if btRes ~= nil then
+          return btRes
         end
       end
     end

@@ -109,6 +109,10 @@ end
 
 function SpArc:GetSlotKeybind(slot)
   if not slot or slot < 1 then return nil end
+  local origSlot = slot
+  if slot >= 73 and slot <= 120 then
+    slot = ((slot - 73) % 12) + 1
+  end
   -- Slots 1 & 2 use M1 / M2 via Mouselook override in Combat Camera Click-Cast mode
   if (slot == 1 or slot == 2) and SpArc.IsCamClickCastEnabled and SpArc:IsCamClickCastEnabled() and SpArc.COMBAT_CAM_SLOT_KEYBINDS and SpArc.COMBAT_CAM_SLOT_KEYBINDS[slot] then
     return SpArc.COMBAT_CAM_SLOT_KEYBINDS[slot]
@@ -197,7 +201,7 @@ function SpArc:GetSlotKeybind(slot)
   end
 
   if GetActionText then
-    local okT, mName = pcall(GetActionText, slot)
+    local okT, mName = pcall(GetActionText, origSlot)
     if okT and not IsSecret(mName) and type(mName) == "string" and mName ~= "" then
       local up = Trim(mName):upper()
       if MACRO_NAME_KEYBINDS[up] then

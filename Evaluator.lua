@@ -823,6 +823,7 @@ eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 eventFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
 eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 eventFrame:RegisterEvent("PLAYER_FLAGS_CHANGED")
+eventFrame:RegisterEvent("UI_ERROR_MESSAGE")
 eventFrame:RegisterEvent("UNIT_SPELLCAST_SENT")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
@@ -834,6 +835,16 @@ eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
 
 eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
   local castGUID, spellID = arg2, arg3
+  if event == "UI_ERROR_MESSAGE" then
+    if _G.IsStealthed and SafeBool(_G.IsStealthed) and SpArc.MarkTargetPickPocketed then
+      local msg = not IsSecret(arg2) and type(arg2) == "string" and arg2 or ""
+      local lowM = SpArc.UTF8Lower and SpArc.UTF8Lower(msg) or msg:lower()
+      if lowM == "" or lowM:find("карман", 1, true) or lowM:find("pocket", 1, true) or lowM:find("краст", 1, true) or lowM:find("steal", 1, true) or lowM:find("обокра", 1, true) then
+        SpArc:MarkTargetPickPocketed(true)
+      end
+    end
+    return
+  end
   if event == "UNIT_SPELLCAST_SENT" then
     if unit ~= "player" then return end
     st.lastAnyCastAt = GetTime()
@@ -842,6 +853,9 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     spellID = arg4
     if spellID and not IsSecret(spellID) then
       local defKey = SpArc:MatchSpellToDefKey(spellID, nil)
+      if defKey == "PICK_POCKET" and SpArc.MarkTargetPickPocketed then
+        SpArc:MarkTargetPickPocketed(false)
+      end
       if defKey and SpArc.TriggerSpellPress then
         SpArc:TriggerSpellPress(defKey, nil, nil)
       end
@@ -943,6 +957,12 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
       SpArc:RecordSpellCastSuccess(defKey, now)
     end
   elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+    if event == "UNIT_SPELLCAST_FAILED" and spellID and not IsSecret(spellID) then
+      local failedKey = SpArc:MatchSpellToDefKey(spellID, sName)
+      if failedKey == "PICK_POCKET" and SpArc.MarkTargetPickPocketed then
+        SpArc:MarkTargetPickPocketed(true)
+      end
+    end
     st.castState.active = false
     st.castState.defKey = nil
   elseif event == "UNIT_SPELLCAST_SUCCEEDED" then

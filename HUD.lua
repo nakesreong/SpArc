@@ -535,6 +535,10 @@ function SpArc:TriggerSpellPress(defKey, slot, keybind)
     slot = defs[defKey].slot
   end
 
+  if (defKey == "PICK_POCKET" or (arcSlots[1] and arcSlots[1].currentDefKey == "PICK_POCKET" and keybind and arcSlots[1].currentKeybind == keybind)) and SpArc.MarkTargetPickPocketed then
+    SpArc:MarkTargetPickPocketed(false)
+  end
+
   local debounceId = defKey or (slot and ("SLOT_" .. tostring(slot))) or (keybind and ("KEY_" .. tostring(keybind))) or nil
   if debounceId then
     local prev = lastPressTriggerAt[debounceId]
@@ -615,10 +619,11 @@ local function EnsureBT4PressHooks(now)
       if btn and btn.HookScript then
         hookedBT4Buttons[slot] = true
         local capturedSlot = slot
-        pcall(btn.HookScript, btn, "PostClick", function()
-          local defKey = ResolveSlotDefKey(capturedSlot)
+        pcall(btn.HookScript, btn, "PostClick", function(selfBtn)
+          local actSlot = (selfBtn and not IsSecret(selfBtn.action) and type(selfBtn.action) == "number" and selfBtn.action > 0) and selfBtn.action or capturedSlot
+          local defKey = ResolveSlotDefKey(actSlot) or ResolveSlotDefKey(capturedSlot)
           local kb = SpArc.GetSlotKeybind and SpArc:GetSlotKeybind(capturedSlot) or nil
-          SpArc:TriggerSpellPress(defKey, capturedSlot, kb)
+          SpArc:TriggerSpellPress(defKey, actSlot, kb)
         end)
       end
     end

@@ -614,7 +614,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 16
+SpArc.PROFILE_SCHEMA_VERSION = 17
 
 ---------------------------------------------------------------------------------------
 --             4 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR)              --
@@ -648,10 +648,10 @@ SPELL VAMPIRIC_TOUCH = ID:34914 | NAME:"Прикосновение вампир�
 SPELL VOID_TORRENT = ID:263165 | NAME:"Поток бездны","Поток Бездны","Void Torrent" | MACRO:"SM1","SM2" | SLOT:3 | KEY:"SM1" | CD:45 | CHARGES:1 | GAIN:35 | GRANTS:MIND_FLAY_INSANITY | LOCK_CHANNEL:true | ICON:1386551
 SPELL DEVOURING_PLAGUE = ID:335467 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума","Shadow Word: Madness","Devouring Plague" | MACRO:"sp4" | SLOT:63 | KEY:"R" | CD:0 | COST:50 | GRANTS:MIND_FLAY_INSANITY | SPENDER:true | ICON:252997
 SPELL MIND_BLAST = ID:450983,8092 | NAME:"Выброс Бездны","Взрыв разума","Void Blast","Mind Blast" | MACRO:"M2","M1","M1_2" | SLOT:2 | KEY:"M2" | CD:7.5 | CHARGES:1 | GAIN:15 | ICON:136224
-SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела Бездны","Void Volley","Void Bolt" | MACRO:"M2","1_to_2","Dps" | SLOT:2 | KEY:"M2" | CD:6 | GAIN:10 | PROC_ONLY:true | ICON:1386548
+SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела Бездны","Void Volley","Void Bolt" | MACRO:"M2","1_to_2","Dps" | SLOT:2 | KEY:"M2" | CD:6 | GAIN:10 | OVERRIDE_OF:VOID_ERUPTION | PROC_ONLY:true | ICON:1386548
 SPELL SHADOW_WORD_DEATH = ID:32379 | NAME:"Слово Тьмы: Смерть","Shadow Word: Death" | MACRO:"SM2","SM1" | SLOT:4 | KEY:"SM2" | CD:10 | GAIN:10 | EXECUTE:true | ICON:136149
-SPELL MIND_FLAY_INSANITY = ID:391403 | NAME:"Пытка разума: безумие","Mind Flay: Insanity" | MACRO:"sp8" | SLOT:10 | KEY:"SE" | CD:0 | GAIN:16 | PROC_ONLY:true | ICON:136208
-SPELL MIND_FLAY = ID:15407,391403 | NAME:"Пытка разума","Mind Flay" | MACRO:"sp8" | SLOT:10 | KEY:"SE" | CD:0 | GAIN:12 | FILLER_INTERRUPTIBLE:true | ICON:136208
+SPELL MIND_FLAY_INSANITY = ID:391403 | NAME:"Пытка разума: безумие","Mind Flay: Insanity" | MACRO:"sp8" | SLOT:10 | KEY:"SE" | CD:0 | GAIN:16 | OVERRIDE_OF:MIND_FLAY | PROC_ONLY:true | ICON:136208
+SPELL MIND_FLAY = ID:15407 | NAME:"Пытка разума","Mind Flay" | MACRO:"sp8" | SLOT:10 | KEY:"SE" | CD:0 | GAIN:12 | FILLER_INTERRUPTIBLE:true | ICON:136208
 SPELL VOID_ERUPTION = ID:228260,391109,194249 | NAME:"Вхождение в Бездну","Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | MACRO:"Dps","1_to_2" | SLOT:49 | KEY:"1" | CD:120 | BURST:20 | ICON:537079
 SPELL POWER_INFUSION = ID:10060 | NAME:"Придание сил","Power Infusion" | MACRO:"1_to_2" | SLOT:11 | KEY:"Q" | CD:120 | BURST:15 | ICON:135939
 SPELL HALO = ID:120644,122121,120517 | NAME:"Сияние","Божественная звезда","Halo","Divine Star" | MACRO:"S1" | SLOT:53 | KEY:"S1" | CD:60 | GAIN:10 | ICON:632352
@@ -790,16 +790,15 @@ END IF
 ]])
 
 -- ====================================================================================
--- #3: ROGUE — Assassination (Улак: ST + AoE + Подхват бурста + Обшаривание карманов)
+-- #3: ROGUE — Assassination (Улак: ST + AoE + Подхват бурста)
 -- ====================================================================================
-RegisterPreset("ROGUE_01_ASSA_PVE", "ROGUE", "3. Разбойник: Ликвидация (Мути — СТ / АоЕ / Инвиз)", "PVE", [[
-# PROFILE: 3. Разбойник: Ликвидация (Мути — СТ / АоЕ / Инвиз)
+RegisterPreset("ROGUE_01_ASSA_PVE", "ROGUE", "3. Разбойник: Ликвидация (Мути — СТ / АоЕ)", "PVE", [[
+# PROFILE: 3. Разбойник: Ликвидация (Мути — СТ / АоЕ)
 # CLASS: ROGUE
 # SPEC: Assassination
 # MODE: PVE
 
 ## SPELL_BOOK
-SPELL PICK_POCKET = ID:921 | NAME:"Обшаривание карманов","Pick Pocket" | CD:0 | ICON:133644
 SPELL DEATHMARK = ID:360194 | NAME:"Знак смерти","Метка смерти","Deathmark" | CD:120 | BURST:16 | ICON:4667421
 SPELL KINGSBANE = ID:385627 | NAME:"Погибель королей","Kingsbane" | CD:60 | BURST:14 | GAIN:20 | ICON:1373906
 SPELL SHIV = ID:5938,319504 | NAME:"Отравляющий укол","Shiv" | CD:30 | CHARGES:1 | GAIN:20 | ICON:135428
@@ -810,7 +809,6 @@ SPELL ENVENOM = ID:32645,196819 | NAME:"Отравление","Потрошен�
 SPELL AMBUSH = ID:8676 | NAME:"Внезапный удар","Ambush" | CD:0 | GAIN:40 | PROC_ONLY:true | OVERRIDE_OF:MUTILATE | ICON:132282
 SPELL MUTILATE = ID:1329,1752 | NAME:"Расправа","Коварный удар","Mutilate","Sinister Strike" | CD:0 | GAIN:40 | FILLER_INTERRUPTIBLE:true | ICON:132304
 SPELL FAN_OF_KNIVES = ID:51723 | NAME:"Веер клинков","Fan of Knives" | CD:0 | GAIN:20 | ICON:236273
-SPELL THISTLE_TEA = ID:381623 | NAME:"Скорополоховый чай","Артишоковый чай","Thistle Tea" | CD:60 | CHARGES:3 | ICON:132819
 SPELL VANISH = ID:1856 | NAME:"Исчезновение","Vanish" | CD:120 | ICON:132331
 SPELL CLOAK_OF_SHADOWS = ID:31224 | NAME:"Плащ теней","Cloak of Shadows" | CD:120 | ICON:136177
 SPELL EVASION = ID:5277 | NAME:"Ускользание","Evasion" | CD:120 | ICON:136205
@@ -819,7 +817,7 @@ SPELL FEINT = ID:1966 | NAME:"Уловка","Feint" | CD:15 | CHARGES:2 | ICON:1
 
 ## TRACKERS
 TRACK_SAVES: CRIMSON_VIAL, EVASION, CLOAK_OF_SHADOWS, FEINT
-TRACK_CDS: DEATHMARK, KINGSBANE, SHIV, THISTLE_TEA, VANISH
+TRACK_CDS: DEATHMARK, KINGSBANE, SHIV, VANISH
 
 ## EMERGENCY_SAVE
 IF player.hp_percent <= 35 AND READY(CRIMSON_VIAL) THEN
@@ -831,9 +829,7 @@ ELSE IF player.hp_percent <= 20 AND READY(CLOAK_OF_SHADOWS) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF player.stealthed AND target.can_pick_pocket AND READY(PICK_POCKET) THEN
-    RETURN CAST(PICK_POCKET)
-ELSE IF READY(GARROTE) THEN
+IF READY(GARROTE) THEN
     RETURN CAST(GARROTE)
 ELSE IF NOT target.has_dots AND READY(RUPTURE) THEN
     RETURN CAST(RUPTURE)
@@ -841,8 +837,6 @@ ELSE IF ACTIVE(DEATHMARK) AND READY(KINGSBANE) THEN
     RETURN CAST(KINGSBANE)
 ELSE IF player.in_burst AND READY(SHIV) THEN
     RETURN CAST(SHIV)
-ELSE IF player.in_burst AND READY(THISTLE_TEA) THEN
-    RETURN CAST(THISTLE_TEA)
 ELSE IF enemies >= 2 AND READY(CRIMSON_TEMPEST) THEN
     RETURN CAST(CRIMSON_TEMPEST)
 ELSE IF READY(ENVENOM) THEN

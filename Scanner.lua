@@ -267,10 +267,27 @@ function SpArc:ScanActionSlotsAndSpells(force)
   local explicitOwnerBySpellID = {}
   for k, def in pairs(SPELL_DEFS) do
     for _, id in ipairs(def.ids or {}) do
-      if not explicitOwnerBySpellID[id] or def.overrideOf or def.procOnly or k == "VOID_BOLT" or k == "MIND_FLAY_INSANITY" then
+      if not explicitOwnerBySpellID[id] or def.overrideOf or def.procOnly then
         explicitOwnerBySpellID[id] = k
       end
     end
+  end
+
+  local function GetSpellIconByID(sid)
+    if not sid or IsSecret(sid) then return nil end
+    if C_Spell and C_Spell.GetSpellTexture then
+      local okT, tex = pcall(C_Spell.GetSpellTexture, sid)
+      if okT and not IsSecret(tex) and tex then
+        return tex
+      end
+    end
+    if C_Spell and C_Spell.GetSpellInfo then
+      local okI, info = pcall(C_Spell.GetSpellInfo, sid)
+      if okI and type(info) == "table" and not IsSecret(info.iconID) and info.iconID then
+        return info.iconID
+      end
+    end
+    return nil
   end
 
   for k, def in pairs(SPELL_DEFS) do
@@ -302,12 +319,7 @@ function SpArc:ScanActionSlotsAndSpells(force)
       if not isKnown and (IsSpellIDKnown(eid) or IsSpellIDKnown(id)) then
         isKnown = true
         resolvedID = eid
-        if C_Spell and C_Spell.GetSpellInfo then
-          local okI, info = pcall(C_Spell.GetSpellInfo, eid)
-          if okI and type(info) == "table" and not IsSecret(info.iconID) and info.iconID then
-            resolvedIcon = info.iconID
-          end
-        end
+        resolvedIcon = GetSpellIconByID(eid) or GetSpellIconByID(id)
       end
     end
     if C_Spell and C_Spell.GetSpellInfo then
@@ -321,30 +333,30 @@ function SpArc:ScanActionSlotsAndSpells(force)
               isKnown = true
               if not resolvedID then
                 resolvedID = info.spellID
-                resolvedIcon = not IsSecret(info.iconID) and info.iconID or nil
+                resolvedIcon = not IsSecret(info.iconID) and info.iconID or GetSpellIconByID(info.spellID)
               end
             end
           end
         end
       end
-      if not resolvedID then
-        for _, id in ipairs(def.ids or {}) do
-          local eid = id
-          if C_Spell.GetOverrideSpell then
-            local okO, over = pcall(C_Spell.GetOverrideSpell, id)
-            if okO and type(over) == "number" and not IsSecret(over) and over > 0 then
-              local owner = explicitOwnerBySpellID[over]
-              if not owner or owner == k then
-                eid = over
-              end
+    end
+    if not resolvedID or not resolvedIcon then
+      for _, id in ipairs(def.ids or {}) do
+        local eid = id
+        if C_Spell and C_Spell.GetOverrideSpell then
+          local okO, over = pcall(C_Spell.GetOverrideSpell, id)
+          if okO and type(over) == "number" and not IsSecret(over) and over > 0 then
+            local owner = explicitOwnerBySpellID[over]
+            if not owner or owner == k then
+              eid = over
             end
           end
-          local ok, info = pcall(C_Spell.GetSpellInfo, eid)
-          if ok and type(info) == "table" and not IsSecret(info.iconID) and info.iconID then
-            resolvedID = eid
-            resolvedIcon = info.iconID
-            break
-          end
+        end
+        local ico = GetSpellIconByID(eid) or GetSpellIconByID(id)
+        if ico then
+          resolvedID = resolvedID or eid
+          resolvedIcon = resolvedIcon or ico
+          break
         end
       end
     end
@@ -352,7 +364,7 @@ function SpArc:ScanActionSlotsAndSpells(force)
     def.isKnown = isKnown
     def.resolvedIcon = resolvedIcon
     def.liveSpellID = resolvedID or (def.ids and def.ids[1])
-    def.liveIcon = resolvedIcon or def.fallbackIcon
+    def.liveIcon = resolvedIcon or def.fallbackIcon or 134400
   end
 
   local assistedSlots = BuildAssistedSlotSet()
@@ -560,31 +572,6 @@ function SpArc:ScanActionSlotsAndSpells(force)
     def.slotCastLineCount = (foundSlot and castLinesBySlot[foundSlot] and #castLinesBySlot[foundSlot]) or 0
     local kb = foundSlot and SpArc:GetSlotKeybind(foundSlot) or nil
     def.keybind = (kb and kb ~= "" and kb) or ""
-
-    if foundSlot then
-      local dirSID = slotDirectSpellID[foundSlot]
-      if dirSID and def.idSet and def.idSet[dirSID] and not (PVP_TALENT_SPELL_IDS[dirSID] and not SpArc:IsPvPActiveNow()) then
-        def.isKnown = true
-        def.liveSpellID = dirSID
-        if not def.resolvedIcon and C_Spell and C_Spell.GetSpellInfo then
-          local okI, info = pcall(C_Spell.GetSpellInfo, dirSID)
-          if okI and type(info) == "table" and not IsSecret(info.iconID) and info.iconID then
-            def.resolvedIcon = info.iconID
-            def.liveIcon = info.iconID
-          end
-        end
-      end
-      if def.key == "BLIZZARD" and def.liveIcon == 135857 then
-        def.liveIcon = 135858
-      end
-    end
-  end
-
-  local mfDef = SPELL_DEFS["MIND_FLAY"]
-  local mfiDef = SPELL_DEFS["MIND_FLAY_INSANITY"]
-  if mfDef and mfiDef and not mfiDef.slot and mfDef.slot then
-    mfiDef.slot = mfDef.slot
-    mfiDef.keybind = mfDef.keybind
   end
 
   for _, def in pairs(SPELL_DEFS) do
@@ -622,18 +609,6 @@ function SpArc:MatchSpellToDefKey(spellID, spellName)
     end
   end
 
-  if spellID == 391403 then
-    return "MIND_FLAY_INSANITY"
-  elseif spellID == 1242173 or spellID == 205448 then
-    return "VOID_BOLT"
-  elseif spellID == 228260 or spellID == 391109 or spellID == 194249 then
-    return "VOID_ERUPTION"
-  elseif spellID == 450983 or spellID == 8092 then
-    return "MIND_BLAST"
-  elseif spellID == 1227280 or spellID == 205385 or spellID == 457042 or spellID == 1234796 then
-    return "TENTACLE_SLAM"
-  end
-
   if spellID and not IsSecret(spellID) then
     for k, def in pairs(SPELL_DEFS) do
       if def.overrideOf or def.procOnly then
@@ -645,7 +620,7 @@ function SpArc:MatchSpellToDefKey(spellID, spellName)
       end
     end
     for k, def in pairs(SPELL_DEFS) do
-      if k ~= "MIND_FLAY_INSANITY" then
+      if not def.overrideOf then
         for _, id in ipairs(def.ids or {}) do
           if id == spellID then
             return k
@@ -656,7 +631,7 @@ function SpArc:MatchSpellToDefKey(spellID, spellName)
   end
 
   for k, def in pairs(SPELL_DEFS) do
-    if k ~= "MIND_FLAY_INSANITY" then
+    if not def.overrideOf then
       if spellID and not IsSecret(spellID) then
         if def.liveSpellID == spellID or (baseID and def.liveSpellID == baseID) then
           return k

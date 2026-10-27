@@ -695,9 +695,13 @@ local function OpenControlCenter(initialTab)
             db.presets[selectedPresetForEdit].mode = compiled.mode
           end
           db.activePresetID = selectedPresetForEdit
-          if db.mode == "AUTO" and type(db.autoPresets) == "table" then
-            local pMode = db.presets[selectedPresetForEdit].mode or "PVE"
-            db.autoPresets[pMode] = selectedPresetForEdit
+          local pCls = GetPlayerClassTag()
+          if db.presets[selectedPresetForEdit].class and db.presets[selectedPresetForEdit].class ~= pCls then
+            db.mode = "MANUAL"
+          elseif db.mode == "AUTO" and type(db.autoPresets) == "table" then
+            db.autoPresets.PVE  = selectedPresetForEdit
+            db.autoPresets.BOSS = selectedPresetForEdit
+            db.autoPresets.PVP  = selectedPresetForEdit
           end
           if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
           SpArc:SelectActiveParsedProfile()

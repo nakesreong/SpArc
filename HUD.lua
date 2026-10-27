@@ -895,7 +895,7 @@ rootFrame:SetScript("OnUpdate", function()
   if v.showEmergencySave ~= false and hpPct <= emThreshold and (inCombat or hasHostileTarget or SpArc.testMode) then
     local pickedEm = nil
     local pickedEmKey = nil
-    for _, emKey in ipairs((parsed and parsed.emergency) or { "DISPERSION", "DESPERATE_PRAYER", "VAMPIRIC_EMBRACE" }) do
+    for _, emKey in ipairs((parsed and parsed.emergency) or {}) do
       local s = states[emKey]
       if s and s.isReady and s.isUsable and not s.isUnavailable then
         pickedEm = s

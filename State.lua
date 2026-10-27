@@ -543,7 +543,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   local usableSource = "default(true)"
 
   local bookUsableVal, bookNoPowerVal = nil, nil
-  if C_Spell and C_Spell.IsSpellUsable and spellID then
+  if def.isKnown and C_Spell and C_Spell.IsSpellUsable and spellID then
     local okU, u, noP = pcall(C_Spell.IsSpellUsable, spellID)
     if okU then
       bookUsableRaw = FormatSecretOrVal(u) .. "/noP=" .. FormatSecretOrVal(noP)
@@ -650,21 +650,6 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
 
-    if useSlotActionState and (not slotActiveSpellID or (def.idSet and def.idSet[slotActiveSpellID])) then
-      local btBtn = _G["BT4Button" .. slot]
-      if btBtn and btBtn.icon and btBtn.icon.GetVertexColor then
-        local okV, r, g, b = pcall(btBtn.icon.GetVertexColor, btBtn.icon)
-        if okV and not IsSecret(r) and type(r) == "number" and r < 0.85 then
-          local isRedRangeTint = (r > 0.65) and (not IsSecret(g) and (g or 1) < 0.35) and (not IsSecret(b) and (b or 1) < 0.35)
-          if not isRedRangeTint then
-            isUsable = false
-            gotCleanUsable = true
-            usableSource = "BT4VertexTint(" .. btColorRaw .. ")"
-          end
-        end
-      end
-    end
-
     if def.isSpender and UnitPower then
       if defKey == "DEVOURING_PLAGUE" or SPELL_DEFS["DEVOURING_PLAGUE"] then
         local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 50
@@ -711,6 +696,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       if def.isSpender then
         isUsable = (assistedKey == defKey) or isProc
         usableSource = "SecretFallback(AssistedOrProcOnly)"
+      elseif not def.isKnown then
+        isUsable = true
+        usableSource = "ForeignClassSim(true)"
       else
         isUsable = false
         usableSource = "SecretFallback(false)"
@@ -746,40 +734,6 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     finalReady = false
     isUsable = false
     usableSource = "procOnly(false)"
-  elseif def.overrideOf and not isProc and not def.isKnown then
-    finalReady = false
-    isUsable = false
-    usableSource = "overrideInactive(" .. tostring(def.overrideOf) .. ")"
-  end
-
-  local isStanceWrapper = (
-    slotActiveSpellID == 15473
-    or slotActiveSpellID == 71
-    or slotActiveSpellID == 386208
-    or slotActiveSpellID == 2457
-    or slotActiveSpellID == 386164
-  )
-  local isExplicitFallback = (
-    slotActiveSpellID == 589
-    or slotActiveSpellID == 528
-    or slotActiveSpellID == 57755
-    or (slotActiveSpellID == 34914 and defKey ~= "VAMPIRIC_TOUCH" and defKey ~= "POWER_INFUSION")
-  )
-
-  if not SpArc.testMode and not isProc and not (def.overrideOf and SPELL_DEFS[def.overrideOf] and SPELL_DEFS[def.overrideOf].isKnown) then
-    if slotActiveSpellID and not (def.idSet and def.idSet[slotActiveSpellID]) and not isStanceWrapper then
-      if not def.isKnown or isExplicitFallback then
-        isUnavailable = true
-        finalReady = false
-        isUsable = false
-        usableSource = "TalentUnavailable(MacroFallback:" .. tostring(slotActiveSpellID) .. ")"
-      end
-    elseif not def.isKnown and not (slotActiveSpellID and def.idSet and def.idSet[slotActiveSpellID]) then
-      isUnavailable = true
-      finalReady = false
-      isUsable = false
-      usableSource = "SpellNotKnown"
-    end
   end
 
   local isNoResource = false

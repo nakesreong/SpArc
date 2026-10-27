@@ -28,11 +28,10 @@ local st = SpArc.state
 function SpArc:SyncSpellDefsFromProfile(parsed, presetID)
   if not parsed or not parsed.spells then return end
   local changed = (presetID and st.lastSyncedPresetID ~= presetID) or false
-  if changed and next(parsed.spells) ~= nil then
-    for k in pairs(SPELL_DEFS) do
-      if not parsed.spells[k] then
-        SPELL_DEFS[k] = nil
-      end
+  for k in pairs(SPELL_DEFS) do
+    if not parsed.spells[k] then
+      SPELL_DEFS[k] = nil
+      changed = true
     end
   end
   for k, spDef in pairs(parsed.spells) do
@@ -41,16 +40,28 @@ function SpArc:SyncSpellDefsFromProfile(parsed, presetID)
       changed = true
     else
       local dst = SPELL_DEFS[k]
-      if spDef.fillerInterruptible ~= nil then dst.fillerInterruptible = spDef.fillerInterruptible end
-      if spDef.lockChannel ~= nil then dst.lockChannel = spDef.lockChannel end
-      if spDef.insanityGain and spDef.insanityGain > 0 then dst.insanityGain = spDef.insanityGain end
-      if spDef.insanityCost and spDef.insanityCost > 0 then dst.insanityCost = spDef.insanityCost end
-      if spDef.stacksGain ~= nil then dst.stacksGain = spDef.stacksGain end
-      if spDef.stacksCost ~= nil then dst.stacksCost = spDef.stacksCost end
-      if spDef.consumesStacks ~= nil then dst.consumesStacks = spDef.consumesStacks end
-      if spDef.overrideOf ~= nil then dst.overrideOf = spDef.overrideOf end
-      if spDef.debuffIDs ~= nil then dst.debuffIDs = spDef.debuffIDs end
-      if spDef.burstDuration ~= nil then dst.burstDuration = spDef.burstDuration end
+      dst.ids = spDef.ids
+      dst.names = spDef.names
+      dst.fallbackIcon = spDef.fallbackIcon
+      dst.baseCD = spDef.baseCD
+      dst.maxCharges = spDef.maxCharges
+      dst.procOnly = spDef.procOnly
+      dst.isSpender = spDef.isSpender
+      dst.isExecute = spDef.isExecute
+      dst.requiresUsable = spDef.requiresUsable
+      dst.appliesDoTs = spDef.appliesDoTs
+      dst.grantsProc = spDef.grantsProc
+      dst.grantsMFI = spDef.grantsMFI
+      dst.fillerInterruptible = spDef.fillerInterruptible
+      dst.lockChannel = spDef.lockChannel
+      dst.insanityGain = spDef.insanityGain
+      dst.insanityCost = spDef.insanityCost
+      dst.stacksGain = spDef.stacksGain
+      dst.stacksCost = spDef.stacksCost
+      dst.consumesStacks = spDef.consumesStacks
+      dst.overrideOf = spDef.overrideOf
+      dst.debuffIDs = spDef.debuffIDs
+      dst.burstDuration = spDef.burstDuration
     end
   end
   if changed then
@@ -149,7 +160,7 @@ function SpArc:SelectActiveParsedProfile()
   local specID = SpArc:GetPlayerSpecID()
   local specMap = specID and SPEC_ID_TO_PRESETS[specID] or nil
 
-  if _G.UnitClass then
+  if mode == "AUTO" and _G.UnitClass then
     local okCls, _, playerClass = pcall(_G.UnitClass, "player")
     if okCls and not IsSecret(playerClass) and type(playerClass) == "string" then
       local curPreset = db.presets and db.presets[presetID]
@@ -178,17 +189,16 @@ function SpArc:SelectActiveParsedProfile()
             end
           end
           if fallbackID then
-            -- Use fallbackID temporarily while specID is nil, without overwriting SavedVariables
             presetID = fallbackID
           end
         end
-      elseif mode == "AUTO" then
-        db.activePresetID = presetID
-        if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
       else
+        db.activePresetID = presetID
         if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
       end
     end
+  elseif mode ~= "AUTO" then
+    if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
   end
 
   local parsed = (SpArc.ParsedPresets and SpArc.ParsedPresets[presetID])
@@ -471,7 +481,7 @@ function SpArc:BuildRotationQueue(maxSlots)
     sObj.keybind = keybind
     sObj.charges = charges
 
-    local known = (not isUnavailable) and (def.isKnown or def.slot ~= nil or SpArc.testMode) and true or false
+    local known = (not isUnavailable) and true or false
     simKnown[k] = known
     if not known then
       simCD[k] = 9999

@@ -579,7 +579,8 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         end
       end
     end
-    if IsUsableAction then
+    local slotMatchesDef = (not slotActiveSpellID) or (def.idSet and def.idSet[slotActiveSpellID]) or false
+    if slotMatchesDef and IsUsableAction then
       local okA, u, noM = pcall(IsUsableAction, slot)
       if okA then
         actUsableRaw = FormatSecretOrVal(u) .. "/noM=" .. FormatSecretOrVal(noM) .. (slotActiveSpellID and ("(id:" .. slotActiveSpellID .. ")") or "")
@@ -589,7 +590,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         end
       end
     end
-    if btBtn and btBtn.icon and btBtn.icon.GetVertexColor then
+    if slotMatchesDef and btBtn and btBtn.icon and btBtn.icon.GetVertexColor then
       local okV, r, g, b = pcall(btBtn.icon.GetVertexColor, btBtn.icon)
       if okV and not IsSecret(r) and not IsSecret(g) and not IsSecret(b) and type(r) == "number" then
         btColorRaw = string.format("%.2f,%.2f,%.2f", r, g or 1, b or 1)
@@ -649,7 +650,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
 
-    if useSlotActionState then
+    if useSlotActionState and (not slotActiveSpellID or (def.idSet and def.idSet[slotActiveSpellID])) then
       local btBtn = _G["BT4Button" .. slot]
       if btBtn and btBtn.icon and btBtn.icon.GetVertexColor then
         local okV, r = pcall(btBtn.icon.GetVertexColor, btBtn.icon)

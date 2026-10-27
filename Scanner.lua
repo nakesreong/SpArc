@@ -562,25 +562,12 @@ function SpArc:ScanActionSlotsAndSpells(force)
       if dirSID and def.idSet and def.idSet[dirSID] and not (PVP_TALENT_SPELL_IDS[dirSID] and not SpArc:IsPvPActiveNow()) then
         def.isKnown = true
         def.liveSpellID = dirSID
-      end
-      local useSlotTex = not (isBonusBarActive and foundSlot <= 12)
-      local btBtn = useSlotTex and _G["BT4Button" .. foundSlot] or nil
-      local tex = nil
-      if btBtn and btBtn.GetTexture then
-        local okBtTex, btTex = pcall(btBtn.GetTexture, btBtn)
-        if okBtTex and not IsSecret(btTex) and btTex then
-          tex = btTex
-        end
-      end
-      if not tex and useSlotTex and GetActionTexture then
-        local okTex, aTex = pcall(GetActionTexture, foundSlot)
-        if okTex and not IsSecret(aTex) and aTex then
-          tex = aTex
-        end
-      end
-      if tex and tex ~= 134400 and tex ~= 136200 and def.key ~= "MIND_FLAY_INSANITY" then
-        if not def.resolvedIcon or (dirSID and def.idSet and def.idSet[dirSID]) then
-          def.liveIcon = tex
+        if not def.resolvedIcon and C_Spell and C_Spell.GetSpellInfo then
+          local okI, info = pcall(C_Spell.GetSpellInfo, dirSID)
+          if okI and type(info) == "table" and not IsSecret(info.iconID) and info.iconID then
+            def.resolvedIcon = info.iconID
+            def.liveIcon = info.iconID
+          end
         end
       end
       if def.key == "BLIZZARD" and def.liveIcon == 135857 then

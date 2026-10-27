@@ -563,7 +563,8 @@ function SpArc:ScanActionSlotsAndSpells(force)
         def.isKnown = true
         def.liveSpellID = dirSID
       end
-      local btBtn = _G["BT4Button" .. foundSlot]
+      local useSlotTex = not (isBonusBarActive and foundSlot <= 12)
+      local btBtn = useSlotTex and _G["BT4Button" .. foundSlot] or nil
       local tex = nil
       if btBtn and btBtn.GetTexture then
         local okBtTex, btTex = pcall(btBtn.GetTexture, btBtn)
@@ -571,7 +572,7 @@ function SpArc:ScanActionSlotsAndSpells(force)
           tex = btTex
         end
       end
-      if not tex and GetActionTexture then
+      if not tex and useSlotTex and GetActionTexture then
         local okTex, aTex = pcall(GetActionTexture, foundSlot)
         if okTex and not IsSecret(aTex) and aTex then
           tex = aTex

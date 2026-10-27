@@ -201,9 +201,10 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     overlayRaw = "assisted(" .. tostring(defKey) .. ")"
   end
 
+  local hasSpellOverlayProc = isProc
+  local overrideActive = false
   if def.overrideOf and SPELL_DEFS[def.overrideOf] then
     local baseDef = SPELL_DEFS[def.overrideOf]
-    local overrideActive = false
     if C_Spell and C_Spell.GetOverrideSpell then
       for _, baseID in ipairs(baseDef.ids or {}) do
         local okO, over = pcall(C_Spell.GetOverrideSpell, baseID)
@@ -235,7 +236,15 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         end
       end
     end
-    if def.inheritedBaseSlot and not overrideActive then
+    if defKey == "AMBUSH" then
+      local isStealthed = _G.IsStealthed and SafeBool(_G.IsStealthed) or false
+      if isStealthed then
+        isProc = true
+        overlayRaw = "stealth"
+      elseif not hasSpellOverlayProc and not overrideActive then
+        isProc = false
+      end
+    elseif def.inheritedBaseSlot and not overrideActive then
       isProc = false
     elseif assistedKey == defKey then
       isProc = true
@@ -672,11 +681,12 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         local minCP = math.max(1, math.floor(cost / 20))
         local okCP, rawCP = pcall(UnitPower, "player", 4)
         if okCP and not IsSecret(rawCP) and type(rawCP) == "number" then
-          if rawCP < minCP and not isProc and assistedKey ~= defKey then
+          if rawCP < minCP then
             isUsable = false
+            isProc = false
             gotCleanUsable = true
             usableSource = "ComboPoints(" .. tostring(rawCP) .. "<" .. tostring(minCP) .. ")"
-          elseif rawCP >= minCP then
+          else
             isUsable = true
             gotCleanUsable = true
             usableSource = "ComboPoints(" .. tostring(rawCP) .. ">=" .. tostring(minCP) .. ")"
@@ -703,7 +713,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
 
-    if isProc or assistedKey == defKey then
+    if (isProc or assistedKey == defKey) and not (def.isSpender and not SPELL_DEFS["DEVOURING_PLAGUE"] and gotCleanUsable and not isUsable) then
       isUsable = true
       usableSource = isProc and "ProcOverride" or "AssistedCombat"
     end
@@ -712,11 +722,20 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   local finalReady = (not isOnCD)
   local isUnavailable = false
 
-  if def.overrideOf and slotActiveSpellID and def.idSet and def.idSet[slotActiveSpellID] then
+  if def.overrideOf and def.inheritedBaseSlot and slotActiveSpellID and def.idSet and def.idSet[slotActiveSpellID] then
     isProc = true
     isOnCD = false
     finalReady = true
     overlayRaw = "slotOverride(" .. tostring(slotActiveSpellID) .. ")"
+  end
+
+  if defKey == "AMBUSH" then
+    if bookUsableVal == false and not bookNoPowerVal then
+      isProc = false
+      finalReady = false
+      isUsable = false
+      usableSource = "AmbushNotStealthedOrProc"
+    end
   end
 
   if def.procOnly and not isProc then

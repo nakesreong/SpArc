@@ -646,6 +646,11 @@ function SpArc:BuildRotationQueue(maxSlots)
 
       local pickedWasProc = simProcs[pickedKey]
       simProcs[pickedKey] = false
+      if simProcs["AMBUSH"] then
+        simProcs["AMBUSH"] = false
+        simReady["AMBUSH"] = false
+        simUsable["AMBUSH"] = false
+      end
       if def then
         if def.appliesDoTs then simHasDoTs = true end
         if def.burstDuration and def.burstDuration > 0 then
@@ -703,13 +708,21 @@ function SpArc:BuildRotationQueue(maxSlots)
         end
       end
 
+      local isComboPointClass = (SPELL_DEFS["DEVOURING_PLAGUE"] == nil)
       for spK, spD in pairs(SPELL_DEFS) do
         if spD.isSpender and spD.insanityCost then
-          local canAfford = simInsanity >= spD.insanityCost
-          simUsable[spK] = canAfford
-          if canAfford then
-            simCD[spK] = 0
-            simReady[spK] = true
+          if isComboPointClass then
+            if def and def.isSpender then
+              simUsable[spK] = false
+              simReady[spK] = false
+            end
+          else
+            local canAfford = simInsanity >= spD.insanityCost
+            simUsable[spK] = canAfford
+            if canAfford then
+              simCD[spK] = 0
+              simReady[spK] = true
+            end
           end
         end
       end

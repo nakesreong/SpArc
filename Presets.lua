@@ -614,7 +614,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 17
+SpArc.PROFILE_SCHEMA_VERSION = 18
 
 ---------------------------------------------------------------------------------------
 --             4 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR)              --
@@ -634,34 +634,34 @@ local function RegisterPreset(id, classTag, title, mode, mdBody)
 end
 
 -- ====================================================================================
--- #1: PRIEST — Shadow (Ньарлатхотеп: ST + AoE + Misc)
+-- #1: PRIEST — Shadow (Ньарлатхотеп: Leveling / ST / AoE / Misc)
 -- ====================================================================================
-RegisterPreset("PRIEST_01_SHADOW_PVE", "PRIEST", "1. Жрец: Тьма (ШП — СТ / АоЕ / Баффы)", "PVE", [[
-# PROFILE: 1. Жрец: Тьма (ШП — СТ / АоЕ / Баффы)
+RegisterPreset("PRIEST_01_SHADOW_PVE", "PRIEST", "1. Жрец: Тьма (ШП — Левелинг / СТ / АоЕ)", "PVE", [[
+# PROFILE: 1. Жрец: Тьма (ШП — Левелинг / СТ / АоЕ)
 # CLASS: PRIEST
 # SPEC: Shadow
 # MODE: PVE
 
 ## SPELL_BOOK
-SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | MACRO:"M1","M2","sp3" | SLOT:1 | KEY:"M1" | CD:15 | CHARGES:2 | GAIN:15 | DOTS:true | ICON:136201
-SPELL VAMPIRIC_TOUCH = ID:34914 | NAME:"Прикосновение вампира","Vampiric Touch" | MACRO:"sp1pvp","sp1" | SLOT:64 | KEY:"SR" | CD:0 | CHARGES:1 | GAIN:6 | DOTS:true | ICON:135978
-SPELL VOID_TORRENT = ID:263165 | NAME:"Поток бездны","Поток Бездны","Void Torrent" | MACRO:"SM1","SM2" | SLOT:3 | KEY:"SM1" | CD:45 | CHARGES:1 | GAIN:35 | GRANTS:MIND_FLAY_INSANITY | LOCK_CHANNEL:true | ICON:1386551
-SPELL DEVOURING_PLAGUE = ID:335467 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума","Shadow Word: Madness","Devouring Plague" | MACRO:"sp4" | SLOT:63 | KEY:"R" | CD:0 | COST:50 | GRANTS:MIND_FLAY_INSANITY | SPENDER:true | ICON:252997
-SPELL MIND_BLAST = ID:450983,8092 | NAME:"Выброс Бездны","Взрыв разума","Void Blast","Mind Blast" | MACRO:"M2","M1","M1_2" | SLOT:2 | KEY:"M2" | CD:7.5 | CHARGES:1 | GAIN:15 | ICON:136224
-SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела Бездны","Void Volley","Void Bolt" | MACRO:"M2","1_to_2","Dps" | SLOT:2 | KEY:"M2" | CD:6 | GAIN:10 | OVERRIDE_OF:VOID_ERUPTION | PROC_ONLY:true | ICON:1386548
-SPELL SHADOW_WORD_DEATH = ID:32379 | NAME:"Слово Тьмы: Смерть","Shadow Word: Death" | MACRO:"SM2","SM1" | SLOT:4 | KEY:"SM2" | CD:10 | GAIN:10 | EXECUTE:true | ICON:136149
-SPELL MIND_FLAY_INSANITY = ID:391403 | NAME:"Пытка разума: безумие","Mind Flay: Insanity" | MACRO:"sp8" | SLOT:10 | KEY:"SE" | CD:0 | GAIN:16 | OVERRIDE_OF:MIND_FLAY | PROC_ONLY:true | ICON:136208
-SPELL MIND_FLAY = ID:15407 | NAME:"Пытка разума","Mind Flay" | MACRO:"sp8" | SLOT:10 | KEY:"SE" | CD:0 | GAIN:12 | FILLER_INTERRUPTIBLE:true | ICON:136208
-SPELL VOID_ERUPTION = ID:228260,391109,194249 | NAME:"Вхождение в Бездну","Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | MACRO:"Dps","1_to_2" | SLOT:49 | KEY:"1" | CD:120 | BURST:20 | ICON:537079
-SPELL POWER_INFUSION = ID:10060 | NAME:"Придание сил","Power Infusion" | MACRO:"1_to_2" | SLOT:11 | KEY:"Q" | CD:120 | BURST:15 | ICON:135939
-SPELL HALO = ID:120644,122121,120517 | NAME:"Сияние","Божественная звезда","Halo","Divine Star" | MACRO:"S1" | SLOT:53 | KEY:"S1" | CD:60 | GAIN:10 | ICON:632352
-SPELL PSYFIEND = ID:34433,211522,375901,451235,200174 | NAME:"Исчадие Тьмы","Ментальный демон","Игры разума","Призрак Бездны","Shadowfiend","Psyfiend" | MACRO:"pvptal" | SLOT:67 | KEY:"T" | CD:60 | ICON:136199
 SPELL POWER_WORD_FORTITUDE = ID:21562 | NAME:"Слово силы: Стойкость","Power Word: Fortitude" | CD:0 | ICON:135987
-SPELL DISPERSION = ID:47585 | NAME:"Слияние с тьмой","Слияние с Тьмой","Dispersion" | MACRO:"CM2" | SLOT:6 | KEY:"CM2" | CD:90 | ICON:237563
-SPELL DESPERATE_PRAYER = ID:19236 | NAME:"Молитва отчаяния","Desperate Prayer" | MACRO:"CM1" | SLOT:5 | KEY:"CM1" | CD:90 | ICON:237550
-SPELL VAMPIRIC_EMBRACE = ID:15286 | NAME:"Объятия вампира","Vampiric Embrace" | MACRO:"AM1" | SLOT:7 | KEY:"AM1" | CD:120 | ICON:136230
-SPELL FADE = ID:586,8122 | NAME:"Уход в тень","Ментальный крик","Fade","Psychic Scream" | MACRO:"p2","p12","p4" | SLOT:71 | KEY:"Z" | CD:30 | ICON:135994
-SPELL POWER_WORD_SHIELD = ID:17 | NAME:"Слово силы: Щит","Power Word: Shield" | MACRO:"H_Shield","p4" | SLOT:62 | KEY:"SB3" | CD:7.5 | ICON:135940
+SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | GAIN:15 | DOTS:true | ICON:136201
+SPELL VAMPIRIC_TOUCH = ID:34914 | NAME:"Прикосновение вампира","Vampiric Touch" | CD:0 | CHARGES:1 | GAIN:6 | DOTS:true | ICON:135978
+SPELL HALO = ID:120644,122121,120517 | NAME:"Сияние","Божественная звезда","Halo","Divine Star" | CD:60 | GAIN:10 | ICON:632352
+SPELL VOID_ERUPTION = ID:228260,391109,194249 | NAME:"Вхождение в Бездну","Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | BURST:20 | ICON:537079
+SPELL POWER_INFUSION = ID:10060 | NAME:"Придание сил","Power Infusion" | CD:120 | BURST:15 | ICON:135939
+SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела Бездны","Void Volley","Void Bolt" | CD:6 | GAIN:10 | OVERRIDE_OF:VOID_ERUPTION | PROC_ONLY:true | ICON:1386548
+SPELL DEVOURING_PLAGUE = ID:335467 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума","Shadow Word: Madness","Devouring Plague" | CD:0 | COST:50 | GRANTS:MIND_FLAY_INSANITY | SPENDER:true | ICON:252997
+SPELL SHADOW_WORD_DEATH = ID:32379 | NAME:"Слово Тьмы: Смерть","Shadow Word: Death" | CD:10 | GAIN:10 | EXECUTE:true | ICON:136149
+SPELL MIND_BLAST = ID:450983,8092 | NAME:"Выброс Бездны","Взрыв разума","Void Blast","Mind Blast" | CD:7.5 | CHARGES:1 | GAIN:15 | ICON:136224
+SPELL VOID_TORRENT = ID:263165 | NAME:"Поток бездны","Поток Бездны","Void Torrent" | CD:45 | CHARGES:1 | GAIN:35 | GRANTS:MIND_FLAY_INSANITY | LOCK_CHANNEL:true | ICON:1386551
+SPELL MIND_FLAY_INSANITY = ID:391403 | NAME:"Пытка разума: безумие","Mind Flay: Insanity" | CD:0 | GAIN:16 | OVERRIDE_OF:MIND_FLAY | PROC_ONLY:true | ICON:136208
+SPELL MIND_FLAY = ID:15407 | NAME:"Пытка разума","Mind Flay" | CD:0 | GAIN:12 | FILLER_INTERRUPTIBLE:true | ICON:136208
+SPELL PSYFIEND = ID:34433,211522,375901,451235,200174 | NAME:"Исчадие Тьмы","Ментальный демон","Игры разума","Призрак Бездны","Shadowfiend","Psyfiend" | CD:60 | ICON:136199
+SPELL DISPERSION = ID:47585 | NAME:"Слияние с тьмой","Слияние с Тьмой","Dispersion" | CD:90 | ICON:237563
+SPELL DESPERATE_PRAYER = ID:19236 | NAME:"Молитва отчаяния","Desperate Prayer" | CD:90 | ICON:237550
+SPELL VAMPIRIC_EMBRACE = ID:15286 | NAME:"Объятия вампира","Vampiric Embrace" | CD:120 | ICON:136230
+SPELL FADE = ID:586,8122 | NAME:"Уход в тень","Ментальный крик","Fade","Psychic Scream" | CD:30 | ICON:135994
+SPELL POWER_WORD_SHIELD = ID:17 | NAME:"Слово силы: Щит","Power Word: Shield" | CD:7.5 | ICON:135940
 
 ## CHANNEL_POLICY
 INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: MIND_FLAY
@@ -687,34 +687,32 @@ ELSE IF NOT target.has_dots AND READY(TENTACLE_SLAM) THEN
     RETURN CAST(TENTACLE_SLAM)
 ELSE IF NOT target.has_dots AND NOT READY(TENTACLE_SLAM) THEN
     RETURN CAST(VAMPIRIC_TOUCH)
-ELSE IF enemies >= 3 AND READY(TENTACLE_SLAM) THEN
+ELSE IF enemies >= 2 AND READY(TENTACLE_SLAM) THEN
     RETURN CAST(TENTACLE_SLAM)
+ELSE IF enemies >= 2 AND READY(HALO) THEN
+    RETURN CAST(HALO)
 ELSE IF PROC(VOID_BOLT) AND READY(VOID_BOLT) THEN
     RETURN CAST(VOID_BOLT)
-ELSE IF PROC(VOID_BLAST) AND READY(MIND_BLAST) THEN
-    RETURN CAST(MIND_BLAST)
 ELSE IF PROC(DEVOURING_PLAGUE) AND USABLE(DEVOURING_PLAGUE) THEN
     RETURN CAST(DEVOURING_PLAGUE)
-ELSE IF PROC(MIND_FLAY_INSANITY) THEN
-    RETURN CAST(MIND_FLAY_INSANITY)
 ELSE IF PROC(SHADOW_WORD_DEATH) AND READY(SHADOW_WORD_DEATH) THEN
+    RETURN CAST(SHADOW_WORD_DEATH)
+ELSE IF USABLE(SHADOW_WORD_DEATH) AND READY(SHADOW_WORD_DEATH) THEN
     RETURN CAST(SHADOW_WORD_DEATH)
 ELSE IF PROC(MIND_BLAST) AND READY(MIND_BLAST) THEN
     RETURN CAST(MIND_BLAST)
-ELSE IF (enemies >= 2 OR player.in_burst) AND READY(HALO) THEN
-    RETURN CAST(HALO)
-ELSE IF READY(VOID_TORRENT) THEN
-    RETURN CAST(VOID_TORRENT)
 ELSE IF USABLE(DEVOURING_PLAGUE) THEN
     RETURN CAST(DEVOURING_PLAGUE)
-ELSE IF READY(MIND_BLAST) THEN
-    RETURN CAST(MIND_BLAST)
-ELSE IF READY(TENTACLE_SLAM) THEN
-    RETURN CAST(TENTACLE_SLAM)
-ELSE IF READY(SHADOW_WORD_DEATH) AND USABLE(SHADOW_WORD_DEATH) THEN
-    RETURN CAST(SHADOW_WORD_DEATH)
 ELSE IF READY(HALO) THEN
     RETURN CAST(HALO)
+ELSE IF READY(MIND_BLAST) THEN
+    RETURN CAST(MIND_BLAST)
+ELSE IF READY(VOID_TORRENT) THEN
+    RETURN CAST(VOID_TORRENT)
+ELSE IF PROC(MIND_FLAY_INSANITY) THEN
+    RETURN CAST(MIND_FLAY_INSANITY)
+ELSE IF READY(TENTACLE_SLAM) THEN
+    RETURN CAST(TENTACLE_SLAM)
 ELSE
     RETURN CAST(MIND_FLAY)
 END IF
@@ -861,20 +859,20 @@ RegisterPreset("WARRIOR_02_ARGS_BOSS", "WARRIOR", "4. Воин: Оружие (А
 
 ## SPELL_BOOK
 SPELL BATTLE_SHOUT = ID:6673 | NAME:"Боевой крик","Battle Shout" | CD:15 | ICON:132333
-SPELL COLOSSUS_SMASH = ID:167105,262161,436358 | NAME:"Удар колосса","Миротворец","Сокрушение","Colossus Smash","Warbreaker","Demolish" | MACRO:"M1" | SLOT:1 | KEY:"M1" | CD:45 | CHARGES:1 | BURST:10 | ICON:132355
-SPELL BLADESTORM = ID:227847,389774,228920 | NAME:"Вихрь клинков","Опустошитель","Bladestorm","Ravager" | MACRO:"M2" | SLOT:2 | KEY:"M2" | CD:90 | CHARGES:1 | ICON:236303
-SPELL EXECUTE = ID:163201,5308,281000 | NAME:"Казнь","Execute" | MACRO:"SM1" | SLOT:3 | KEY:"SM1" | CD:0 | CHARGES:1 | EXECUTE:true | ICON:135358
-SPELL SWEEPING_STRIKES = ID:260708 | NAME:"Размашистые удары","Sweeping Strikes" | MACRO:"SM2","R" | SLOT:4 | KEY:"SM2" | CD:30 | CHARGES:1 | ICON:132366
-SPELL REND = ID:772,384318,376079 | NAME:"Кровопускание","Громогласный рык","Копье чемпиона","Rend","Thunderous Roar","Champion's Spear" | MACRO:"R" | SLOT:8 | KEY:"R" | CD:0 | CHARGES:1 | DOTS:true | ICON:132155
-SPELL AVATAR = ID:107574 | NAME:"Аватара","Avatar" | MACRO:"3","SM2" | SLOT:27 | KEY:"3" | CD:90 | CHARGES:1 | BURST:20 | ICON:613534
-SPELL MORTAL_STRIKE = ID:12294 | NAME:"Смертельный удар","Mortal Strike" | MACRO:"E" | SLOT:9 | KEY:"E" | CD:6 | CHARGES:1 | ICON:132355
-SPELL OVERPOWER = ID:7384 | NAME:"Превосходство","Overpower" | MACRO:"Q" | SLOT:11 | KEY:"Q" | CD:12 | CHARGES:2 | ICON:132223
-SPELL CLEAVE = ID:845 | NAME:"Рассекающий удар","Cleave" | MACRO:"1" | SLOT:25 | KEY:"1" | CD:4.5 | CHARGES:1 | ICON:132338
-SPELL SLAM = ID:1680,1464,6343 | NAME:"Вихрь","Мощный удар","Удар грома","Whirlwind","Slam","Thunder Clap" | MACRO:"1","M2","SQ" | SLOT:26 | KEY:"SQ" | CD:0 | CHARGES:1 | DOTS:true | FILLER_INTERRUPTIBLE:true | ICON:132369
-SPELL DIE_BY_THE_SWORD = ID:118038 | NAME:"Бой насмерть","Die by the Sword" | MACRO:"CM1" | SLOT:5 | KEY:"CM1" | CD:120 | CHARGES:1 | ICON:132336
-SPELL RALLYING_CRY = ID:97462,383762 | NAME:"Ободряющий клич","Горестная невосприимчивость","Rallying Cry","Bitter Immunity" | MACRO:"CM2","C" | SLOT:6 | KEY:"CM2" | CD:180 | CHARGES:1 | ICON:132351
-SPELL SPELL_REFLECTION = ID:23920 | NAME:"Отражение заклинаний","Spell Reflection" | MACRO:"AM1" | SLOT:7 | KEY:"AM1" | CD:25 | CHARGES:1 | ICON:132361
-SPELL IMPENDING_VICTORY = ID:202168 | NAME:"Верная победа","Impending Victory" | MACRO:"SE","2" | SLOT:10 | KEY:"SE" | CD:25 | CHARGES:1 | ICON:589768
+SPELL COLOSSUS_SMASH = ID:167105,262161,436358 | NAME:"Удар колосса","Миротворец","Сокрушение","Colossus Smash","Warbreaker","Demolish" | CD:45 | CHARGES:1 | BURST:10 | ICON:132355
+SPELL BLADESTORM = ID:227847,389774,228920 | NAME:"Вихрь клинков","Опустошитель","Bladestorm","Ravager" | CD:90 | CHARGES:1 | ICON:236303
+SPELL EXECUTE = ID:163201,5308,281000 | NAME:"Казнь","Execute" | CD:0 | CHARGES:1 | EXECUTE:true | ICON:135358
+SPELL SWEEPING_STRIKES = ID:260708 | NAME:"Размашистые удары","Sweeping Strikes" | CD:30 | CHARGES:1 | ICON:132366
+SPELL REND = ID:772,384318,376079 | NAME:"Кровопускание","Громогласный рык","Копье чемпиона","Rend","Thunderous Roar","Champion's Spear" | CD:0 | CHARGES:1 | DOTS:true | ICON:132155
+SPELL AVATAR = ID:107574 | NAME:"Аватара","Avatar" | CD:90 | CHARGES:1 | BURST:20 | ICON:613534
+SPELL MORTAL_STRIKE = ID:12294 | NAME:"Смертельный удар","Mortal Strike" | CD:6 | CHARGES:1 | ICON:132355
+SPELL OVERPOWER = ID:7384 | NAME:"Превосходство","Overpower" | CD:12 | CHARGES:2 | ICON:132223
+SPELL CLEAVE = ID:845 | NAME:"Рассекающий удар","Cleave" | CD:4.5 | CHARGES:1 | ICON:132338
+SPELL SLAM = ID:1680,1464,6343 | NAME:"Вихрь","Мощный удар","Удар грома","Whirlwind","Slam","Thunder Clap" | CD:0 | CHARGES:1 | DOTS:true | FILLER_INTERRUPTIBLE:true | ICON:132369
+SPELL DIE_BY_THE_SWORD = ID:118038 | NAME:"Бой насмерть","Die by the Sword" | CD:120 | CHARGES:1 | ICON:132336
+SPELL RALLYING_CRY = ID:97462,383762 | NAME:"Ободряющий клич","Горестная невосприимчивость","Rallying Cry","Bitter Immunity" | CD:180 | CHARGES:1 | ICON:132351
+SPELL SPELL_REFLECTION = ID:23920 | NAME:"Отражение заклинаний","Spell Reflection" | CD:25 | CHARGES:1 | ICON:132361
+SPELL IMPENDING_VICTORY = ID:202168 | NAME:"Верная победа","Impending Victory" | CD:25 | CHARGES:1 | ICON:589768
 
 ## TRACKERS
 TRACK_SAVES: DIE_BY_THE_SWORD, RALLYING_CRY, SPELL_REFLECTION, IMPENDING_VICTORY

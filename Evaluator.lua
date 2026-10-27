@@ -499,6 +499,15 @@ function SpArc:BuildRotationQueue(maxSlots)
     st.trackedInsanity = math.min(st.trackedInsanity, 25)
   elseif states["DEVOURING_PLAGUE"] and states["DEVOURING_PLAGUE"].isUsable and st.trackedInsanity < 50 then
     st.trackedInsanity = 50
+  else
+    local cpSpender = states["ENVENOM"] or states["RUPTURE"]
+    if cpSpender and not cpSpender.isUnavailable then
+      if not cpSpender.isUsable and st.trackedInsanity >= 80 then
+        st.trackedInsanity = 40
+      elseif cpSpender.isUsable and st.trackedInsanity < 80 then
+        st.trackedInsanity = 80
+      end
+    end
   end
   local simInsanity = st.trackedInsanity
 
@@ -777,6 +786,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
       st.targetDoTsUntil = 0
       st.targetDebuffStacks = 0
       st.targetDebuffUntil = 0
+      st.lastCastAt["GARROTE"] = nil
       st.lastTargetGUID = newGUID
     end
     return

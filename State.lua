@@ -455,6 +455,17 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   end
 
   local recentlyCast = st.lastCastAt[defKey] and ((now - st.lastCastAt[defKey]) < 2.5) or false
+  if defKey == "GARROTE" and st.lastCastAt["GARROTE"] and assistedKey ~= "GARROTE" then
+    local gElapsed = now - st.lastCastAt["GARROTE"]
+    if gElapsed >= 0 and gElapsed < 13.0 then
+      isOnCD = true
+      durSec = 13.0
+      startTime = st.lastCastAt["GARROTE"]
+      remSec = 13.0 - gElapsed
+      charges = 0
+      cdRaw = string.format("pandemic:%.1fs", remSec)
+    end
+  end
   if assistedKey == defKey and not recentlyCast then
     isOnCD = false
     local maxCh = def.liveMaxCharges or def.maxCharges or 1
@@ -605,18 +616,41 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
 
-    if def.isSpender and UnitPower and (defKey == "DEVOURING_PLAGUE" or SPELL_DEFS["DEVOURING_PLAGUE"]) then
-      local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 50
-      local okP, rawP = pcall(UnitPower, "player", 13)
-      if okP and not IsSecret(rawP) and type(rawP) == "number" then
-        if rawP < (cost - 5) and not isProc and assistedKey ~= defKey then
-          isUsable = false
-          gotCleanUsable = true
-          usableSource = "UnitPower(" .. tostring(rawP) .. "<" .. tostring(cost - 5) .. ")"
-        elseif rawP >= cost and not gotCleanUsable then
-          isUsable = true
-          gotCleanUsable = true
-          usableSource = "UnitPower(" .. tostring(rawP) .. ">=" .. tostring(cost) .. ")"
+    if def.isSpender and UnitPower then
+      if defKey == "DEVOURING_PLAGUE" or SPELL_DEFS["DEVOURING_PLAGUE"] then
+        local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 50
+        local okP, rawP = pcall(UnitPower, "player", 13)
+        if okP and not IsSecret(rawP) and type(rawP) == "number" then
+          if rawP < (cost - 5) and not isProc and assistedKey ~= defKey then
+            isUsable = false
+            gotCleanUsable = true
+            usableSource = "UnitPower(" .. tostring(rawP) .. "<" .. tostring(cost - 5) .. ")"
+          elseif rawP >= cost and not gotCleanUsable then
+            isUsable = true
+            gotCleanUsable = true
+            usableSource = "UnitPower(" .. tostring(rawP) .. ">=" .. tostring(cost) .. ")"
+          end
+        end
+      elseif _G.UnitPowerMax then
+        local okM, maxCP = pcall(_G.UnitPowerMax, "player", 4)
+        if okM and not IsSecret(maxCP) and type(maxCP) == "number" and maxCP > 0 then
+          local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 80
+          local minCP = math.max(1, math.floor(cost / 20))
+          local okCP, rawCP = pcall(UnitPower, "player", 4)
+          if okCP and not IsSecret(rawCP) and type(rawCP) == "number" then
+            if rawCP < minCP and not isProc and assistedKey ~= defKey then
+              isUsable = false
+              gotCleanUsable = true
+              usableSource = "ComboPoints(" .. tostring(rawCP) .. "<" .. tostring(minCP) .. ")"
+            elseif rawCP >= minCP and isUsable then
+              gotCleanUsable = true
+              usableSource = "ComboPoints(" .. tostring(rawCP) .. ">=" .. tostring(minCP) .. ")"
+            end
+          elseif (st.trackedInsanity or 0) < cost and not isProc and assistedKey ~= defKey then
+            isUsable = false
+            gotCleanUsable = true
+            usableSource = "TrackedCP(" .. tostring(st.trackedInsanity or 0) .. "<" .. tostring(cost) .. ")"
+          end
         end
       end
     end
@@ -715,7 +749,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   return finalReady, remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or "", charges, isUnavailable
 end
 
-local DEFAULT_DOT_IDS = { 34914, 589, 772, 388539 }
+local DEFAULT_DOT_IDS = { 34914, 589, 772, 388539, 1943 }
 local EMPTY_TABLE = {}
 
 function SpArc:CheckTargetHasDoTs(assistedKey)
@@ -769,14 +803,14 @@ function SpArc:CheckTargetHasDoTs(assistedKey)
     local btn = _G["ElvUF_TargetDebuffsButton" .. i]
     if btn and SafeBool(btn.IsShown, btn) then
       local sid = btn.spellID
-      if not IsSecret(sid) and (sid == 34914 or sid == 589 or sid == 772 or sid == 388539) then
+      if not IsSecret(sid) and (sid == 34914 or sid == 589 or sid == 772 or sid == 388539 or sid == 1943) then
         return true
       end
       local okTex, iconTex = false, nil
       if btn.Icon and btn.Icon.GetTexture then
         okTex, iconTex = pcall(btn.Icon.GetTexture, btn.Icon)
       end
-      if okTex and not IsSecret(iconTex) and (iconTex == 135978 or iconTex == 136207 or iconTex == 132155) then
+      if okTex and not IsSecret(iconTex) and (iconTex == 135978 or iconTex == 136207 or iconTex == 132155 or iconTex == 132302) then
         return true
       end
     end
@@ -804,6 +838,16 @@ end
 
 function SpArc:RefreshTrackedInsanity()
   if UnitPower then
+    if _G.UnitPowerMax then
+      local okM, maxCP = pcall(_G.UnitPowerMax, "player", 4)
+      if okM and not IsSecret(maxCP) and type(maxCP) == "number" and maxCP > 0 then
+        local okCP, cp = pcall(UnitPower, "player", 4)
+        if okCP and not IsSecret(cp) and type(cp) == "number" then
+          st.trackedInsanity = math.min(100, cp * 20)
+          return
+        end
+      end
+    end
     local ok, p = pcall(UnitPower, "player", 13)
     if ok and not IsSecret(p) and type(p) == "number" then
       st.trackedInsanity = p

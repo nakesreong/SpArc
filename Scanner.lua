@@ -374,9 +374,10 @@ function SpArc:ScanActionSlotsAndSpells(force)
     end
   end
 
+  local isBonusBarActive = _G.HasBonusActionBar and SafeBool(_G.HasBonusActionBar) or false
   for _, slot in ipairs(ACTIVE_SLOTS) do
     if not assistedSlots[slot] then
-      local btBtn = _G["BT4Button" .. slot]
+      local btBtn = (not (isBonusBarActive and slot <= 12)) and _G["BT4Button" .. slot] or nil
       if btBtn and btBtn.GetSpellId then
         local okS, btSpellID = pcall(btBtn.GetSpellId, btBtn)
         if okS and not IsSecret(btSpellID) and type(btSpellID) == "number" and btSpellID > 0 then

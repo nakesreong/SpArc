@@ -631,26 +631,28 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
             usableSource = "UnitPower(" .. tostring(rawP) .. ">=" .. tostring(cost) .. ")"
           end
         end
-      elseif _G.UnitPowerMax then
-        local okM, maxCP = pcall(_G.UnitPowerMax, "player", 4)
-        if okM and not IsSecret(maxCP) and type(maxCP) == "number" and maxCP > 0 then
-          local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 80
-          local minCP = math.max(1, math.floor(cost / 20))
-          local okCP, rawCP = pcall(UnitPower, "player", 4)
-          if okCP and not IsSecret(rawCP) and type(rawCP) == "number" then
-            if rawCP < minCP and not isProc and assistedKey ~= defKey then
-              isUsable = false
-              gotCleanUsable = true
-              usableSource = "ComboPoints(" .. tostring(rawCP) .. "<" .. tostring(minCP) .. ")"
-            elseif rawCP >= minCP and isUsable then
-              gotCleanUsable = true
-              usableSource = "ComboPoints(" .. tostring(rawCP) .. ">=" .. tostring(minCP) .. ")"
-            end
-          elseif (st.trackedInsanity or 0) < cost and not isProc and assistedKey ~= defKey then
+      else
+        local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 80
+        local minCP = math.max(1, math.floor(cost / 20))
+        local okCP, rawCP = pcall(UnitPower, "player", 4)
+        if okCP and not IsSecret(rawCP) and type(rawCP) == "number" then
+          if rawCP < minCP and not isProc and assistedKey ~= defKey then
             isUsable = false
             gotCleanUsable = true
-            usableSource = "TrackedCP(" .. tostring(st.trackedInsanity or 0) .. "<" .. tostring(cost) .. ")"
+            usableSource = "ComboPoints(" .. tostring(rawCP) .. "<" .. tostring(minCP) .. ")"
+          elseif rawCP >= minCP then
+            isUsable = true
+            gotCleanUsable = true
+            usableSource = "ComboPoints(" .. tostring(rawCP) .. ">=" .. tostring(minCP) .. ")"
           end
+        elseif (st.trackedInsanity or 0) >= cost or isProc or assistedKey == defKey then
+          isUsable = true
+          gotCleanUsable = true
+          usableSource = "TrackedCP(" .. tostring(st.trackedInsanity or 0) .. ">=" .. tostring(cost) .. ")"
+        else
+          isUsable = false
+          gotCleanUsable = true
+          usableSource = "TrackedCP(" .. tostring(st.trackedInsanity or 0) .. "<" .. tostring(cost) .. ")"
         end
       end
     end
@@ -838,14 +840,11 @@ end
 
 function SpArc:RefreshTrackedInsanity()
   if UnitPower then
-    if _G.UnitPowerMax then
-      local okM, maxCP = pcall(_G.UnitPowerMax, "player", 4)
-      if okM and not IsSecret(maxCP) and type(maxCP) == "number" and maxCP > 0 then
-        local okCP, cp = pcall(UnitPower, "player", 4)
-        if okCP and not IsSecret(cp) and type(cp) == "number" then
-          st.trackedInsanity = math.min(100, cp * 20)
-          return
-        end
+    if not SPELL_DEFS["DEVOURING_PLAGUE"] then
+      local okCP, cp = pcall(UnitPower, "player", 4)
+      if okCP and not IsSecret(cp) and type(cp) == "number" then
+        st.trackedInsanity = math.min(100, cp * 20)
+        return
       end
     end
     local ok, p = pcall(UnitPower, "player", 13)

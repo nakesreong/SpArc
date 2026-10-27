@@ -1710,7 +1710,7 @@ END IF
 
 local ROGUE_ASSA_MD = [[
 ## SPELL_BOOK (Assassination Rogue — Icy Veins Leveling & PvE)
-SPELL DEATHMARK = ID:360194 | NAME:"Метка смерти","Deathmark" | CD:120 | ICON:4667421
+SPELL DEATHMARK = ID:360194 | NAME:"Знак смерти","Метка смерти","Deathmark" | CD:120 | ICON:4667421
 SPELL KINGSBANE = ID:385627 | NAME:"Погибель королей","Kingsbane" | CD:60 | GAIN:20 | ICON:1373906
 SPELL SHIV = ID:5938,319504 | NAME:"Отравляющий укол","Shiv" | CD:25 | CHARGES:2 | GAIN:20 | ICON:135428
 SPELL GARROTE = ID:703 | NAME:"Гаррота","Garrote" | CD:13 | GAIN:20 | ICON:132297
@@ -1720,7 +1720,7 @@ SPELL ENVENOM = ID:32645,196819 | NAME:"Отравление","Потрошен�
 SPELL AMBUSH = ID:8676 | NAME:"Внезапный удар","Ambush" | CD:0 | GAIN:40 | PROC_ONLY:true | OVERRIDE_OF:MUTILATE | ICON:132282
 SPELL MUTILATE = ID:1329,1752 | NAME:"Расправа","Коварный удар","Mutilate","Sinister Strike" | CD:0 | GAIN:40 | FILLER_INTERRUPTIBLE:true | ICON:132304
 SPELL FAN_OF_KNIVES = ID:51723 | NAME:"Веер клинков","Fan of Knives" | CD:0 | GAIN:20 | ICON:236273
-SPELL THISTLE_TEA = ID:381623 | NAME:"Артишоковый чай","Thistle Tea" | CD:60 | CHARGES:3 | ICON:132819
+SPELL THISTLE_TEA = ID:381623 | NAME:"Скорополоховый чай","Артишоковый чай","Thistle Tea" | CD:60 | CHARGES:3 | ICON:132819
 SPELL VANISH = ID:1856 | NAME:"Исчезновение","Vanish" | CD:120 | ICON:132331
 SPELL CLOAK_OF_SHADOWS = ID:31224 | NAME:"Плащ теней","Cloak of Shadows" | CD:120 | ICON:136177
 SPELL EVASION = ID:5277 | NAME:"Ускользание","Evasion" | CD:120 | ICON:136205

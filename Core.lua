@@ -339,21 +339,74 @@ function SpArc:EnsureDB(forceReinit)
   db.presets = db.presets or {}
   db.presetOrder = db.presetOrder or {}
   if db.profileSchemaVersion ~= SpArc.PROFILE_SCHEMA_VERSION or #db.presetOrder == 0 then
+    local prevSchema = tonumber(db.profileSchemaVersion) or 0
+    local preservedPresets = {}
+    local preservedCustomOrder = {}
+
+    if prevSchema >= 15 then
+      for _, id in ipairs(db.presetOrder) do
+        local p = db.presets[id]
+        if p then
+          preservedPresets[id] = p
+          if not (SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]) then
+            p.isCustom = true
+            p.userModified = true
+            preservedCustomOrder[#preservedCustomOrder + 1] = id
+          end
+        end
+      end
+      for id, p in pairs(db.presets) do
+        if p and not preservedPresets[id] then
+          preservedPresets[id] = p
+          if not (SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]) then
+            p.isCustom = true
+            p.userModified = true
+            preservedCustomOrder[#preservedCustomOrder + 1] = id
+          end
+        end
+      end
+    else
+      for id, p in pairs(db.presets) do
+        if p and (p.isCustom or p.userModified or tostring(id):find("_CUSTOM_", 1, true)) then
+          p.isCustom = true
+          p.userModified = true
+          preservedPresets[id] = p
+          if not (SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]) then
+            preservedCustomOrder[#preservedCustomOrder + 1] = id
+          end
+        end
+      end
+    end
+
     db.presetOrder = {}
     db.presets = {}
     for _, id in ipairs(SpArc.BuiltInPresetOrder or {}) do
       local bp = SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]
       if bp then
         db.presetOrder[#db.presetOrder + 1] = id
-        db.presets[id] = {
-          id = bp.id,
-          class = bp.class,
-          title = bp.title,
-          mode = bp.mode,
-          md = bp.md,
-        }
+        local existing = preservedPresets[id]
+        if existing and existing.userModified and type(existing.md) == "string" and existing.md ~= "" then
+          db.presets[id] = existing
+        else
+          db.presets[id] = {
+            id = bp.id,
+            class = bp.class,
+            title = bp.title,
+            mode = bp.mode,
+            md = bp.md,
+            userModified = false,
+          }
+        end
       end
     end
+
+    for _, cid in ipairs(preservedCustomOrder) do
+      if preservedPresets[cid] and not db.presets[cid] then
+        db.presetOrder[#db.presetOrder + 1] = cid
+        db.presets[cid] = preservedPresets[cid]
+      end
+    end
+
     local charDefaultPreset = {
       ["Ньарлатхотеп - Свежеватель Душ"] = "PRIEST_01_SHADOW_PVE",
       ["Калиратри - Свежеватель Душ"]    = "MAGE_04_FROST_PVE",
@@ -362,12 +415,10 @@ function SpArc:EnsureDB(forceReinit)
       ["Моржовый - Свежеватель Душ"]     = "WARRIOR_02_ARGS_BOSS",
     }
     for pName, pObj in pairs(db.profiles or {}) do
-      local wantID = charDefaultPreset[pName]
-      if wantID then
+      if not pObj.activePresetID or not db.presets[pObj.activePresetID] then
+        local wantID = charDefaultPreset[pName] or "PRIEST_01_SHADOW_PVE"
         pObj.activePresetID = wantID
         pObj.autoPresets = { PVE = wantID, BOSS = wantID, PVP = wantID }
-      elseif pObj.activePresetID and not db.presets[pObj.activePresetID] then
-        pObj.activePresetID = "PRIEST_01_SHADOW_PVE"
       end
     end
     db.profileSchemaVersion = SpArc.PROFILE_SCHEMA_VERSION

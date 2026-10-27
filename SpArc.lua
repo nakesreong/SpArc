@@ -543,7 +543,7 @@ local function OpenControlCenter(initialTab)
         local newTitle = string.format(SpArc:L("NEW_PRESET_TITLE"), newIdx, cls, newIdx)
         local baseMD = (db.presets[selectedPresetForEdit] and db.presets[selectedPresetForEdit].md) or SpArc.DefaultMarkdownProfiles["PVE"]
         db.presetOrder[#db.presetOrder + 1] = newID
-        db.presets[newID] = { id = newID, class = cls, title = newTitle, mode = "PVE", md = baseMD }
+        db.presets[newID] = { id = newID, class = cls, title = newTitle, mode = "PVE", md = baseMD, isCustom = true, userModified = true }
         selectedPresetForEdit = newID
         db.activePresetID = newID
         db.mode = "MANUAL"
@@ -683,6 +683,7 @@ local function OpenControlCenter(initialTab)
         local txt = ui.editBox:GetText() or ""
         if selectedPresetForEdit and db.presets[selectedPresetForEdit] then
           db.presets[selectedPresetForEdit].md = txt
+          db.presets[selectedPresetForEdit].userModified = true
           local compiled = SpArc:ParseMarkdownFSM(txt)
           SpArc.ParsedPresets[selectedPresetForEdit] = compiled
           if compiled.title and compiled.title ~= "" then
@@ -719,6 +720,7 @@ local function OpenControlCenter(initialTab)
         if bp and db.presets[selectedPresetForEdit] then
           db.presets[selectedPresetForEdit].md = bp.md
           db.presets[selectedPresetForEdit].title = bp.title
+          db.presets[selectedPresetForEdit].userModified = false
           SpArc:RebuildParsedProfiles()
           SpArc:SelectActiveParsedProfile()
           controlFrame:RefreshUI()

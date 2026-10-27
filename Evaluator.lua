@@ -576,8 +576,16 @@ function SpArc:BuildRotationQueue(maxSlots)
         if simKnown[sp] and spD and not spD.procOnly and not spD.isExecute and not spD.isSpender and not spD.consumesStacks then
           local rem = simCD[sp] or 9999
           if rem < bestRem then
-            bestRem = rem
-            bestSp = sp
+            local prevR, prevU = simReady[sp], simUsable[sp]
+            simReady[sp] = true
+            simUsable[sp] = true
+            local condOK = SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx)
+            simReady[sp] = prevR
+            simUsable[sp] = prevU
+            if condOK then
+              bestRem = rem
+              bestSp = sp
+            end
           end
         end
       end
@@ -591,12 +599,9 @@ function SpArc:BuildRotationQueue(maxSlots)
         simUsable[bestSp] = true
         pickedKey = bestSp
       elseif #parsed.rules > 0 then
-        for i = #parsed.rules, 1, -1 do
-          local fallbackSp = parsed.rules[i].spell
-          if simKnown[fallbackSp] then
-            pickedKey = fallbackSp
-            break
-          end
+        local lastRule = parsed.rules[#parsed.rules]
+        if lastRule and simKnown[lastRule.spell] then
+          pickedKey = lastRule.spell
         end
       end
     end

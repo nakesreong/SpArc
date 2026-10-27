@@ -491,24 +491,27 @@ function SpArc:ScanActionSlotsAndSpells(force)
 
     if not foundSlot then
       for _, slot in ipairs(ACTIVE_SLOTS) do
-        local tLines = tooltipLinesBySlot[slot]
-        if tLines then
-          for _, line in ipairs(tLines) do
-            for _, nm in ipairs(def.names or {}) do
-              if line:find(nm, 1, true) then
-                foundSlot = slot
-                break
-              end
-            end
-            if not foundSlot and def.idSet then
-              for sid, _ in pairs(def.idSet) do
-                if line:match("%f[%d]" .. tostring(sid) .. "%f[%D]") then
+        local activeSlotSID = slotDirectSpellID[slot]
+        if not activeSlotSID or (def.idSet and def.idSet[activeSlotSID]) then
+          local tLines = tooltipLinesBySlot[slot]
+          if tLines then
+            for _, line in ipairs(tLines) do
+              for _, nm in ipairs(def.names or {}) do
+                if line:find(nm, 1, true) then
                   foundSlot = slot
                   break
                 end
               end
+              if not foundSlot and def.idSet then
+                for sid, _ in pairs(def.idSet) do
+                  if line:match("%f[%d]" .. tostring(sid) .. "%f[%D]") then
+                    foundSlot = slot
+                    break
+                  end
+                end
+              end
+              if foundSlot then break end
             end
-            if foundSlot then break end
           end
         end
         if foundSlot then break end
@@ -517,24 +520,27 @@ function SpArc:ScanActionSlotsAndSpells(force)
 
     if not foundSlot then
       for _, slot in ipairs(ACTIVE_SLOTS) do
-        local cLines = castLinesBySlot[slot]
-        if cLines then
-          for _, line in ipairs(cLines) do
-            for _, nm in ipairs(def.names or {}) do
-              if line:find(nm, 1, true) then
-                foundSlot = slot
-                break
-              end
-            end
-            if not foundSlot and def.idSet then
-              for sid, _ in pairs(def.idSet) do
-                if line:match("%f[%d]" .. tostring(sid) .. "%f[%D]") then
+        local activeSlotSID = slotDirectSpellID[slot]
+        if not activeSlotSID or (def.idSet and def.idSet[activeSlotSID]) then
+          local cLines = castLinesBySlot[slot]
+          if cLines then
+            for _, line in ipairs(cLines) do
+              for _, nm in ipairs(def.names or {}) do
+                if line:find(nm, 1, true) then
                   foundSlot = slot
                   break
                 end
               end
+              if not foundSlot and def.idSet then
+                for sid, _ in pairs(def.idSet) do
+                  if line:match("%f[%d]" .. tostring(sid) .. "%f[%D]") then
+                    foundSlot = slot
+                    break
+                  end
+                end
+              end
+              if foundSlot then break end
             end
-            if foundSlot then break end
           end
         end
         if foundSlot then break end

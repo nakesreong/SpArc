@@ -897,8 +897,10 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
       st.targetDoTsUntil = 0
       st.targetDebuffStacks = 0
       st.targetDebuffUntil = 0
+      st.targetPickPocketed = false
       st.lastCastAt["GARROTE"] = nil
       st.lastCastAt["CRIMSON_TEMPEST"] = nil
+      st.lastCastAt["PICK_POCKET"] = nil
     end
     if newGUID then
       st.lastTargetGUID = newGUID

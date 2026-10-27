@@ -1432,6 +1432,7 @@ function SpArc:MarkTargetPickPocketed(markNameToo)
   local now = GetTime()
   st.lastCastAt = st.lastCastAt or {}
   st.lastCastAt["PICK_POCKET"] = now
+  st.targetPickPocketed = true
   if _G.UnitGUID then
     local okG, guid = pcall(_G.UnitGUID, "target")
     if okG and not IsSecret(guid) and type(guid) == "string" and guid ~= "" then
@@ -1450,6 +1451,9 @@ end
 
 function SpArc:CanPickPocketTarget(now)
   now = now or GetTime()
+  if st.targetPickPocketed then
+    return false
+  end
   if not (_G.IsStealthed and SafeBool(_G.IsStealthed)) then
     return false
   end

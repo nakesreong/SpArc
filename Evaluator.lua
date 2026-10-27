@@ -569,67 +569,6 @@ function SpArc:BuildRotationQueue(maxSlots)
       end
     end
 
-    -- Lookahead fallback: if all known spells are currently on short cooldowns, advance to the earliest upcoming spell
-    if not pickedKey then
-      local bestSp = nil
-      local bestRem = 9000
-      for _, rule in ipairs(parsed.rules) do
-        local sp = rule.spell
-        local spD = SPELL_DEFS[sp]
-        if simKnown[sp] and spD and not spD.procOnly and not spD.isExecute and not spD.isSpender and not spD.consumesStacks then
-          local rem = simCD[sp] or 9999
-          if rem > 0.05 and rem < bestRem then
-            local prevR, prevU = simReady[sp], simUsable[sp]
-            simReady[sp] = true
-            simUsable[sp] = true
-            local condOK = SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx)
-            simReady[sp] = prevR
-            simUsable[sp] = prevU
-            if condOK then
-              bestRem = rem
-              bestSp = sp
-            end
-          end
-        end
-      end
-      if bestSp and bestRem < 9000 then
-        for spK, _ in pairs(SPELL_DEFS) do
-          if simCD[spK] and simCD[spK] < 9000 then
-            simCD[spK] = math.max(0, simCD[spK] - bestRem)
-          end
-        end
-        simReady[bestSp] = true
-        simUsable[bestSp] = true
-        pickedKey = bestSp
-      elseif #parsed.rules > 0 then
-        local lastRule = parsed.rules[#parsed.rules]
-        if lastRule and simKnown[lastRule.spell] then
-          pickedKey = lastRule.spell
-        end
-      end
-    end
-
-    if step == 1 and pickedKey then
-      local inCombat = _G.InCombatLockdown and SafeBool(_G.InCombatLockdown) or false
-      local recentCast = (now - (st.lastAnyCastAt or 0)) < 0.40
-      local locked = st.lockedTopKey
-      if inCombat and not recentCast and not simBurst and locked and locked ~= pickedKey and simReady[locked] and simUsable[locked] then
-        if st.lockedTopCandidateKey ~= pickedKey then
-          st.lockedTopCandidateKey = pickedKey
-          st.lockedTopCandidateSince = now
-          pickedKey = locked
-        elseif (now - (st.lockedTopCandidateSince or now)) < 0.45 then
-          pickedKey = locked
-        else
-          st.lockedTopKey = pickedKey
-          st.lockedTopCandidateKey = nil
-        end
-      else
-        st.lockedTopKey = pickedKey
-        st.lockedTopCandidateKey = nil
-      end
-    end
-
     if pickedKey and states[pickedKey] and not states[pickedKey].isUnavailable then
       local s = states[pickedKey]
       local def = SPELL_DEFS[pickedKey]
@@ -653,25 +592,6 @@ function SpArc:BuildRotationQueue(maxSlots)
       local pickedWasProc = simProcs[pickedKey]
       simProcs[pickedKey] = false
       simBuffs[pickedKey] = true
-      if pickedKey == "PICK_POCKET" then
-        simCtx.canPickPocket = false
-        simCD[pickedKey] = 9999
-        simReady[pickedKey] = false
-        simUsable[pickedKey] = false
-      elseif pickedKey == "STEALTH" or pickedKey == "VANISH" then
-        simCtx.stealthed = true
-        simCD[pickedKey] = 9999
-        simReady[pickedKey] = false
-        simUsable[pickedKey] = false
-      else
-        simCtx.stealthed = false
-        simCtx.inCombat = true
-        if simProcs["AMBUSH"] then
-          simProcs["AMBUSH"] = false
-          simReady["AMBUSH"] = false
-          simUsable["AMBUSH"] = false
-        end
-      end
       if def then
         if def.appliesDoTs then simHasDoTs = true end
         if def.burstDuration and def.burstDuration > 0 then

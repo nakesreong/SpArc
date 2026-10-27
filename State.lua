@@ -164,45 +164,24 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
   end
-  if defKey == "MIND_FLAY_INSANITY" then
-    if C_Spell and C_Spell.GetOverrideSpell then
-      local okO, over = pcall(C_Spell.GetOverrideSpell, 15407)
-      if okO and not IsSecret(over) and over == 391403 then
-        isProc = true
-        overlayRaw = "override(391403)"
-      end
-    end
-    if assistedKey == "MIND_FLAY_INSANITY" then
-      isProc = true
-      overlayRaw = "assisted(391403)"
-    end
-  elseif defKey == "MIND_BLAST" and C_Spell and C_Spell.GetOverrideSpell then
-    local okO, over = pcall(C_Spell.GetOverrideSpell, 8092)
-    if okO and not IsSecret(over) and over == 450983 then
-      isVoidBlastOverride = true
-      spellID = 450983
-      overlayRaw = "override(450983)"
-    end
-  elseif defKey == "VOID_BOLT" then
-    if C_Spell and C_Spell.GetOverrideSpell then
-      local okO, over = pcall(C_Spell.GetOverrideSpell, 228260)
-      if okO and not IsSecret(over) and type(over) == "number" and over > 0 and over ~= 228260 then
-        isProc = true
-        spellID = over
-        overlayRaw = "override(" .. tostring(over) .. ")"
-      end
-    end
-    if assistedKey == "VOID_BOLT" then
-      isProc = true
-      overlayRaw = "assisted(VOID_BOLT)"
-    end
-  elseif defKey == "BLIZZARD" and assistedKey == defKey then
-    isProc = true
-    overlayRaw = "assisted(BLIZZARD)"
-  end
-
   local hasSpellOverlayProc = isProc
   local overrideActive = false
+  if C_Spell and C_Spell.GetOverrideSpell and def.ids and #def.ids > 1 then
+    for i = 2, #def.ids do
+      local baseID = def.ids[i]
+      local okO, over = pcall(C_Spell.GetOverrideSpell, baseID)
+      if okO and not IsSecret(over) and type(over) == "number" and over > 0 and over ~= baseID then
+        for _, myID in ipairs(def.ids) do
+          if over == myID then
+            isVoidBlastOverride = true
+            spellID = over
+            overlayRaw = "override(" .. tostring(over) .. ")"
+            break
+          end
+        end
+      end
+    end
+  end
   if def.overrideOf and SPELL_DEFS[def.overrideOf] then
     local baseDef = SPELL_DEFS[def.overrideOf]
     if C_Spell and C_Spell.GetOverrideSpell then
@@ -236,15 +215,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         end
       end
     end
-    if defKey == "AMBUSH" then
-      local isStealthed = _G.IsStealthed and SafeBool(_G.IsStealthed) or false
-      if isStealthed then
-        isProc = true
-        overlayRaw = "stealth"
-      elseif not hasSpellOverlayProc and not overrideActive then
-        isProc = false
-      end
-    elseif def.inheritedBaseSlot and not overrideActive then
+    if def.inheritedBaseSlot and not overrideActive and not hasSpellOverlayProc then
       isProc = false
     elseif assistedKey == defKey then
       isProc = true
@@ -378,7 +349,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     local cdDur = (def and (def.liveChargeCD or def.baseCD)) or 7.5
     if cdDur <= 0 then cdDur = 7.5 end
 
-    if maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" then
+    if maxCh > 1 then
       local simCh, simMax, simDur, simStart = SpArc:GetTrackedSpellCharges(defKey, now)
       cdDur = simDur
       charges = simCh
@@ -392,7 +363,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     else
       local last = st.lastCastAt[defKey]
-      local effCD = (defKey == "VOID_BOLT") and 5.0 or (def.baseCD or 0)
+      local effCD = def.baseCD or 0
       if last and effCD > 1.6 then
         local elapsed = now - last
         if elapsed < (effCD - 0.15) then
@@ -405,131 +376,13 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         end
       end
     end
-
-    if defKey == "VOID_BOLT" and assistedKey and assistedKey ~= "VOID_BOLT" and assistedKey ~= "VAMPIRIC_TOUCH" then
-      isOnCD = true
-      charges = 0
-      cdRaw = "AssistSaysOnCD(" .. tostring(assistedKey) .. ")"
-    end
-
-    if assistedKey == "MIND_FLAY" and (defKey == "MIND_BLAST" or defKey == "VOID_TORRENT" or defKey == "TENTACLE_SLAM" or defKey == "VOID_BOLT") then
-      isOnCD = true
-      charges = 0
-      if remSec <= 0 then
-        remSec = math.max(1.8, cdDur * 0.35)
-      end
-      cdRaw = "AssistSaysOnCD(MF)"
-      if maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" then
-        if (st.spellChargesUsed[defKey] or 0) < maxCh then
-          st.spellChargesUsed[defKey] = maxCh
-          st.spellChargeStart[defKey] = now - (cdDur * 0.65)
-        end
-        chargesRaw = "sim:0/" .. tostring(maxCh)
-      end
-    elseif assistedKey == "TENTACLE_SLAM" and defKey == "MIND_BLAST" and st.targetDoTsUntil and now < st.targetDoTsUntil then
-      isOnCD = true
-      charges = 0
-      if remSec <= 0 then
-        remSec = math.max(1.8, cdDur * 0.35)
-      end
-      cdRaw = "AssistSaysOnCD(TS)"
-      if (st.spellChargesUsed[defKey] or 0) < maxCh then
-        st.spellChargesUsed[defKey] = maxCh
-        st.spellChargeStart[defKey] = now - (cdDur * 0.65)
-      end
-      chargesRaw = "sim:0/" .. tostring(maxCh)
-    elseif assistedKey == "FROSTBOLT" and (defKey == "FLURRY" or defKey == "RAY_OF_FROST" or defKey == "FROZEN_ORB" or defKey == "BLIZZARD") then
-      isOnCD = true
-      charges = 0
-      if remSec <= 0 then
-        remSec = math.max(2.5, cdDur * 0.45)
-        durSec = cdDur
-      end
-      cdRaw = "AssistSaysOnCD(FB)"
-      if maxCh > 1 or defKey == "FLURRY" then
-        if (st.spellChargesUsed[defKey] or 0) < maxCh then
-          st.spellChargesUsed[defKey] = maxCh
-          if (st.spellChargeStart[defKey] or 0) <= 0 then
-            st.spellChargeStart[defKey] = now
-          end
-        end
-        chargesRaw = "sim:0/" .. tostring(maxCh)
-      end
-    elseif assistedKey == "FROZEN_ORB" and (defKey == "FLURRY" or defKey == "RAY_OF_FROST") then
-      isOnCD = true
-      charges = 0
-      if remSec <= 0 then
-        remSec = math.max(2.5, cdDur * 0.45)
-        durSec = cdDur
-      end
-      cdRaw = "AssistSaysOnCD(FO)"
-      if maxCh > 1 or defKey == "FLURRY" then
-        if (st.spellChargesUsed[defKey] or 0) < maxCh then
-          st.spellChargesUsed[defKey] = maxCh
-          if (st.spellChargeStart[defKey] or 0) <= 0 then
-            st.spellChargeStart[defKey] = now
-          end
-        end
-        chargesRaw = "sim:0/" .. tostring(maxCh)
-      end
-    elseif assistedKey == "ICE_LANCE" and (defKey == "RAY_OF_FROST" or defKey == "FROZEN_ORB") then
-      isOnCD = true
-      charges = 0
-      if remSec <= 0 then
-        remSec = math.max(2.5, cdDur * 0.45)
-        durSec = cdDur
-      end
-      cdRaw = "AssistSaysOnCD(IL)"
-    end
-  end
-
-  local recentlyCast = st.lastCastAt[defKey] and ((now - st.lastCastAt[defKey]) < 2.5) or false
-  local isPandemicLocked = false
-  if defKey == "GARROTE" and st.lastCastAt["GARROTE"] then
-    local gElapsed = now - st.lastCastAt["GARROTE"]
-    if gElapsed >= 0 and gElapsed < 13.0 then
-      isOnCD = true
-      isPandemicLocked = true
-      durSec = 13.0
-      startTime = st.lastCastAt["GARROTE"]
-      remSec = 13.0 - gElapsed
-      charges = 0
-      cdRaw = string.format("pandemic:%.1fs", remSec)
-    end
-  elseif defKey == "CRIMSON_TEMPEST" and st.lastCastAt["CRIMSON_TEMPEST"] then
-    local ctElapsed = now - st.lastCastAt["CRIMSON_TEMPEST"]
-    if ctElapsed >= 0 and ctElapsed < 12.0 then
-      isOnCD = true
-      isPandemicLocked = true
-      isProc = false
-      durSec = 12.0
-      startTime = st.lastCastAt["CRIMSON_TEMPEST"]
-      remSec = 12.0 - ctElapsed
-      charges = 0
-      cdRaw = string.format("pandemic:%.1fs", remSec)
-    end
-  end
-  if assistedKey == defKey and not recentlyCast and not isPandemicLocked then
-    isOnCD = false
-    local maxCh = def.liveMaxCharges or def.maxCharges or 1
-    if (maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" or defKey == "FLURRY") and (st.spellChargesUsed[defKey] or 0) >= maxCh then
-      st.spellChargesUsed[defKey] = math.max(0, maxCh - 1)
-      if st.spellChargesUsed[defKey] > 0 then
-        st.spellChargeStart[defKey] = now
-      else
-        st.spellChargeStart[defKey] = 0
-      end
-      charges = 1
-      chargesRaw = "sim:1/" .. tostring(maxCh)
-    end
-    if charges < 1 then charges = 1 end
   end
 
   if isOnCD and remSec > 0 and durSec > 0 and (not startTime or startTime <= 0) then
     startTime = now - math.max(0, durSec - remSec)
   end
 
-  if defKey == "VOID_BOLT" and isOnCD then
+  if def.procOnly and isOnCD then
     isProc = false
   end
 

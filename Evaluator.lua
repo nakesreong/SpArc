@@ -434,8 +434,11 @@ function SpArc:BuildRotationQueue(maxSlots)
   maxSlots = maxSlots or (db.visual and db.visual.queueLength) or 5
   SpArc:RefreshTrackedInsanity()
   local assistedKey = SpArc:GetAssistedSuggestedDefKey()
-  if assistedKey == "DEVOURING_PLAGUE" and st.trackedInsanity < 50 then
-    st.trackedInsanity = 55
+  if assistedKey and SPELL_DEFS[assistedKey] and SPELL_DEFS[assistedKey].isSpender then
+    local aCost = SPELL_DEFS[assistedKey].insanityCost or 50
+    if st.trackedInsanity < aCost then
+      st.trackedInsanity = aCost
+    end
   end
 
   local parsed = SpArc:SelectActiveParsedProfile()
@@ -508,17 +511,17 @@ function SpArc:BuildRotationQueue(maxSlots)
   local simHasDoTs = SpArc:CheckTargetHasDoTs(assistedKey)
   local simStacks = (SpArc.GetTargetDebuffStacks and SpArc:GetTargetDebuffStacks(parsed, assistedKey)) or 0
   local simBurst = (SpArc.IsPlayerInBurst and SpArc:IsPlayerInBurst(states, now)) or false
-  if states["DEVOURING_PLAGUE"] and not states["DEVOURING_PLAGUE"].isUsable then
-    st.trackedInsanity = math.min(st.trackedInsanity, 25)
-  elseif states["DEVOURING_PLAGUE"] and states["DEVOURING_PLAGUE"].isUsable and st.trackedInsanity < 50 then
-    st.trackedInsanity = 50
-  else
-    local cpSpender = states["ENVENOM"] or states["RUPTURE"]
-    if cpSpender and not cpSpender.isUnavailable then
-      if not cpSpender.isUsable and st.trackedInsanity >= 80 then
-        st.trackedInsanity = 40
-      elseif cpSpender.isUsable and st.trackedInsanity < 80 then
-        st.trackedInsanity = 80
+  for spK, spD in pairs(SPELL_DEFS) do
+    if spD.isSpender and spD.insanityCost and spD.insanityCost > 0 and (not spD.baseCD or spD.baseCD <= 0) then
+      local sSp = states[spK]
+      if sSp and not sSp.isUnavailable then
+        local cost = spD.insanityCost
+        if not sSp.isUsable and st.trackedInsanity >= cost then
+          st.trackedInsanity = math.floor(cost * 0.5)
+        elseif sSp.isUsable and st.trackedInsanity < cost then
+          st.trackedInsanity = cost
+        end
+        break
       end
     end
   end
@@ -684,12 +687,6 @@ function SpArc:BuildRotationQueue(maxSlots)
           simReady[def.grantsProc] = true
           simUsable[def.grantsProc] = true
         end
-        if def.grantsMFI and SPELL_DEFS["MIND_FLAY_INSANITY"] then
-          simProcs["MIND_FLAY_INSANITY"] = true
-          simCD["MIND_FLAY_INSANITY"] = 0
-          simReady["MIND_FLAY_INSANITY"] = true
-          simUsable["MIND_FLAY_INSANITY"] = true
-        end
         if def.consumesStacks and not pickedWasProc then
           local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
           simStacks = math.max(0, (simStacks or 0) - cost)
@@ -713,10 +710,7 @@ function SpArc:BuildRotationQueue(maxSlots)
         elseif def.baseCD and def.baseCD > 0 then
           simCD[pickedKey] = def.baseCD
           simReady[pickedKey] = false
-        elseif def.fillerInterruptible and pickedKey == "MIND_FLAY" then
-          simCD[pickedKey] = 4.5
-          simReady[pickedKey] = false
-        elseif pickedKey ~= "PICK_POCKET" and pickedKey ~= "STEALTH" then
+        else
           simCD[pickedKey] = 0
         end
       end
@@ -727,21 +721,13 @@ function SpArc:BuildRotationQueue(maxSlots)
         end
       end
 
-      local isComboPointClass = (SPELL_DEFS["DEVOURING_PLAGUE"] == nil)
       for spK, spD in pairs(SPELL_DEFS) do
         if spD.isSpender and spD.insanityCost then
-          if isComboPointClass then
-            if def and def.isSpender then
-              simUsable[spK] = false
-              simReady[spK] = false
-            end
-          else
-            local canAfford = simInsanity >= spD.insanityCost
-            simUsable[spK] = canAfford
-            if canAfford then
-              simCD[spK] = 0
-              simReady[spK] = true
-            end
+          local canAfford = simInsanity >= spD.insanityCost
+          simUsable[spK] = canAfford
+          if canAfford and (not spD.baseCD or spD.baseCD <= 0) then
+            simCD[spK] = 0
+            simReady[spK] = true
           end
         end
       end
@@ -813,7 +799,7 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
     st.targetDebuffUntil = now + 15.0
   end
   local maxCh = def.liveMaxCharges or def.maxCharges or 1
-  if maxCh > 1 or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" or defKey == "FLURRY" then
+  if maxCh > 1 or (def.baseCD and def.baseCD > 0 and def.baseCD <= 30) then
     SpArc:GetTrackedSpellCharges(defKey, now)
     local used = st.spellChargesUsed[defKey] or 0
     if used == 0 then
@@ -995,7 +981,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     end
     local d = defKey and SPELL_DEFS[defKey]
     local isChan = d and (d.lockChannel or d.fillerInterruptible)
-    if defKey and not isChan and defKey ~= "VOID_TORRENT" and defKey ~= "MIND_FLAY" and defKey ~= "MIND_FLAY_INSANITY" and defKey ~= "RAY_OF_FROST" then
+    if defKey and not isChan then
       SpArc:RecordSpellCastSuccess(defKey, now)
     end
   end

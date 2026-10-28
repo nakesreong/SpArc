@@ -753,38 +753,14 @@ end
 
 function SpArc:CheckTargetHasDoTs(assistedKey)
   local now = GetTime()
-  local aDef = assistedKey and SPELL_DEFS[assistedKey] or nil
-  local hasComboSpenderDoT = (SPELL_DEFS["RUPTURE"] ~= nil) or (SPELL_DEFS["RIP"] ~= nil)
-
-  if hasComboSpenderDoT then
-    if assistedKey == "RUPTURE" or assistedKey == "RIP" then
-      if st.targetDoTsUntil and (st.targetDoTsUntil - now) > 6.0 then
-        return true
-      end
-      return false
-    end
-    if assistedKey == "ENVENOM" or assistedKey == "FEROCIOUS_BITE" then
-      st.targetDoTsUntil = math.max(st.targetDoTsUntil or 0, now + 6.0)
-      return true
-    end
-    if st.targetDoTsUntil and now < st.targetDoTsUntil then
-      return true
-    end
-  else
-    if assistedKey == "VAMPIRIC_TOUCH" or (aDef and aDef.appliesDoTs and (aDef.baseCD or 0) <= 1.5) then
-      return false
-    end
-    if st.targetDoTsUntil and now < st.targetDoTsUntil then
-      return true
-    end
-    if assistedKey == "TENTACLE_SLAM" or (aDef and aDef.appliesDoTs) then
-      return false
-    end
-    if assistedKey and not (aDef and aDef.appliesDoTs) then
-      st.targetDoTsUntil = math.max(st.targetDoTsUntil or 0, now + 2.5)
-      return true
-    end
+  if not (_G.UnitExists and SafeBool(_G.UnitExists, "target")) then
+    return false
   end
+  if _G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, "target") then
+    return false
+  end
+
+  local refreshLeadSec = 1.2
 
   if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID then
     for _, def in pairs(SPELL_DEFS or EMPTY_TABLE) do
@@ -793,11 +769,7 @@ function SpArc:CheckTargetHasDoTs(assistedKey)
           local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", dotID)
           if ok and type(aura) == "table" then
             if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
-              if (aura.expirationTime - now) > 3.0 then
-                return true
-              end
-            else
-              return true
+              return (aura.expirationTime - now) > refreshLeadSec
             end
           end
         end
@@ -807,11 +779,7 @@ function SpArc:CheckTargetHasDoTs(assistedKey)
       local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", dotID)
       if ok and type(aura) == "table" then
         if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
-          if (aura.expirationTime - now) > 3.0 then
-            return true
-          end
-        else
-          return true
+          return (aura.expirationTime - now) > refreshLeadSec
         end
       end
     end
@@ -821,17 +789,28 @@ function SpArc:CheckTargetHasDoTs(assistedKey)
     local btn = _G["ElvUF_TargetDebuffsButton" .. i]
     if btn and SafeBool(btn.IsShown, btn) then
       local sid = btn.spellID
+      local isDotBtn = false
       if not IsSecret(sid) and (sid == 34914 or sid == 589 or sid == 772 or sid == 388539 or sid == 1943) then
-        return true
+        isDotBtn = true
+      else
+        local okTex, iconTex = false, nil
+        if btn.Icon and btn.Icon.GetTexture then
+          okTex, iconTex = pcall(btn.Icon.GetTexture, btn.Icon)
+        end
+        if okTex and not IsSecret(iconTex) and (iconTex == 135978 or iconTex == 136207 or iconTex == 132155 or iconTex == 132302) then
+          isDotBtn = true
+        end
       end
-      local okTex, iconTex = false, nil
-      if btn.Icon and btn.Icon.GetTexture then
-        okTex, iconTex = pcall(btn.Icon.GetTexture, btn.Icon)
-      end
-      if okTex and not IsSecret(iconTex) and (iconTex == 135978 or iconTex == 136207 or iconTex == 132155 or iconTex == 132302) then
-        return true
+      if isDotBtn then
+        if not IsSecret(btn.expiration) and type(btn.expiration) == "number" and btn.expiration > 0 then
+          return (btn.expiration - now) > refreshLeadSec
+        end
       end
     end
+  end
+
+  if st.targetDoTsUntil and st.targetDoTsUntil > 0 then
+    return now < st.targetDoTsUntil
   end
 
   return false

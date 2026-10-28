@@ -694,7 +694,10 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   local def = SPELL_DEFS[defKey]
   if not def then return end
   if def.appliesDoTs then
-    st.targetDoTsUntil = now + 21.0
+    local dotDur = (def.dotDuration and def.dotDuration > 0) and def.dotDuration or 21.0
+    local refreshLead = 1.2
+    local remPrev = (st.targetDoTsUntil and st.targetDoTsUntil > (now - refreshLead)) and math.max(0, math.min(6.3, (st.targetDoTsUntil - now) + refreshLead)) or 0
+    st.targetDoTsUntil = now + math.max(1.0, (dotDur + remPrev) - refreshLead)
   end
   if def.insanityGain then
     st.trackedInsanity = math.min(100, st.trackedInsanity + def.insanityGain)
@@ -814,7 +817,8 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     local targetDead = hasTarget and UnitIsDeadOrGhost and SafeBool(UnitIsDeadOrGhost, "target") or false
     local okG, guid = pcall(UnitGUID, "target")
     local newGUID = (okG and not IsSecret(guid) and guid) or nil
-    if (not hasTarget) or targetDead or (newGUID and st.lastTargetGUID and newGUID ~= st.lastTargetGUID) then
+    local sameTarget = (newGUID and st.lastTargetGUID and newGUID == st.lastTargetGUID) or false
+    if (not hasTarget) or targetDead or (not sameTarget) then
       st.targetDoTsUntil = 0
       st.targetDebuffStacks = 0
       st.targetDebuffUntil = 0
@@ -825,7 +829,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     end
     if newGUID then
       st.lastTargetGUID = newGUID
-    elseif not hasTarget then
+    else
       st.lastTargetGUID = nil
     end
     return

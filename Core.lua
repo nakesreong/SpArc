@@ -10,7 +10,7 @@ _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
 SpArc.VERSION = "2.9.1"
-SpArc.PROFILE_SCHEMA_VERSION = 20
+SpArc.PROFILE_SCHEMA_VERSION = SpArc.PROFILE_SCHEMA_VERSION or 21
 
 local C_CVar = _G.C_CVar
 local issecretvalue = _G.issecretvalue
@@ -343,7 +343,7 @@ function SpArc:EnsureDB(forceReinit)
     local preservedPresets = {}
     local preservedCustomOrder = {}
 
-    if prevSchema >= 20 then
+    if prevSchema >= 21 then
       for _, id in ipairs(db.presetOrder) do
         local p = db.presets[id]
         if p then
@@ -367,13 +367,12 @@ function SpArc:EnsureDB(forceReinit)
       end
     else
       for id, p in pairs(db.presets) do
-        if p and (p.isCustom or p.userModified or tostring(id):find("_CUSTOM_", 1, true)) then
+        local isBuiltIn = (SpArc.BuiltInPresets and SpArc.BuiltInPresets[id] ~= nil) or false
+        if p and not isBuiltIn and (p.isCustom or p.userModified or tostring(id):find("_CUSTOM_", 1, true)) then
           p.isCustom = true
           p.userModified = true
           preservedPresets[id] = p
-          if not (SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]) then
-            preservedCustomOrder[#preservedCustomOrder + 1] = id
-          end
+          preservedCustomOrder[#preservedCustomOrder + 1] = id
         end
       end
     end

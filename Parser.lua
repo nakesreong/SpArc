@@ -94,7 +94,15 @@ local function ParseSpellDefLine(line)
       elseif prop == "ICON" then
         def.fallbackIcon = tonumber(val) or 134400
       elseif prop == "DOTS" then
-        def.appliesDoTs = (val:lower() == "true" or val == "1")
+        local dotSec = tonumber(val)
+        if dotSec and dotSec > 0 then
+          def.appliesDoTs = true
+          def.dotDuration = dotSec
+        else
+          def.appliesDoTs = (val:lower() == "true" or val == "1")
+        end
+      elseif prop == "DOT_DURATION" then
+        def.dotDuration = tonumber(val)
       elseif prop == "GRANTS" then
         def.grantsProc = val:gsub('^"', ''):gsub('"$', '')
         if def.grantsProc == "MIND_FLAY_INSANITY" then

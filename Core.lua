@@ -190,6 +190,7 @@ SpArc.state = {
   lastAnyCastAt = 0,
   lastSlotScanAt = 0,
   targetDoTsUntil = 0,
+  targetSpellDoTs = {},
   targetDebuffStacks = 0,
   targetDebuffUntil = 0,
   lastTargetGUID = nil,

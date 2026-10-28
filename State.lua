@@ -524,10 +524,17 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         local okCP, rawCP = pcall(UnitPower, "player", 4)
         if okCP and not IsSecret(rawCP) and type(rawCP) == "number" then
           if rawCP < minCP then
-            isUsable = false
-            isProc = false
-            gotCleanUsable = true
-            usableSource = "ComboPoints(" .. tostring(rawCP) .. "<" .. tostring(minCP) .. ")"
+            if hasSpellOverlayProc and defKey == "FEROCIOUS_BITE" then
+              isUsable = true
+              isProc = true
+              gotCleanUsable = true
+              usableSource = "ProcOverlayFreeSpender(" .. tostring(rawCP) .. "CP)"
+            else
+              isUsable = false
+              isProc = false
+              gotCleanUsable = true
+              usableSource = "ComboPoints(" .. tostring(rawCP) .. "<" .. tostring(minCP) .. ")"
+            end
           else
             isUsable = true
             gotCleanUsable = true
@@ -592,7 +599,8 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   local isNoResource = false
   local resWaitSec = 0
   local isPriestSpender = (defKey == "DEVOURING_PLAGUE") or (def.isSpender and SPELL_DEFS["DEVOURING_PLAGUE"] ~= nil)
-  if isUsable and not isUnavailable and not isPriestSpender then
+  local isFreeProcSpender = (defKey == "FEROCIOUS_BITE" and isProc)
+  if isUsable and not isUnavailable and not isPriestSpender and not isFreeProcSpender then
     if bookNoPowerVal == true or (useSlotActionState and actNoManaVal == true) then
       isNoResource = true
       resWaitSec = 2.6
@@ -680,10 +688,13 @@ SpArc.DEFAULT_ENERGY_COST = {
   SWIPE = 35,
   BRUTAL_SLASH = 25,
   RIP = 20,
+  PRIMAL_WRATH = 20,
+  MOONFIRE = 30,
+  FERAL_FRENZY = 25,
   FEROCIOUS_BITE = 25,
 }
 
-local DEFAULT_DOT_IDS = { 34914, 589, 772, 388539, 1943 }
+local DEFAULT_DOT_IDS = { 34914, 589, 772, 388539, 1943, 155722, 1079 }
 local EMPTY_TABLE = {}
 
 local DEFAULT_BURST_DURATIONS = {
@@ -698,6 +709,8 @@ local DEFAULT_BURST_DURATIONS = {
   ARCANE_SURGE = 15.0,
   SHADOW_BLADES = 16.0,
   ADRENALINE_RUSH = 20.0,
+  TIGERS_FURY = 20.0,
+  BERSERK = 15.0,
 }
 
 function SpArc:IsSpellBurstActive(defKey, sObj, now)
@@ -751,6 +764,87 @@ function SpArc:IsPlayerInBurst(states, now)
   return false
 end
 
+function SpArc:TargetHasSpellDoT(defKey, now)
+  if not defKey then return false end
+  now = now or GetTime()
+  if not (_G.UnitExists and SafeBool(_G.UnitExists, "target")) then
+    return false
+  end
+  if _G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, "target") then
+    return false
+  end
+
+  local def = SPELL_DEFS[defKey]
+  local refreshLeadSec = 1.0
+
+  if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID and def then
+    for _, dID in ipairs(def.debuffIDs or EMPTY_TABLE) do
+      local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", dID)
+      if ok and type(aura) == "table" then
+        if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
+          return (aura.expirationTime - now) > refreshLeadSec
+        end
+      end
+    end
+    for _, sID in ipairs(def.ids or EMPTY_TABLE) do
+      local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", sID)
+      if ok and type(aura) == "table" then
+        if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
+          return (aura.expirationTime - now) > refreshLeadSec
+        end
+      end
+    end
+  end
+
+  if def then
+    local wantIcon = def.liveIcon or def.fallbackIcon
+    for i = 1, 16 do
+      local btn = _G["ElvUF_TargetDebuffsButton" .. i]
+      if btn and SafeBool(btn.IsShown, btn) then
+        local sid = btn.spellID
+        local matched = false
+        if not IsSecret(sid) and type(sid) == "number" then
+          if def.idSet and def.idSet[sid] then
+            matched = true
+          elseif def.debuffIDs then
+            for _, dID in ipairs(def.debuffIDs) do
+              if sid == dID then matched = true; break end
+            end
+          end
+        end
+        if not matched and wantIcon and btn.Icon and btn.Icon.GetTexture then
+          local okTex, iconTex = pcall(btn.Icon.GetTexture, btn.Icon)
+          if okTex and not IsSecret(iconTex) and iconTex == wantIcon then
+            matched = true
+          end
+        end
+        if matched and not IsSecret(btn.expiration) and type(btn.expiration) == "number" and btn.expiration > 0 then
+          return (btn.expiration - now) > refreshLeadSec
+        end
+      end
+    end
+  end
+
+  local dotMap = st.targetSpellDoTs
+  if dotMap then
+    local untilT = dotMap[defKey]
+    if (not untilT or untilT <= now) and def and def.debuffIDs then
+      for _, dID in ipairs(def.debuffIDs) do
+        local u = dotMap[dID]
+        if u and u > now then
+          untilT = u
+          break
+        end
+      end
+    end
+    if untilT and untilT > 0 then
+      return now < untilT
+    end
+  end
+
+  return false
+end
+
 function SpArc:CheckTargetHasDoTs(assistedKey)
   local now = GetTime()
   if not (_G.UnitExists and SafeBool(_G.UnitExists, "target")) then
@@ -764,8 +858,16 @@ function SpArc:CheckTargetHasDoTs(assistedKey)
 
   if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID then
     for _, def in pairs(SPELL_DEFS or EMPTY_TABLE) do
-      if def.appliesDoTs and def.ids then
-        for _, dotID in ipairs(def.ids) do
+      if def.appliesDoTs then
+        for _, dID in ipairs(def.debuffIDs or EMPTY_TABLE) do
+          local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", dID)
+          if ok and type(aura) == "table" then
+            if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
+              return (aura.expirationTime - now) > refreshLeadSec
+            end
+          end
+        end
+        for _, dotID in ipairs(def.ids or EMPTY_TABLE) do
           local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", dotID)
           if ok and type(aura) == "table" then
             if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
@@ -831,6 +933,31 @@ function SpArc:GetPlayerHPPercent()
     return 20
   end
   return 100
+end
+
+function SpArc:GetPlayerEnergy(now)
+  now = now or GetTime()
+  if st.trackedEnergy and st.lastEnergyUpdateAt and now > st.lastEnergyUpdateAt then
+    local dt = math.min(10.0, now - st.lastEnergyUpdateAt)
+    local regen = 12.0
+    if _G.GetPowerRegen then
+      local okR, rVal = pcall(_G.GetPowerRegen)
+      if okR and not IsSecret(rVal) and type(rVal) == "number" and rVal > 1 then
+        regen = rVal
+      end
+    end
+    st.trackedEnergy = math.min(100, st.trackedEnergy + dt * regen)
+    st.lastEnergyUpdateAt = now
+  end
+  if UnitPower then
+    local okE, curE = pcall(UnitPower, "player", 3)
+    if okE and not IsSecret(curE) and type(curE) == "number" then
+      st.trackedEnergy = curE
+      st.lastEnergyUpdateAt = now
+      return curE
+    end
+  end
+  return st.trackedEnergy or 100
 end
 
 function SpArc:RefreshTrackedInsanity()
@@ -967,6 +1094,8 @@ local AOE_ASSIST_HINTS = {
   BLIZZARD         = 3,
   COMET_STORM      = 2,
   FROZEN_ORB       = 2,
+  SWIPE            = 2,
+  PRIMAL_WRATH     = 2,
 }
 
 local function IsUnitDummyOrInCombat(unit)
@@ -1145,7 +1274,12 @@ local EXTRA_BUFF_SPELL_IDS = {
   DEADLY_POISON        = { 2823, 315584, 8679 },
   CRIPPLING_POISON     = { 3408, 5761 },
   SLICE_AND_DICE       = { 315496 },
-  STEALTH              = { 1784, 115191, 115192 },
+  STEALTH              = { 1784, 115191, 115192, 5215 },
+  PROWL                = { 5215 },
+  CAT_FORM             = { 768 },
+  MARK_OF_THE_WILD     = { 1126 },
+  TIGERS_FURY          = { 5217 },
+  BERSERK              = { 106951, 102543 },
   SWEEPING_STRIKES     = { 260708 },
   BATTLE_SHOUT         = { 6673 },
   ARCANE_INTELLECT     = { 1459 },
@@ -1161,10 +1295,14 @@ local DEFAULT_BUFF_REM_DUR = {
   BATTLE_SHOUT         = 3600,
   ARCANE_INTELLECT     = 3600,
   POWER_WORD_FORTITUDE = 3600,
+  MARK_OF_THE_WILD     = 3600,
   SHADOWFORM           = 3600,
+  CAT_FORM             = 3600,
   ICE_BARRIER          = 60,
   SLICE_AND_DICE       = 30,
   SWEEPING_STRIKES     = 15,
+  TIGERS_FURY          = 20,
+  BERSERK              = 15,
   POWER_WORD_SHIELD    = 15,
 }
 
@@ -1355,6 +1493,15 @@ local NO_RANGE_CHECK_SPELLS = {
   POWER_INFUSION       = true,
   VOIDFORM             = true,
   DARK_ASCENSION       = true,
+  PROWL                = true,
+  CAT_FORM             = true,
+  MARK_OF_THE_WILD     = true,
+  TIGERS_FURY          = true,
+  BERSERK              = true,
+  SURVIVAL_INSTINCTS   = true,
+  BARKSKIN             = true,
+  RENEWAL              = true,
+  FRENZIED_REGENERATION = true,
 }
 
 local CLASS_RANGE_FALLBACK_SPELLS = {
@@ -1362,6 +1509,7 @@ local CLASS_RANGE_FALLBACK_SPELLS = {
   WARRIOR = { 12294, 1464, 23881, 6552 },
   MAGE    = { 116, 30455, 133, 30451 },
   PRIEST  = { 8092, 589, 34914, 15407 },
+  DRUID   = { 5221, 1822, 22568, 1079 },
 }
 
 local function CheckBT4ButtonOutOfRange(btBtn)

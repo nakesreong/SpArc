@@ -470,7 +470,7 @@ SPELL <KEY> = ID:<id1,id2> | NAME:"Russian Name","English Name" | CD:<sec> | ICO
   - `GAIN:<N>` : Primary resource generated on cast (0..100 scale; for Combo Point classes 1 CP = 20).
   - `COST:<N> | SPENDER:true` : Primary resource cost (for 4+ CP spenders use `COST:80 | SPENDER:true`).
   - `BURST:<sec>` : Marks ability as a burst window cooldown lasting `<sec>` seconds (enables `ACTIVE(KEY)` and `player.in_burst`).
-  - `DOTS:true` : Applies or refreshes main target DoTs (satisfies `target.has_dots`).
+  - `DOTS:true` or `DOTS:<sec>` : Applies or refreshes target DoT (`target.has_dots` and `DOT(KEY)`). Optional `DEBUFF_ID:<id>` specifies the target aura ID if different from the cast ID.
   - `STACKS:+N` / `STACKS:-N | CONSUMES_STACKS:true` : Generates or consumes `TARGET_DEBUFF` stacks.
   - `PROC_ONLY:true` : Only castable when glowing (`IsSpellOverlayed`) or active as a temporary spell override.
   - `OVERRIDE_OF:<BASE_KEY>` : For combo/transformation spells that replace another spell.
@@ -506,6 +506,7 @@ Use `IF <condition> THEN` / `ELSE IF <condition> THEN` / `ELSE` / `END IF` with 
   - `player.in_combat` / `NOT player.in_combat` — player is currently in combat.
   - `target.can_pick_pocket` — stealthed, humanoid/undead/demon NPC target in 10yd range not yet pick-pocketed.
   - `CHARGES(KEY) >= N` — current charge count.
+  - `DOT(KEY)` / `NOT DOT(KEY)` — target has active DoT from specific spell `KEY` (`DOTS:<sec>` / `DEBUFF_ID:<id>`).
   - `target.has_dots` / `NOT target.has_dots` — target has active DoTs from a `DOTS:true` spell.
   - `target.debuff_stacks >= N` (or `target.freezing_stacks >= N`) — current stacks of `TARGET_DEBUFF`.
 • Always end with an unconditional `ELSE` -> `RETURN CAST(<FILLER_KEY>)` and `END IF`.]]
@@ -542,7 +543,7 @@ SPELL <КЛЮЧ_КАПСОМ> = ID:<id1,id2> | NAME:"Русское имя","Eng
   - `GAIN:<N>` — сколько ресурса генерирует каст (0..100; для комбо-поинтов 1 КП = 20).
   - `COST:<N> | SPENDER:true` — сколько ресурса тратит спелл (для финишеров от 4+ КП ставь `COST:80 | SPENDER:true`).
   - `BURST:<секунды>` — помечает способность как бурст-окно длительностью `<секунды>` (включает `ACTIVE(KEY)` и `player.in_burst`).
-  - `DOTS:true` — спелл вешает/обновляет основные доты на цели (`target.has_dots = true`).
+  - `DOTS:true` или `DOTS:<секунды>` — спелл вешает/обновляет доту на цели (`target.has_dots` и `DOT(KEY)`). При необходимости `DEBUFF_ID:<id>` задаёт ID дебаффа на цели.
   - `STACKS:+N` / `STACKS:-N | CONSUMES_STACKS:true` — генерация и трата стаков `TARGET_DEBUFF`.
   - `PROC_ONLY:true` — спелл доступен ТОЛЬКО при свечении прока (`IsSpellOverlayed`) или активной подмене `OVERRIDE_OF`.
   - `OVERRIDE_OF:<БАЗОВЫЙ_КЛЮЧ>` — для комбо-заклинаний, заменяющих базовую кнопку.
@@ -578,6 +579,7 @@ END IF
   - `player.in_combat` / `NOT player.in_combat` — находится ли персонаж в бою.
   - `target.can_pick_pocket` — игрок в инвизе, цель — гуманоид/нежить/демон в радиусе 10м с ещё не обчищенными карманами.
   - `CHARGES(KEY) >= N` — проверка числа зарядов.
+  - `DOT(KEY)` / `NOT DOT(KEY)` — висит ли на цели конкретная дота `KEY` (`DOTS:<сек>` / `DEBUFF_ID:<id>`).
   - `target.has_dots` / `NOT target.has_dots` — висят ли на цели доты (`DOTS:true`).
   - `target.debuff_stacks >= N` (или `target.freezing_stacks >= N`) — число стаков `TARGET_DEBUFF`.
 • В самом конце ОБЯЗАТЕЛЬНО должна быть ветка `ELSE` -> `RETURN CAST(<КЛЮЧ_ФИЛЛЕРА>)` и закрывающий `END IF`.]]
@@ -601,6 +603,7 @@ local EN_PRESET_TITLES = {
   MAGE_04_FROST_PVE    = "2. Mage: Frost (ST / AoE)",
   ROGUE_01_ASSA_PVE    = "3. Rogue: Assassination (ST / AoE)",
   WARRIOR_02_ARGS_BOSS = "4. Warrior: Arms (ST / AoE)",
+  DRUID_01_FERAL_PVE   = "5. Druid: Feral (ST / AoE)",
 }
 
 function SpArc:GetPresetDisplayTitle(pr)
@@ -614,10 +617,10 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 21
+SpArc.PROFILE_SCHEMA_VERSION = 24
 
 ---------------------------------------------------------------------------------------
---             4 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR)              --
+--         5 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID)           --
 ---------------------------------------------------------------------------------------
 SpArc.BuiltInPresetOrder = {}
 SpArc.BuiltInPresets = {}
@@ -892,6 +895,75 @@ ELSE IF READY(CLEAVE) THEN
     RETURN CAST(CLEAVE)
 ELSE
     RETURN CAST(SLAM)
+END IF
+]])
+
+-- ====================================================================================
+-- #5: DRUID — Feral (Трипобраз: Midnight 12.0+ ST + AoE + Авто-подхват бурста)
+-- ====================================================================================
+RegisterPreset("DRUID_01_FERAL_PVE", "DRUID", "5. Друид: Сила зверя (Кот — СТ / АоЕ)", "PVE", [[
+# PROFILE: 5. Друид: Сила зверя (Кот — СТ / АоЕ)
+# CLASS: DRUID
+# SPEC: Feral
+# MODE: PVE
+
+## SPELL_BOOK
+SPELL TIGERS_FURY = ID:5217 | NAME:"Тигриное неистовство","Tiger's Fury" | CD:30 | BURST:20 | ICON:132242
+SPELL BERSERK = ID:106951,102543,343223 | NAME:"Берсерк","Воплощение: аватара Ашаманы","Berserk","Incarnation: Avatar of Ashamane" | CD:120 | BURST:15 | ICON:236149
+SPELL CONVOKE_THE_SPIRITS = ID:391528 | NAME:"Созыв духов","Convoke the Spirits" | CD:120 | LOCK_CHANNEL:true | ICON:3636839
+SPELL FERAL_FRENZY = ID:274837,1243807 | NAME:"Дикое бешенство","Безумное бешенство","Feral Frenzy","Frantic Frenzy" | CD:45 | GAIN:100 | ICON:2065580
+SPELL RAKE = ID:1822 | DEBUFF_ID:155722 | NAME:"Глубокая рана","Rake" | CD:0 | GAIN:20 | DOTS:15 | ICON:132122
+SPELL PRIMAL_WRATH = ID:285381 | DEBUFF_ID:1079 | NAME:"Первобытный гнев","Primal Wrath" | CD:0 | COST:80 | SPENDER:true | DOTS:12 | ICON:2065583
+SPELL RIP = ID:1079 | DEBUFF_ID:1079 | NAME:"Разорвать","Rip" | CD:0 | COST:80 | SPENDER:true | DOTS:24 | ICON:132152
+SPELL FEROCIOUS_BITE = ID:22568,441583,441591 | NAME:"Свирепый укус","Опустошение","Ferocious Bite","Ravage" | CD:0 | COST:80 | SPENDER:true | ICON:132127
+SPELL SWIPE = ID:106785,213764 | NAME:"Размах","Swipe" | CD:0 | GAIN:20 | ICON:132141
+SPELL SHRED = ID:5221 | NAME:"Полоснуть","Shred" | CD:0 | GAIN:20 | FILLER_INTERRUPTIBLE:true | ICON:136231
+SPELL SURVIVAL_INSTINCTS = ID:61336 | NAME:"Инстинкты выживания","Survival Instincts" | CD:180 | CHARGES:2 | ICON:236169
+SPELL BARKSKIN = ID:22812 | NAME:"Дубовая кожа","Barkskin" | CD:60 | ICON:136097
+SPELL RENEWAL = ID:108238 | NAME:"Обновление","Renewal" | CD:90 | ICON:236153
+SPELL FRENZIED_REGENERATION = ID:22842,8936 | NAME:"Неистовое восстановление","Восстановление","Frenzied Regeneration","Regrowth" | CD:36 | ICON:132091
+
+## CHANNEL_POLICY
+PROTECT_CHANNEL: CONVOKE_THE_SPIRITS
+
+## TRACKERS
+TRACK_SAVES: SURVIVAL_INSTINCTS, BARKSKIN, RENEWAL, FRENZIED_REGENERATION
+TRACK_CDS: BERSERK, CONVOKE_THE_SPIRITS, TIGERS_FURY, FERAL_FRENZY
+
+## EMERGENCY_SAVE
+IF player.hp_percent <= 25 AND READY(SURVIVAL_INSTINCTS) THEN
+    RETURN EMERGENCY(SURVIVAL_INSTINCTS)
+ELSE IF player.hp_percent <= 35 AND READY(RENEWAL) THEN
+    RETURN EMERGENCY(RENEWAL)
+ELSE IF player.hp_percent <= 35 AND READY(FRENZIED_REGENERATION) THEN
+    RETURN EMERGENCY(FRENZIED_REGENERATION)
+ELSE IF player.hp_percent <= 40 AND READY(BARKSKIN) THEN
+    RETURN EMERGENCY(BARKSKIN)
+END IF
+
+## ROTATION_QUEUE
+IF player.stealthed AND READY(RAKE) THEN
+    RETURN CAST(RAKE)
+ELSE IF PROC(FEROCIOUS_BITE) AND READY(FEROCIOUS_BITE) THEN
+    RETURN CAST(FEROCIOUS_BITE)
+ELSE IF player.energy <= 40 AND READY(TIGERS_FURY) THEN
+    RETURN CAST(TIGERS_FURY)
+ELSE IF enemies >= 2 AND NOT DOT(RIP) AND USABLE(PRIMAL_WRATH) THEN
+    RETURN CAST(PRIMAL_WRATH)
+ELSE IF NOT DOT(RIP) AND USABLE(RIP) THEN
+    RETURN CAST(RIP)
+ELSE IF USABLE(FEROCIOUS_BITE) THEN
+    RETURN CAST(FEROCIOUS_BITE)
+ELSE IF NOT DOT(RAKE) AND READY(RAKE) THEN
+    RETURN CAST(RAKE)
+ELSE IF player.combo_points <= 2 AND READY(FERAL_FRENZY) THEN
+    RETURN CAST(FERAL_FRENZY)
+ELSE IF ACTIVE(BERSERK) AND player.combo_points <= 2 AND READY(CONVOKE_THE_SPIRITS) THEN
+    RETURN CAST(CONVOKE_THE_SPIRITS)
+ELSE IF enemies >= 2 AND READY(SWIPE) THEN
+    RETURN CAST(SWIPE)
+ELSE
+    RETURN CAST(SHRED)
 END IF
 ]])
 

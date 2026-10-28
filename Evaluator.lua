@@ -50,6 +50,7 @@ function SpArc:SyncSpellDefsFromProfile(parsed, presetID)
       dst.isExecute = spDef.isExecute
       dst.requiresUsable = spDef.requiresUsable
       dst.appliesDoTs = spDef.appliesDoTs
+      dst.dotDuration = spDef.dotDuration
       dst.grantsProc = spDef.grantsProc
       dst.grantsMFI = spDef.grantsMFI
       dst.fillerInterruptible = spDef.fillerInterruptible
@@ -87,6 +88,11 @@ local SPEC_ID_TO_PRESETS = {
   [71]  = { PVE = "WARRIOR_02_ARGS_BOSS",  BOSS = "WARRIOR_02_ARGS_BOSS",  PVP = "WARRIOR_02_ARGS_BOSS" },
   [72]  = { PVE = "WARRIOR_02_ARGS_BOSS",  BOSS = "WARRIOR_02_ARGS_BOSS",  PVP = "WARRIOR_02_ARGS_BOSS" },
   [73]  = { PVE = "WARRIOR_02_ARGS_BOSS",  BOSS = "WARRIOR_02_ARGS_BOSS",  PVP = "WARRIOR_02_ARGS_BOSS" },
+  -- DRUID (Feral)
+  [102] = { PVE = "DRUID_01_FERAL_PVE",    BOSS = "DRUID_01_FERAL_PVE",    PVP = "DRUID_01_FERAL_PVE" },
+  [103] = { PVE = "DRUID_01_FERAL_PVE",    BOSS = "DRUID_01_FERAL_PVE",    PVP = "DRUID_01_FERAL_PVE" },
+  [104] = { PVE = "DRUID_01_FERAL_PVE",    BOSS = "DRUID_01_FERAL_PVE",    PVP = "DRUID_01_FERAL_PVE" },
+  [105] = { PVE = "DRUID_01_FERAL_PVE",    BOSS = "DRUID_01_FERAL_PVE",    PVP = "DRUID_01_FERAL_PVE" },
 }
 
 local PRESET_SPEC_IDS = {
@@ -94,6 +100,7 @@ local PRESET_SPEC_IDS = {
   MAGE_04_FROST_PVE    = 64,
   ROGUE_01_ASSA_PVE    = 259,
   WARRIOR_02_ARGS_BOSS = 71,
+  DRUID_01_FERAL_PVE   = 103,
 }
 
 local lastValidSpecID = nil
@@ -270,6 +277,16 @@ local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, si
     return not (simCtx and simCtx.buffs and simCtx.buffs[notBuffSp])
   end
 
+  local dotSp = c:match("^DOT%(([A-Z0-9_]+)%)$")
+  if dotSp then
+    return (simCtx and simCtx.dots and simCtx.dots[dotSp]) and true or false
+  end
+
+  local notDotSp = c:match("^NOT%s+DOT%(([A-Z0-9_]+)%)$")
+  if notDotSp then
+    return not (simCtx and simCtx.dots and simCtx.dots[notDotSp])
+  end
+
   local readySp = c:match("^READY%(([A-Z0-9_]+)%)$")
   if readySp then
     return simReady[readySp] and true or false
@@ -319,6 +336,14 @@ local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, si
   if cpOp and cpVal then
     local curCP = (simCtx and simCtx.comboPoints) or 0
     return CompareNum(curCP, cpOp, tonumber(cpVal) or 0)
+  end
+
+  local eOp, eVal = c:match("^player%.energy%s*([><=]+)%s*(%d+)$")
+  if not eOp then eOp, eVal = c:match("^ENERGY%s*([><=]+)%s*(%d+)$") end
+  if not eOp then eOp, eVal = c:match("^energy%s*([><=]+)%s*(%d+)$") end
+  if eOp and eVal then
+    local curE = (simCtx and simCtx.energy) or 100
+    return CompareNum(curE, eOp, tonumber(eVal) or 0)
   end
 
   local pHpOp, pHpVal = c:match("^player%.hp_percent%s*([><=]+)%s*(%d+)$")
@@ -425,7 +450,8 @@ local simKnown = {}
 local simActive = {}
 local simNoResource = {}
 local simBuffs = {}
-local simCtx = { buffs = simBuffs }
+local simDoTs = {}
+local simCtx = { buffs = simBuffs, dots = simDoTs }
 local EMPTY_TABLE = {}
 
 function SpArc:BuildRotationQueue(maxSlots)
@@ -459,6 +485,7 @@ function SpArc:BuildRotationQueue(maxSlots)
       simActive[k] = nil
       simNoResource[k] = nil
       simBuffs[k] = nil
+      simDoTs[k] = nil
     end
   end
 
@@ -504,6 +531,11 @@ function SpArc:BuildRotationQueue(maxSlots)
     simActive[k] = (SpArc.IsSpellBurstActive and SpArc:IsSpellBurstActive(k, sObj, now)) or false
     simNoResource[k] = isNoResource or false
     simBuffs[k] = (SpArc.PlayerHasBuff and SpArc:PlayerHasBuff(k, now)) or false
+    if def.appliesDoTs or (def.debuffIDs and #def.debuffIDs > 0) then
+      simDoTs[k] = (SpArc.TargetHasSpellDoT and SpArc:TargetHasSpellDoT(k, now)) or false
+    else
+      simDoTs[k] = false
+    end
   end
 
   local queue = reusableQueue
@@ -516,25 +548,31 @@ function SpArc:BuildRotationQueue(maxSlots)
       local sSp = states[spK]
       if sSp and not sSp.isUnavailable then
         local cost = spD.insanityCost
-        if not sSp.isUsable and st.trackedInsanity >= cost then
-          st.trackedInsanity = math.floor(cost * 0.5)
-        elseif sSp.isUsable and st.trackedInsanity < cost then
-          st.trackedInsanity = cost
+        local isFreeProc = (spK == "FEROCIOUS_BITE" and sSp.isProc)
+        if not isFreeProc then
+          if not sSp.isUsable and st.trackedInsanity >= cost then
+            st.trackedInsanity = math.floor(cost * 0.5)
+          elseif sSp.isUsable and st.trackedInsanity < cost then
+            st.trackedInsanity = cost
+          end
+          break
         end
-        break
       end
     end
   end
   local simInsanity = st.trackedInsanity
+  local simEnergy = (SpArc.GetPlayerEnergy and SpArc:GetPlayerEnergy(now)) or 100
 
   simCtx.enemies = (SpArc.GetNearbyEnemyCount and SpArc:GetNearbyEnemyCount(now, assistedKey)) or 1
   simCtx.stealthed = (_G.IsStealthed and SafeBool(_G.IsStealthed)) or false
   simCtx.inCombat = (_G.InCombatLockdown and SafeBool(_G.InCombatLockdown)) or (_G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player")) or false
   simCtx.canPickPocket = (SpArc.CanPickPocketTarget and SpArc:CanPickPocketTarget(now)) or false
   simCtx.comboPoints = math.floor(simInsanity / 20)
+  simCtx.energy = simEnergy
   simCtx.playerHP = (SpArc.GetPlayerHPPercent and SpArc:GetPlayerHPPercent()) or 100
   simCtx.targetHP = (SpArc.GetTargetHPPercent and SpArc:GetTargetHPPercent()) or 100
   simCtx.buffs = simBuffs
+  simCtx.dots = simDoTs
 
   for step = 1, maxSlots do
     for spK, spD in pairs(SPELL_DEFS) do
@@ -592,15 +630,40 @@ function SpArc:BuildRotationQueue(maxSlots)
       local pickedWasProc = simProcs[pickedKey]
       simProcs[pickedKey] = false
       simBuffs[pickedKey] = true
+      if simCtx.stealthed then
+        simCtx.stealthed = false
+      end
       if def then
-        if def.appliesDoTs then simHasDoTs = true end
+        if def.appliesDoTs then
+          simHasDoTs = true
+          simDoTs[pickedKey] = true
+          if def.debuffIDs then
+            for _, dID in ipairs(def.debuffIDs) do
+              for otherKey, otherDef in pairs(SPELL_DEFS) do
+                if otherDef.debuffIDs then
+                  for _, oID in ipairs(otherDef.debuffIDs) do
+                    if oID == dID then simDoTs[otherKey] = true end
+                  end
+                end
+              end
+            end
+          end
+        end
         if def.burstDuration and def.burstDuration > 0 then
           simActive[pickedKey] = true
           simBurst = true
         end
         if def.insanityGain then simInsanity = math.min(100, simInsanity + def.insanityGain) end
-        if def.insanityCost then simInsanity = math.max(0, simInsanity - def.insanityCost) end
+        if def.insanityCost and not (def.isSpender and pickedWasProc) then
+          simInsanity = math.max(0, simInsanity - def.insanityCost)
+        end
         simCtx.comboPoints = math.floor(simInsanity / 20)
+        if pickedKey == "TIGERS_FURY" then
+          simEnergy = math.min(100, simEnergy + 50)
+        elseif SpArc.DEFAULT_ENERGY_COST and SpArc.DEFAULT_ENERGY_COST[pickedKey] and not (def.isSpender and pickedWasProc) then
+          simEnergy = math.max(0, simEnergy - SpArc.DEFAULT_ENERGY_COST[pickedKey])
+        end
+        simCtx.energy = simEnergy
         if def.grantsProc and SPELL_DEFS[def.grantsProc] then
           simProcs[def.grantsProc] = true
           simCD[def.grantsProc] = 0
@@ -697,13 +760,32 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
     local dotDur = (def.dotDuration and def.dotDuration > 0) and def.dotDuration or 21.0
     local refreshLead = 1.2
     local remPrev = (st.targetDoTsUntil and st.targetDoTsUntil > (now - refreshLead)) and math.max(0, math.min(6.3, (st.targetDoTsUntil - now) + refreshLead)) or 0
-    st.targetDoTsUntil = now + math.max(1.0, (dotDur + remPrev) - refreshLead)
+    local newUntil = now + math.max(1.0, (dotDur + remPrev) - refreshLead)
+    st.targetDoTsUntil = newUntil
+    st.targetSpellDoTs = st.targetSpellDoTs or {}
+    st.targetSpellDoTs[defKey] = newUntil
+    if def.debuffIDs then
+      for _, dID in ipairs(def.debuffIDs) do
+        st.targetSpellDoTs[dID] = newUntil
+      end
+    end
   end
   if def.insanityGain then
     st.trackedInsanity = math.min(100, st.trackedInsanity + def.insanityGain)
   end
-  if def.insanityCost then
+  local lastAudit = st.lastSpellAudit and st.lastSpellAudit[defKey]
+  local castWasProc = (lastAudit and lastAudit.isProc) or false
+  if def.insanityCost and not (def.isSpender and castWasProc) then
     st.trackedInsanity = math.max(0, st.trackedInsanity - def.insanityCost)
+  end
+  if defKey == "TIGERS_FURY" then
+    local curE = (SpArc.GetPlayerEnergy and SpArc:GetPlayerEnergy(now)) or 100
+    st.trackedEnergy = math.min(100, curE + 50)
+    st.lastEnergyUpdateAt = now
+  elseif SpArc.DEFAULT_ENERGY_COST and SpArc.DEFAULT_ENERGY_COST[defKey] and not (def.isSpender and castWasProc) then
+    local curE = (SpArc.GetPlayerEnergy and SpArc:GetPlayerEnergy(now)) or 100
+    st.trackedEnergy = math.max(0, curE - SpArc.DEFAULT_ENERGY_COST[defKey])
+    st.lastEnergyUpdateAt = now
   end
   if def.grantsMFI then
     st.mfiProcUntil = now + 10.0
@@ -711,8 +793,6 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   if defKey == "MIND_FLAY_INSANITY" then
     st.mfiProcUntil = 0
   end
-  local lastAudit = st.lastSpellAudit and st.lastSpellAudit[defKey]
-  local castWasProc = (lastAudit and lastAudit.isProc) or false
   if def.consumesStacks and not castWasProc then
     local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
     st.targetDebuffStacks = math.max(0, (st.targetDebuffStacks or 0) - cost)
@@ -820,6 +900,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     local sameTarget = (newGUID and st.lastTargetGUID and newGUID == st.lastTargetGUID) or false
     if (not hasTarget) or targetDead or (not sameTarget) then
       st.targetDoTsUntil = 0
+      st.targetSpellDoTs = {}
       st.targetDebuffStacks = 0
       st.targetDebuffUntil = 0
       st.targetPickPocketed = false
@@ -872,7 +953,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
         SpArc:TriggerSpellPress(defKey, nil, nil)
       end
     end
-    local dur = (defKey == "RAY_OF_FROST") and 4.0 or ((defKey == "VOID_TORRENT") and 3.0 or 2.8)
+    local dur = (defKey == "RAY_OF_FROST" or defKey == "CONVOKE_THE_SPIRITS") and 4.0 or ((defKey == "VOID_TORRENT") and 3.0 or 2.8)
     st.castState.active = true
     st.castState.isChannel = true
     st.castState.defKey = defKey

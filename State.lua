@@ -811,32 +811,46 @@ function SpArc:GetUnitAuraState(unit, keyOrID, parsed, assistedKey, now)
     end
   end
 
-  -- 2. Indexed Aura Scan (matches by ID or localized/English Name across Debuffs & Buffs)
+  -- 2. Indexed Aura Scan (lightweight fallback across player's own debuffs/buffs)
   if C_UnitAuras and (#checkIDs > 0 or #checkNames > 0) then
-    local idLookup = {}
-    for _, id in ipairs(checkIDs) do
-      idLookup[id] = true
+    local idLookup = (def and def.auraIDSet) or nil
+    if not idLookup then
+      idLookup = {}
+      for _, id in ipairs(checkIDs) do
+        idLookup[id] = true
+      end
+      if def then def.auraIDSet = idLookup end
+    end
+    local lowerWantNames = (def and def.lowerNames) or nil
+    if not lowerWantNames and #checkNames > 0 then
+      lowerWantNames = {}
+      for _, wantNm in ipairs(checkNames) do
+        lowerWantNames[#lowerWantNames + 1] = SpArc.UTF8Lower(wantNm)
+      end
+      if def then def.lowerNames = lowerWantNames end
     end
 
-    local function ScanAuraSlots(fetchFn, filter)
+    local function ScanAuraSlots(fetchFn, filter, maxSlots)
       if not fetchFn then return nil, nil end
-      for i = 1, 16 do
+      for i = 1, (maxSlots or 12) do
         local ok, aura = pcall(fetchFn, unit, i, filter)
         if not ok or type(aura) ~= "table" then
           break
         end
         local sid = (not IsSecret(aura.spellId) and type(aura.spellId) == "number") and aura.spellId or nil
-        local nm = (not IsSecret(aura.name) and type(aura.name) == "string") and aura.name or nil
         local matched = false
         if sid and idLookup[sid] then
           matched = true
-        elseif nm and #checkNames > 0 then
-          local lowerNm = SpArc.UTF8Lower(nm)
-          for _, wantNm in ipairs(checkNames) do
-            local lowerWant = SpArc.UTF8Lower(wantNm)
-            if nm == wantNm or lowerNm == lowerWant or lowerNm:find(lowerWant, 1, true) then
-              matched = true
-              break
+        elseif lowerWantNames and #lowerWantNames > 0 then
+          local nm = (not IsSecret(aura.name) and type(aura.name) == "string") and aura.name or nil
+          if nm then
+            local lowerNm = SpArc.UTF8Lower(nm)
+            for idx, wantNm in ipairs(checkNames) do
+              local lowerWant = lowerWantNames[idx]
+              if nm == wantNm or lowerNm == lowerWant or (lowerWant and lowerNm:find(lowerWant, 1, true)) then
+                matched = true
+                break
+              end
             end
           end
         end
@@ -851,21 +865,15 @@ function SpArc:GetUnitAuraState(unit, keyOrID, parsed, assistedKey, now)
     end
 
     if unit == "target" then
-      local rem, stacks = ScanAuraSlots(C_UnitAuras.GetDebuffDataByIndex, "HARMFUL|PLAYER")
-      if not rem then
-        rem, stacks = ScanAuraSlots(C_UnitAuras.GetDebuffDataByIndex, "HARMFUL")
-      end
-      if not rem then
-        rem, stacks = ScanAuraSlots(C_UnitAuras.GetBuffDataByIndex, "HELPFUL")
+      local rem, stacks = ScanAuraSlots(C_UnitAuras.GetDebuffDataByIndex, "HARMFUL|PLAYER", 10)
+      if not rem and (not C_UnitAuras.GetUnitAuraBySpellID or #checkIDs == 0 or (def and def.isAuraOnly)) then
+        rem, stacks = ScanAuraSlots(C_UnitAuras.GetDebuffDataByIndex, "HARMFUL", 12)
       end
       if rem and rem > 0 then
         return true, rem, stacks
       end
-    else
-      local rem, stacks = ScanAuraSlots(C_UnitAuras.GetBuffDataByIndex, "HELPFUL")
-      if not rem then
-        rem, stacks = ScanAuraSlots(C_UnitAuras.GetDebuffDataByIndex, "HARMFUL")
-      end
+    elseif not C_UnitAuras.GetUnitAuraBySpellID or #checkIDs == 0 then
+      local rem, stacks = ScanAuraSlots(C_UnitAuras.GetBuffDataByIndex, "HELPFUL", 16)
       if rem and rem > 0 then
         return true, rem, stacks
       end
@@ -1109,7 +1117,7 @@ local function IsUnitInClassRange(unit, isMelee, checkSpellIDs, checkSlot)
       end
     end
   end
-  if isMelee and _G.CheckInteractDistance then
+  if isMelee and not (_G.InCombatLockdown and SafeBool(_G.InCombatLockdown)) and _G.CheckInteractDistance then
     local okI, inI = pcall(_G.CheckInteractDistance, unit, 3)
     if okI and not IsSecret(inI) and type(inI) == "boolean" then
       return inI

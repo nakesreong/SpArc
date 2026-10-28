@@ -232,7 +232,7 @@ local function GetSimAura(simCtx, u, k)
   if not simCtx or not simCtx.auraRem or not simCtx.auraStacks then return 0, 0 end
   local rem = simCtx.auraRem[u] and simCtx.auraRem[u][k]
   local stacks = simCtx.auraStacks[u] and simCtx.auraStacks[u][k]
-  if rem == nil and tonumber(k) and SpArc.GetUnitAuraState then
+  if rem == nil and k and SpArc.GetUnitAuraState then
     local _, r, s = SpArc:GetUnitAuraState(u, k, st.activeParsed, nil, GetTime())
     rem = r or 0
     stacks = s or 0
@@ -595,32 +595,33 @@ function SpArc:BuildRotationQueue(maxSlots)
     simNoResource[k] = isNoResource or false
   end
 
-  -- Populate unified Aura state for all defined spells and standalone auras
+  -- Populate unified Aura state for active aura definitions on their designated unit
   local auraMap = (parsed and parsed.auras) or SPELL_DEFS
   local simHasDoTs = false
   local anyDoTDef = false
   local allDoTsActive = true
   for aKey, aDef in pairs(auraMap) do
-    local _, tRem, tStacks = SpArc:GetUnitAuraState("target", aKey, parsed, assistedKey, now)
-    local _, pRem, pStacks = SpArc:GetUnitAuraState("player", aKey, parsed, assistedKey, now)
-    simAuraRem.target[aKey] = tRem or 0
-    simAuraStacks.target[aKey] = tStacks or 0
-    simAuraRem.player[aKey] = pRem or 0
-    simAuraStacks.player[aKey] = pStacks or 0
-    local aIDs = aDef.auraIDs or aDef.debuffIDs or aDef.ids
-    if aIDs then
-      for _, id in ipairs(aIDs) do
-        local idStr = tostring(id)
-        if (tRem or 0) > (simAuraRem.target[idStr] or 0) then simAuraRem.target[idStr] = tRem end
-        if (tStacks or 0) > (simAuraStacks.target[idStr] or 0) then simAuraStacks.target[idStr] = tStacks end
-        if (pRem or 0) > (simAuraRem.player[idStr] or 0) then simAuraRem.player[idStr] = pRem end
-        if (pStacks or 0) > (simAuraStacks.player[idStr] or 0) then simAuraStacks.player[idStr] = pStacks end
+    local hasAuraMeta = aDef.isAuraOnly or (aDef.auraDuration and aDef.auraDuration > 0) or aDef.appliesDoTs or (aDef.burstDuration and aDef.burstDuration > 0)
+    if hasAuraMeta then
+      local u = aDef.auraUnit or ((aDef.burstDuration and aDef.burstDuration > 0 and not aDef.appliesDoTs) and "player" or "target")
+      local _, uRem, uStacks = SpArc:GetUnitAuraState(u, aKey, parsed, assistedKey, now)
+      uRem = uRem or 0
+      uStacks = uStacks or 0
+      simAuraRem[u][aKey] = uRem
+      simAuraStacks[u][aKey] = uStacks
+      local aIDs = aDef.auraIDs or aDef.debuffIDs or aDef.ids
+      if aIDs then
+        for _, id in ipairs(aIDs) do
+          local idStr = tostring(id)
+          if uRem > (simAuraRem[u][idStr] or 0) then simAuraRem[u][idStr] = uRem end
+          if uStacks > (simAuraStacks[u][idStr] or 0) then simAuraStacks[u][idStr] = uStacks end
+        end
       end
-    end
-    if aDef.appliesDoTs and states[aKey] and not states[aKey].isUnavailable then
-      anyDoTDef = true
-      if (tRem or 0) <= 1.0 then
-        allDoTsActive = false
+      if aDef.appliesDoTs and states[aKey] and not states[aKey].isUnavailable then
+        anyDoTDef = true
+        if uRem <= 1.0 then
+          allDoTsActive = false
+        end
       end
     end
   end

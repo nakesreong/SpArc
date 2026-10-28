@@ -254,6 +254,9 @@ function SpArc:ApplyVisualLayout()
   if emLabel then
     emLabel:SetText(SpArc:L("HUD_SAVE_ALERT"))
   end
+  if SpArc.ApplyResourceBarLayout then
+    SpArc:ApplyResourceBarLayout()
+  end
 end
 
 SpArc:RebuildParsedProfiles()
@@ -291,16 +294,27 @@ local function UpdateCooldownRow(boxes, spellKeys, states, now, gcdStart, gcdDur
       box.keybind:SetText(s.keybind or "")
       if s.isUnavailable or (not s.isUsable and s.isReady) then
         box.icon:SetDesaturated(true)
+        box.icon:SetVertexColor(1, 1, 1)
         box.icon:SetAlpha(0.35)
         box.border:SetColorTexture(0.18, 0.18, 0.22, 0.85)
+        box.glow:SetColorTexture(0, 0, 0, 0)
         box.keybind:SetTextColor(0.52, 0.52, 0.58, 0.80)
         box.timer:SetText("")
         SetBoxCooldownSafe(box, 0, 0, now)
       elseif s.isReady then
         box.icon:SetDesaturated(false)
         box.icon:SetAlpha(1.0)
-        box.border:SetColorTexture(0.18, 0.88, 0.42, 0.95)
-        box.keybind:SetTextColor(1, 0.96, 0.80, 1)
+        if s.isOutOfRange then
+          box.icon:SetVertexColor(1.0, 0.24, 0.24)
+          box.border:SetColorTexture(1.0, 0.12, 0.12, 0.96)
+          box.glow:SetColorTexture(1.0, 0.08, 0.08, 0.45)
+          box.keybind:SetTextColor(1.0, 0.30, 0.30, 1)
+        else
+          box.icon:SetVertexColor(1, 1, 1)
+          box.border:SetColorTexture(0.18, 0.88, 0.42, 0.95)
+          box.glow:SetColorTexture(0, 0, 0, 0)
+          box.keybind:SetTextColor(1, 0.96, 0.80, 1)
+        end
         box.timer:SetText("")
         if gcdStart and gcdStart > 0 and gcdDur and gcdDur > 0 then
           SetBoxCooldownSafe(box, gcdStart, gcdDur, now)
@@ -309,8 +323,10 @@ local function UpdateCooldownRow(boxes, spellKeys, states, now, gcdStart, gcdDur
         end
       else
         box.icon:SetDesaturated(true)
+        box.icon:SetVertexColor(1, 1, 1)
         box.icon:SetAlpha(0.55)
         box.border:SetColorTexture(0.22, 0.22, 0.26, 0.95)
+        box.glow:SetColorTexture(0, 0, 0, 0)
         box.keybind:SetTextColor(0.80, 0.80, 0.85, 1)
         if s.remSec and s.remSec > 0 then
           if s.remSec >= 60 then
@@ -519,6 +535,10 @@ function SpArc:TriggerSpellPress(defKey, slot, keybind)
     slot = defs[defKey].slot
   end
 
+  if (defKey == "PICK_POCKET" or (arcSlots[1] and arcSlots[1].currentDefKey == "PICK_POCKET" and keybind and arcSlots[1].currentKeybind == keybind)) and SpArc.MarkTargetPickPocketed then
+    SpArc:MarkTargetPickPocketed(false)
+  end
+
   local debounceId = defKey or (slot and ("SLOT_" .. tostring(slot))) or (keybind and ("KEY_" .. tostring(keybind))) or nil
   if debounceId then
     local prev = lastPressTriggerAt[debounceId]
@@ -584,17 +604,26 @@ function SpArc:TriggerSpellPress(defKey, slot, keybind)
 end
 
 local hookedBT4Buttons = {}
-local function EnsureBT4PressHooks()
+local lastBT4HookCheck = 0
+local function EnsureBT4PressHooks(now)
+  if not _G.Bartender4 and not _G.BT4Button1 then
+    return
+  end
+  if now and (now - lastBT4HookCheck) < 2.0 then
+    return
+  end
+  lastBT4HookCheck = now or GetTime()
   for slot = 1, 180 do
     if not hookedBT4Buttons[slot] then
       local btn = _G["BT4Button" .. slot]
       if btn and btn.HookScript then
         hookedBT4Buttons[slot] = true
         local capturedSlot = slot
-        pcall(btn.HookScript, btn, "PostClick", function()
-          local defKey = ResolveSlotDefKey(capturedSlot)
+        pcall(btn.HookScript, btn, "PostClick", function(selfBtn)
+          local actSlot = (selfBtn and not IsSecret(selfBtn.action) and type(selfBtn.action) == "number" and selfBtn.action > 0) and selfBtn.action or capturedSlot
+          local defKey = ResolveSlotDefKey(actSlot) or ResolveSlotDefKey(capturedSlot)
           local kb = SpArc.GetSlotKeybind and SpArc:GetSlotKeybind(capturedSlot) or nil
-          SpArc:TriggerSpellPress(defKey, capturedSlot, kb)
+          SpArc:TriggerSpellPress(defKey, actSlot, kb)
         end)
       end
     end
@@ -619,6 +648,9 @@ rootFrame:SetScript("OnUpdate", function()
   local qScale = tonumber(v.queueScale) or 1.00
 
   UpdateCastbar(now)
+  if SpArc.UpdateResourceBar then
+    SpArc:UpdateResourceBar(now)
+  end
   if arcSlots[1]:IsShown() then
     local speed = st.lastShouldInterrupt and 12.0 or 6.0
     local amp = st.lastShouldInterrupt and 0.08 or 0.04
@@ -653,7 +685,7 @@ rootFrame:SetScript("OnUpdate", function()
   end
   lastLogicTick = now
 
-  EnsureBT4PressHooks()
+  EnsureBT4PressHooks(now)
   SpArc:ScanActionSlotsAndSpells(false)
 
   local isMounted = SafeBool(IsMounted) or SafeBool(UnitInVehicle, "player") or SafeBool(HasOverrideActionBar)
@@ -672,6 +704,23 @@ rootFrame:SetScript("OnUpdate", function()
     and not SafeBool(UnitIsDead, "target")
   )
   local inCombat = SafeBool(UnitAffectingCombat, "player")
+  if not hasHostileTarget and not inCombat and not v.alwaysShowCDs and not SpArc.testMode then
+    for i = 1, MAX_ARC_SLOTS do
+      arcSlots[i].currentDefKey = nil
+      arcSlots[i].currentSlot = nil
+      arcSlots[i].currentKeybind = nil
+      arcSlots[i].resWaitStart = nil
+      SetBoxCooldownSafe(arcSlots[i], 0, 0, now)
+      arcSlots[i]:Hide()
+    end
+    for i = 1, #savesBoxes do savesBoxes[i]:Hide() end
+    for i = 1, #cdsBoxes do cdsBoxes[i]:Hide() end
+    emergencyBox.currentDefKey = nil
+    emergencyBox.currentSlot = nil
+    emergencyBox.currentKeybind = nil
+    emergencyBox:Hide()
+    return
+  end
   local maxQueue = math.max(3, math.min(MAX_ARC_SLOTS, tonumber(v.queueLength) or 5))
 
   local queue, states, parsed, activeChannelKey, shouldInterruptChannel, isProtectedChannel = SpArc:BuildRotationQueue(maxQueue)
@@ -702,29 +751,80 @@ rootFrame:SetScript("OnUpdate", function()
         box.timer:SetText("")
 
         local s = states and item.key and states[item.key] or nil
-        if s and not s.isReady and s.remSec and s.remSec > 0 then
-          local dur = (s.durSec and s.durSec > 0) and s.durSec or s.remSec
-          local stTime = (s.startTime and s.startTime > 0) and s.startTime or (now - math.max(0, dur - s.remSec))
-          SetBoxCooldownSafe(box, stTime, dur, now)
-          if i == 1 and s.remSec > 1.6 then
-            box.timer:SetText(string.format("%d", math.ceil(s.remSec)))
+        local isNoRes = (i == 1) and (item.isNoResource or (item.isReady and not item.isUsable))
+        if isNoRes then
+          local waitDur = (item.resWaitSec and item.resWaitSec > 0.5) and item.resWaitSec or 2.8
+          if box.resWaitKey ~= item.key or not box.resWaitStart or (now >= (box.resWaitStart + (box.resWaitDur or 2.8) - 0.08)) then
+            box.resWaitKey = item.key
+            box.resWaitStart = now
+            box.resWaitDur = math.max(1.8, waitDur)
           end
-        elseif gcdStart and gcdStart > 0 and gcdDur and gcdDur > 0 then
-          SetBoxCooldownSafe(box, gcdStart, gcdDur, now)
+          local remWait = math.max(0.1, (box.resWaitStart + box.resWaitDur) - now)
+          SetBoxCooldownSafe(box, box.resWaitStart, box.resWaitDur, now)
+          box.timer:SetTextColor(0.55, 0.82, 1.0, 0.95)
+          box.timer:SetText(string.format("%.1f", remWait))
         else
-          SetBoxCooldownSafe(box, 0, 0, now)
+          box.resWaitKey = nil
+          box.resWaitStart = nil
+          box.timer:SetTextColor(1, 0.88, 0.35, 1)
+          if s and not s.isReady and s.remSec and s.remSec > 0 then
+            local dur = (s.durSec and s.durSec > 0) and s.durSec or s.remSec
+            local stTime = (s.startTime and s.startTime > 0) and s.startTime or (now - math.max(0, dur - s.remSec))
+            SetBoxCooldownSafe(box, stTime, dur, now)
+            if i == 1 and s.remSec > 0.4 then
+              if s.remSec >= 10 then
+                box.timer:SetText(string.format("%d", math.ceil(s.remSec)))
+              else
+                box.timer:SetText(string.format("%.1f", s.remSec))
+              end
+            end
+          elseif gcdStart and gcdStart > 0 and gcdDur and gcdDur > 0 then
+            SetBoxCooldownSafe(box, gcdStart, gcdDur, now)
+          else
+            SetBoxCooldownSafe(box, 0, 0, now)
+          end
         end
 
-        local isDisabledArcItem = item.isUnavailable or (i == 1 and (item.isReady == false or item.isUsable == false))
-        if isDisabledArcItem then
+        local isOutOfRange = item.isOutOfRange or (s and s.isOutOfRange) or false
+        local isDisabledArcItem = item.isUnavailable or isNoRes or (i == 1 and (item.isReady == false or item.isUsable == false))
+        if isOutOfRange then
+          box.icon:SetDesaturated(false)
+          box.icon:SetVertexColor(1.0, 0.24, 0.24)
+          box.icon:SetAlpha(isDisabledArcItem and 0.72 or 0.96)
+          box.border:SetColorTexture(1.0, 0.12, 0.12, 1.0)
+          box.glow:SetColorTexture(1.0, 0.08, 0.08, i == 1 and 0.72 or 0.38)
+          box.keybind:SetTextColor(1.0, 0.30, 0.30, 1)
+          if i == 1 and box.banner then
+            if st.lastShouldInterrupt then
+              box.banner:SetTextColor(1.0, 0.30, 0.68, 1)
+              box.banner:SetText(SpArc:L("HUD_CLIP_BANNER"))
+            elseif isProtectedChannel then
+              box.banner:SetTextColor(0.35, 0.90, 1.0, 1)
+              box.banner:SetText(SpArc:L("HUD_CHANNEL_BANNER"))
+            else
+              box.banner:SetTextColor(1.0, 0.28, 0.28, 1)
+              box.banner:SetText(SpArc:L("HUD_RANGE_BANNER"))
+            end
+          end
+        elseif isDisabledArcItem then
           box.icon:SetDesaturated(true)
-          box.icon:SetAlpha(0.45)
-          box.border:SetColorTexture(0.22, 0.22, 0.26, 0.95)
+          box.keybind:SetTextColor(1, 0.96, 0.80, 1)
+          if isNoRes then
+            box.icon:SetVertexColor(0.42, 0.48, 0.65)
+            box.icon:SetAlpha(0.62)
+            box.border:SetColorTexture(0.20, 0.34, 0.56, 0.95)
+          else
+            box.icon:SetVertexColor(0.55, 0.55, 0.58)
+            box.icon:SetAlpha(0.45)
+            box.border:SetColorTexture(0.22, 0.22, 0.26, 0.95)
+          end
           box.glow:SetColorTexture(0, 0, 0, 0)
           if box.banner then box.banner:SetText("") end
         else
           box.icon:SetDesaturated(false)
+          box.icon:SetVertexColor(1, 1, 1)
           box.icon:SetAlpha(1.0)
+          box.keybind:SetTextColor(1, 0.96, 0.80, 1)
           if i == 1 then
             if st.lastShouldInterrupt then
               box.border:SetColorTexture(1.0, 0.18, 0.56, 1.0)
@@ -759,6 +859,7 @@ rootFrame:SetScript("OnUpdate", function()
         box.currentDefKey = nil
         box.currentSlot = nil
         box.currentKeybind = nil
+        box.resWaitStart = nil
         SetBoxCooldownSafe(box, 0, 0, now)
         box:Hide()
       end
@@ -768,6 +869,7 @@ rootFrame:SetScript("OnUpdate", function()
       arcSlots[i].currentDefKey = nil
       arcSlots[i].currentSlot = nil
       arcSlots[i].currentKeybind = nil
+      arcSlots[i].resWaitStart = nil
       SetBoxCooldownSafe(arcSlots[i], 0, 0, now)
       arcSlots[i]:Hide()
     end
@@ -793,7 +895,7 @@ rootFrame:SetScript("OnUpdate", function()
   if v.showEmergencySave ~= false and hpPct <= emThreshold and (inCombat or hasHostileTarget or SpArc.testMode) then
     local pickedEm = nil
     local pickedEmKey = nil
-    for _, emKey in ipairs((parsed and parsed.emergency) or { "DISPERSION", "DESPERATE_PRAYER", "VAMPIRIC_EMBRACE" }) do
+    for _, emKey in ipairs((parsed and parsed.emergency) or {}) do
       local s = states[emKey]
       if s and s.isReady and s.isUsable and not s.isUnavailable then
         pickedEm = s
@@ -826,7 +928,7 @@ end)
 --                SMART BOSS TAB-TARGETING (@boss1..5 PRIORITY)                      --
 ---------------------------------------------------------------------------------------
 local smartTabBtn = CreateFrame("Button", "SpArcSmartTabButton", UIParent, "SecureActionButtonTemplate")
-smartTabBtn:RegisterForClicks("AnyDown", "AnyUp")
+smartTabBtn:RegisterForClicks("AnyDown")
 smartTabBtn:SetAttribute("type", "macro")
 smartTabBtn:SetAttribute("macrotext", "/targetenemy\n/target [@boss1,harm,nodead][@boss2,harm,nodead][@boss3,harm,nodead][@boss4,harm,nodead][@boss5,harm,nodead]")
 

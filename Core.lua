@@ -9,18 +9,17 @@ _G.SparkArc = SpArc
 _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
-SpArc.VERSION = "2.9.0"
-SpArc.PROFILE_SCHEMA_VERSION = 12
+SpArc.VERSION = "2.9.1"
+SpArc.PROFILE_SCHEMA_VERSION = SpArc.PROFILE_SCHEMA_VERSION or 21
 
-local C_AddOns = _G.C_AddOns
 local C_CVar = _G.C_CVar
-local UIParent = _G.UIParent
 local issecretvalue = _G.issecretvalue
 local pcall = _G.pcall
 local ipairs = _G.ipairs
 local pairs = _G.pairs
 local type = _G.type
 local table = _G.table
+local string = _G.string
 
 local FONT_PATH = (_G.GameFontNormal and select(1, _G.GameFontNormal:GetFont()))
   or (_G.StandardTextFont and select(1, _G.StandardTextFont:GetFont()))
@@ -51,6 +50,25 @@ function SpArc.Trim(s)
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
+local CYR_UPPER_TO_LOWER = {
+  ["\208\129"] = "\209\145", -- Ё -> ё
+}
+for b = 144, 159 do
+  CYR_UPPER_TO_LOWER[string.char(208, b)] = string.char(208, b + 32)
+end
+for b = 160, 175 do
+  CYR_UPPER_TO_LOWER[string.char(208, b)] = string.char(209, b - 32)
+end
+
+function SpArc.UTF8Lower(s)
+  if type(s) ~= "string" or s == "" then return "" end
+  local low = s:lower()
+  if not low:find("\208", 1, true) then
+    return low
+  end
+  return (low:gsub("\208[\129\144-\175]", CYR_UPPER_TO_LOWER))
+end
+
 function SpArc.EnableAssistedCombatEngine()
   if C_CVar and C_CVar.SetCVar then
     pcall(C_CVar.SetCVar, "assistedCombatHighlight", "1")
@@ -60,263 +78,21 @@ end
 SpArc.EnableAssistedCombatEngine()
 
 ---------------------------------------------------------------------------------------
---                  DEFAULT SPELL CATALOG (MERGED WITH .MD SPELL_BOOK)               --
+--         DYNAMIC SPELL TABLE (POPULATED STRICTLY FROM ACTIVE .MD PSEUDOCODE)       --
 ---------------------------------------------------------------------------------------
-local BASE_SPELL_DEFS = {
-  TENTACLE_SLAM = {
-    key = "TENTACLE_SLAM",
-    names = { "Мощный удар щупальцем", "Темное сокрушение", "Shadow Crash", "Tentacle Slam" },
-    macroNames = { "M1", "M2", "sp3" },
-    ids = { 1227280, 205385, 457042, 1234796 },
-    preferredSlot = 1,
-    baseCD = 15,
-    maxCharges = 2,
-    insanityGain = 15,
-    fallbackIcon = 136201,
-    fallbackKey = "M1",
-    appliesDoTs = true,
-  },
-  VAMPIRIC_TOUCH = {
-    key = "VAMPIRIC_TOUCH",
-    names = { "Прикосновение вампира", "Vampiric Touch" },
-    macroNames = { "sp1pvp", "sp1" },
-    ids = { 34914 },
-    preferredSlot = 64,
-    baseCD = 0,
-    maxCharges = 1,
-    insanityGain = 6,
-    fallbackIcon = 135978,
-    fallbackKey = "SR",
-    appliesDoTs = true,
-  },
-  VOID_TORRENT = {
-    key = "VOID_TORRENT",
-    names = { "Поток бездны", "Поток Бездны", "Void Torrent" },
-    macroNames = { "SM1", "SM2" },
-    ids = { 263165 },
-    preferredSlot = 3,
-    baseCD = 45,
-    maxCharges = 1,
-    insanityGain = 35,
-    grantsMFI = true,
-    lockChannel = true,
-    fallbackIcon = 1386551,
-    fallbackKey = "SM1",
-  },
-  DEVOURING_PLAGUE = {
-    key = "DEVOURING_PLAGUE",
-    names = { "Слово Тьмы: Безумие", "Всепожирающая чума", "Shadow Word: Madness", "Devouring Plague" },
-    macroNames = { "sp4" },
-    ids = { 335467 },
-    preferredSlot = 63,
-    baseCD = 0,
-    maxCharges = 1,
-    insanityCost = 50,
-    grantsMFI = true,
-    fallbackIcon = 252997,
-    fallbackKey = "R",
-    isSpender = true,
-    requiresUsable = true,
-  },
-  MIND_BLAST = {
-    key = "MIND_BLAST",
-    names = { "Выброс Бездны", "Взрыв разума", "Void Blast", "Mind Blast" },
-    macroNames = { "M2", "M1", "M1_2" },
-    ids = { 450983, 8092 },
-    preferredSlot = 2,
-    baseCD = 7.5,
-    maxCharges = 1,
-    insanityGain = 15,
-    fallbackIcon = 136224,
-    fallbackKey = "M2",
-  },
-  VOID_BOLT = {
-    key = "VOID_BOLT",
-    names = { "Залп Бездны", "Стрела Бездны", "Void Volley", "Void Bolt" },
-    macroNames = { "M2", "1_to_2", "Dps", "M1" },
-    ids = { 1242173, 205448 },
-    preferredSlot = 2,
-    baseCD = 6,
-    maxCharges = 1,
-    insanityGain = 10,
-    fallbackIcon = 1386548,
-    fallbackKey = "M2",
-    procOnly = true,
-  },
-  SHADOW_WORD_DEATH = {
-    key = "SHADOW_WORD_DEATH",
-    names = { "Слово Тьмы: Смерть", "Shadow Word: Death" },
-    macroNames = { "SM2", "SM1" },
-    ids = { 32379 },
-    preferredSlot = 4,
-    baseCD = 10,
-    maxCharges = 1,
-    insanityGain = 10,
-    fallbackIcon = 136149,
-    fallbackKey = "SM2",
-    requiresUsable = true,
-    isExecute = true,
-  },
-  MIND_FLAY_INSANITY = {
-    key = "MIND_FLAY_INSANITY",
-    names = { "Пытка разума: безумие", "Mind Flay: Insanity" },
-    macroNames = { "sp8" },
-    ids = { 391403 },
-    preferredSlot = 10,
-    baseCD = 0,
-    maxCharges = 1,
-    insanityGain = 16,
-    fallbackIcon = 136208,
-    fallbackKey = "SE",
-    procOnly = true,
-  },
-  MIND_FLAY = {
-    key = "MIND_FLAY",
-    names = { "Пытка разума", "Mind Flay" },
-    macroNames = { "sp8" },
-    ids = { 15407, 391403 },
-    preferredSlot = 10,
-    baseCD = 0,
-    maxCharges = 1,
-    insanityGain = 12,
-    fillerInterruptible = true,
-    fallbackIcon = 136208,
-    fallbackKey = "SE",
-  },
-  VOID_ERUPTION = {
-    key = "VOID_ERUPTION",
-    names = { "Вхождение в Бездну", "Облик Бездны", "Извержение Бездны", "Темное вознесение", "Voidform", "Void Eruption", "Dark Ascension" },
-    macroNames = { "Dps", "1_to_2", "M2" },
-    ids = { 228260, 391109, 194249 },
-    preferredSlot = 49,
-    baseCD = 120,
-    maxCharges = 1,
-    fallbackIcon = 537079,
-    fallbackKey = "1",
-  },
-  POWER_INFUSION = {
-    key = "POWER_INFUSION",
-    names = { "Придание сил", "Power Infusion" },
-    macroNames = { "1_to_2" },
-    ids = { 10060 },
-    preferredSlot = 11,
-    baseCD = 120,
-    maxCharges = 1,
-    fallbackIcon = 135939,
-    fallbackKey = "Q",
-  },
-  HALO = {
-    key = "HALO",
-    names = { "Сияние", "Божественная звезда", "Halo", "Divine Star" },
-    macroNames = { "S1" },
-    ids = { 120644, 122121, 120517 },
-    preferredSlot = 53,
-    baseCD = 60,
-    maxCharges = 1,
-    insanityGain = 10,
-    fallbackIcon = 632352,
-    fallbackKey = "S1",
-  },
-  PSYFIEND = {
-    key = "PSYFIEND",
-    names = { "Исчадие Тьмы", "Ментальный демон", "Игры разума", "Призрак Бездны", "Shadowfiend", "Psyfiend", "Mindgames" },
-    macroNames = { "pvptal" },
-    ids = { 34433, 211522, 375901, 451235, 200174 },
-    preferredSlot = 67,
-    baseCD = 60,
-    maxCharges = 1,
-    fallbackIcon = 136199,
-    fallbackKey = "T",
-  },
-  DISPERSION = {
-    key = "DISPERSION",
-    names = { "Слияние с тьмой", "Слияние с Тьмой", "Dispersion" },
-    macroNames = { "CM2" },
-    ids = { 47585 },
-    preferredSlot = 6,
-    baseCD = 90,
-    maxCharges = 1,
-    fallbackIcon = 237563,
-    fallbackKey = "CM2",
-  },
-  DESPERATE_PRAYER = {
-    key = "DESPERATE_PRAYER",
-    names = { "Молитва отчаяния", "Desperate Prayer" },
-    macroNames = { "CM1" },
-    ids = { 19236 },
-    preferredSlot = 5,
-    baseCD = 90,
-    maxCharges = 1,
-    fallbackIcon = 237550,
-    fallbackKey = "CM1",
-  },
-  VAMPIRIC_EMBRACE = {
-    key = "VAMPIRIC_EMBRACE",
-    names = { "Объятия вампира", "Vampiric Embrace" },
-    macroNames = { "AM1" },
-    ids = { 15286 },
-    preferredSlot = 7,
-    baseCD = 120,
-    maxCharges = 1,
-    fallbackIcon = 136230,
-    fallbackKey = "AM1",
-  },
-  FADE = {
-    key = "FADE",
-    names = { "Уход в тень", "Ментальный крик", "Fade", "Psychic Scream" },
-    macroNames = { "p2", "p12", "p4" },
-    ids = { 586, 8122 },
-    preferredSlot = 71,
-    baseCD = 30,
-    maxCharges = 1,
-    fallbackIcon = 135994,
-    fallbackKey = "Z",
-  },
-  POWER_WORD_SHIELD = {
-    key = "POWER_WORD_SHIELD",
-    names = { "Слово силы: Щит", "Power Word: Shield" },
-    macroNames = { "H_Shield", "p4" },
-    ids = { 17 },
-    preferredSlot = 62,
-    baseCD = 7.5,
-    maxCharges = 1,
-    fallbackIcon = 135940,
-    fallbackKey = "SB3",
-  },
-  SILENCE = {
-    key = "SILENCE",
-    names = { "Безмолвие", "Silence" },
-    macroNames = { "F" },
-    ids = { 15487 },
-    preferredSlot = 65,
-    baseCD = 45,
-    maxCharges = 1,
-    fallbackIcon = 458230,
-    fallbackKey = "F",
-  },
-  PSYCHIC_HORROR = {
-    key = "PSYCHIC_HORROR",
-    names = { "Глубинный ужас", "Psychic Horror" },
-    macroNames = { "p2vp", "M3" },
-    ids = { 64044 },
-    preferredSlot = 12,
-    baseCD = 45,
-    maxCharges = 1,
-    fallbackIcon = 237568,
-    fallbackKey = "SQ",
-  },
-}
-
 SpArc.SPELL_DEFS = {}
-for k, v in pairs(BASE_SPELL_DEFS) do
-  SpArc.SPELL_DEFS[k] = v
-end
 
 SpArc.ACTIVE_SLOTS = {
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
   61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
   49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
+  25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+  37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
   13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+  73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84,
+  85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
+  97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108,
+  109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120,
 }
 
 SpArc.SLOT_DEFAULT_KEYBIND = {
@@ -380,6 +156,13 @@ SpArc.DEFAULT_VISUAL = {
   showEmergencySave = true,
   showInterruptAlert = true,
   showCastbar = true,
+  showResourceBar = true,
+  alwaysShowResourceBar = false,
+  resourceBarWidth = 276,
+  resourceBarHeight = 16,
+  resourceBarOffsetX = 0,
+  resourceBarOffsetY = -166,
+  resourceBarScale = 1.00,
   alwaysShowCDs = false,
   enableTelemetry = true,
   showMinimapButton = true,
@@ -398,11 +181,13 @@ SpArc.DEFAULT_VISUAL = {
   macroGenIncludeClass = true,
   macroGenIncludeSpec = true,
   macroGenTemplate = "#showtooltip\n/stopmacro [flying]\n/cast [@target] spell",
+  smartBossTab = true,
   lang = "AUTO",
 }
 
 SpArc.state = {
   lastCastAt = {},
+  lastAnyCastAt = 0,
   lastSlotScanAt = 0,
   targetDoTsUntil = 0,
   targetDebuffStacks = 0,
@@ -414,6 +199,14 @@ SpArc.state = {
   gcdStartTime = 0,
   gcdDuration = 0,
   mfiProcUntil = 0,
+  lastStableAssistKey = nil,
+  lastStableAssistID = nil,
+  lastStableAssistAt = 0,
+  assistCandidateKey = nil,
+  assistCandidateSince = 0,
+  lockedTopKey = nil,
+  lockedTopCandidateKey = nil,
+  lockedTopCandidateSince = 0,
   lastSpellAudit = {},
   lastShouldInterrupt = false,
   lastIsProtectedChannel = false,
@@ -429,14 +222,22 @@ SpArc.state = {
   },
 }
 
+local cachedCharKey = nil
+local cachedDB = nil
+
 function SpArc:GetCurrentCharKey()
+  if cachedCharKey then
+    return cachedCharKey
+  end
   local uName = _G.UnitName and _G.UnitName("player")
   local rName = _G.GetRealmName and _G.GetRealmName()
   if uName and not SpArc.IsSecret(uName) and type(uName) == "string" and uName ~= "" and uName ~= _G.UNKNOWNOBJECT then
     if rName and not SpArc.IsSecret(rName) and type(rName) == "string" and rName ~= "" then
-      return uName .. " - " .. rName
+      cachedCharKey = uName .. " - " .. rName
+      return cachedCharKey
     end
-    return uName
+    cachedCharKey = uName
+    return cachedCharKey
   end
   return "Default"
 end
@@ -495,7 +296,10 @@ local function EnsureProfileObject(db, profName, templateVisual, keepExplicitInt
   return prof
 end
 
-function SpArc:EnsureDB()
+function SpArc:EnsureDB(forceReinit)
+  if cachedDB and _G.SpArcDB == cachedDB and cachedCharKey and not forceReinit and cachedDB.visual then
+    return cachedDB
+  end
   _G.SpArcDB = _G.SpArcDB or _G.SparkArcDB or {}
   _G.SparkArcDB = _G.SpArcDB
   local db = _G.SpArcDB
@@ -535,38 +339,125 @@ function SpArc:EnsureDB()
   db.presets = db.presets or {}
   db.presetOrder = db.presetOrder or {}
   if db.profileSchemaVersion ~= SpArc.PROFILE_SCHEMA_VERSION or #db.presetOrder == 0 then
-    local customOrder = {}
-    local customMap = {}
-    for _, id in ipairs(db.presetOrder) do
-      if not (SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]) and db.presets[id] then
-        customOrder[#customOrder + 1] = id
-        customMap[id] = db.presets[id]
+    local prevSchema = tonumber(db.profileSchemaVersion) or 0
+    local preservedPresets = {}
+    local preservedCustomOrder = {}
+
+    if prevSchema >= 21 then
+      for _, id in ipairs(db.presetOrder) do
+        local p = db.presets[id]
+        if p then
+          preservedPresets[id] = p
+          if not (SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]) then
+            p.isCustom = true
+            p.userModified = true
+            preservedCustomOrder[#preservedCustomOrder + 1] = id
+          end
+        end
+      end
+      for id, p in pairs(db.presets) do
+        if p and not preservedPresets[id] then
+          preservedPresets[id] = p
+          if not (SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]) then
+            p.isCustom = true
+            p.userModified = true
+            preservedCustomOrder[#preservedCustomOrder + 1] = id
+          end
+        end
+      end
+    else
+      for id, p in pairs(db.presets) do
+        local isBuiltIn = (SpArc.BuiltInPresets and SpArc.BuiltInPresets[id] ~= nil) or false
+        if p and not isBuiltIn and (p.isCustom or p.userModified or tostring(id):find("_CUSTOM_", 1, true)) then
+          p.isCustom = true
+          p.userModified = true
+          preservedPresets[id] = p
+          preservedCustomOrder[#preservedCustomOrder + 1] = id
+        end
       end
     end
+
     db.presetOrder = {}
+    db.presets = {}
     for _, id in ipairs(SpArc.BuiltInPresetOrder or {}) do
       local bp = SpArc.BuiltInPresets and SpArc.BuiltInPresets[id]
       if bp then
         db.presetOrder[#db.presetOrder + 1] = id
-        db.presets[id] = {
-          id = bp.id,
-          class = bp.class,
-          title = bp.title,
-          mode = bp.mode,
-          md = bp.md,
-        }
+        local existing = preservedPresets[id]
+        if existing and existing.userModified and type(existing.md) == "string" and existing.md ~= "" then
+          db.presets[id] = existing
+        else
+          db.presets[id] = {
+            id = bp.id,
+            class = bp.class,
+            title = bp.title,
+            mode = bp.mode,
+            md = bp.md,
+            userModified = false,
+          }
+        end
       end
     end
-    for _, cid in ipairs(customOrder) do
-      db.presetOrder[#db.presetOrder + 1] = cid
-      db.presets[cid] = customMap[cid]
+
+    for _, cid in ipairs(preservedCustomOrder) do
+      if preservedPresets[cid] and not db.presets[cid] then
+        db.presetOrder[#db.presetOrder + 1] = cid
+        db.presets[cid] = preservedPresets[cid]
+      end
+    end
+
+    local charDefaultPreset = {
+      ["Ньарлатхотеп - Свежеватель Душ"] = "PRIEST_01_SHADOW_PVE",
+      ["Калиратри - Свежеватель Душ"]    = "MAGE_04_FROST_PVE",
+      ["Морвара - Свежеватель Душ"]      = "MAGE_04_FROST_PVE",
+      ["Улак - Свежеватель Душ"]         = "ROGUE_01_ASSA_PVE",
+      ["Моржовый - Свежеватель Душ"]     = "WARRIOR_02_ARGS_BOSS",
+    }
+    for pName, pObj in pairs(db.profiles or {}) do
+      if not pObj.activePresetID or not db.presets[pObj.activePresetID] then
+        local wantID = charDefaultPreset[pName] or "PRIEST_01_SHADOW_PVE"
+        pObj.activePresetID = wantID
+        pObj.autoPresets = { PVE = wantID, BOSS = wantID, PVP = wantID }
+      end
     end
     db.profileSchemaVersion = SpArc.PROFILE_SCHEMA_VERSION
   end
 
+  if activeProf.mode then
+    db.mode = activeProf.mode
+  else
+    activeProf.mode = db.mode or "AUTO"
+  end
+  if activeProf.activePresetID and db.presets[activeProf.activePresetID] then
+    db.activePresetID = activeProf.activePresetID
+  end
+  if type(activeProf.autoPresets) == "table" then
+    db.autoPresets = activeProf.autoPresets
+  else
+    activeProf.autoPresets = {
+      PVE  = (db.autoPresets and db.autoPresets.PVE) or "PRIEST_01_SHADOW_PVE",
+      BOSS = (db.autoPresets and db.autoPresets.BOSS) or "PRIEST_02_SHADOW_BOSS",
+      PVP  = (db.autoPresets and db.autoPresets.PVP) or "PRIEST_03_SHADOW_PVP",
+    }
+    db.autoPresets = activeProf.autoPresets
+  end
+
   db.telemetryLog = db.telemetryLog or {}
   db.lastSpellAudit = db.lastSpellAudit or {}
+  cachedDB = db
   return db
+end
+
+function SpArc:SaveCharPresetState(db)
+  db = db or cachedDB or _G.SpArcDB
+  if not db then return end
+  local profName = db.activeProfile
+  local prof = profName and db.profiles and db.profiles[profName]
+  if prof then
+    prof.mode = db.mode
+    prof.activePresetID = db.activePresetID
+    prof.autoPresets = db.autoPresets
+  end
 end
 
 function SpArc:GetActiveProfileName()

@@ -112,6 +112,8 @@ local function ParseSpellDefLine(line)
         def.fillerInterruptible = (val:lower() == "true" or val == "1")
       elseif prop == "LOCK_CHANNEL" then
         def.lockChannel = (val:lower() == "true" or val == "1")
+      elseif prop == "BURST" or prop == "BURST_DURATION" then
+        def.burstDuration = tonumber(val) or 15
       end
     end
   end
@@ -163,6 +165,26 @@ function SpArc:ParseMarkdownFSM(mdText)
       local profMode = line:match("^#%s*MODE:%s*([A-Z]+)")
       if profMode then parsed.mode = Trim(profMode) end
 
+      local debuffHeaderOrBody = line:match("^#%s*TARGET_DEBUFF:%s*(.+)$") or line:match("^TARGET_DEBUFF:%s*(.+)$")
+      if debuffHeaderOrBody then
+        for part in debuffHeaderOrBody:gmatch("([^|]+)") do
+          local p = Trim(part)
+          local prop, val = p:match("^([A-Z_]+)%s*:%s*(.+)$")
+          if prop and val then
+            if prop == "ID" or prop == "IDS" then
+              for _, tok in ipairs(ParseCSVTokens(val)) do
+                local n = tonumber(tok)
+                if n then parsed.targetDebuffIDs[#parsed.targetDebuffIDs + 1] = n end
+              end
+            elseif prop == "NAME" or prop == "NAMES" then
+              for _, nm in ipairs(ParseCSVTokens(val)) do
+                parsed.targetDebuffNames[#parsed.targetDebuffNames + 1] = nm
+              end
+            end
+          end
+        end
+      end
+
       if not line:match("^#") then
         local spKey, spDef = ParseSpellDefLine(line)
         if spKey and spDef then
@@ -179,26 +201,6 @@ function SpArc:ParseMarkdownFSM(mdText)
             end
           end
         else
-          local debuffLine = line:match("^TARGET_DEBUFF:%s*(.+)$")
-          if debuffLine then
-            for part in debuffLine:gmatch("([^|]+)") do
-              local p = Trim(part)
-              local prop, val = p:match("^([A-Z_]+)%s*:%s*(.+)$")
-              if prop and val then
-                if prop == "ID" or prop == "IDS" then
-                  for _, tok in ipairs(ParseCSVTokens(val)) do
-                    local n = tonumber(tok)
-                    if n then parsed.targetDebuffIDs[#parsed.targetDebuffIDs + 1] = n end
-                  end
-                elseif prop == "NAME" or prop == "NAMES" then
-                  for _, nm in ipairs(ParseCSVTokens(val)) do
-                    parsed.targetDebuffNames[#parsed.targetDebuffNames + 1] = nm
-                  end
-                end
-              end
-            end
-          end
-
           local intList = line:match("^INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY:%s*(.+)$")
             or line:match("^INTERRUPTIBLE_CHANNELS:%s*(.+)$")
           if intList then

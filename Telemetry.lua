@@ -85,14 +85,14 @@ local function GetActiveAuditOrder(parsed)
     for _, r in ipairs(parsed.rules or {}) do
       addKey(r.spell)
     end
-    for _, k in ipairs(parsed.trackCDs or {}) do
+    for _, k in ipairs(parsed.cds or parsed.trackCDs or {}) do
       addKey(k)
     end
-    for _, k in ipairs(parsed.trackSaves or {}) do
+    for _, k in ipairs(parsed.saves or parsed.trackSaves or {}) do
       addKey(k)
     end
     for _, r in ipairs(parsed.emergency or {}) do
-      addKey(r.spell)
+      addKey(type(r) == "table" and r.spell or r)
     end
   end
 

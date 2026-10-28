@@ -164,6 +164,20 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
   end
+  if not isProc and _G.C_SpellActivationOverlay and _G.C_SpellActivationOverlay.IsSpellOverlayed and spellID then
+    local okS, overS = pcall(_G.C_SpellActivationOverlay.IsSpellOverlayed, spellID)
+    if okS and not IsSecret(overS) and overS then
+      isProc = true
+      overlayRaw = "sao(" .. tostring(spellID) .. ")"
+    end
+  end
+  if not isProc and def.auraUnit == "player" and (not def.burstDuration or def.burstDuration <= 0) and def.auraIDs and #def.auraIDs > 0 and def.auraIDs[1] ~= spellID and SpArc.GetUnitAuraState then
+    local aActive = SpArc:GetUnitAuraState("player", defKey, st.activeParsed, assistedKey, now)
+    if aActive then
+      isProc = true
+      overlayRaw = "auraProc(" .. tostring(defKey) .. ")"
+    end
+  end
   local hasSpellOverlayProc = isProc
   local overrideActive = false
   if C_Spell and C_Spell.GetOverrideSpell and def.ids and #def.ids > 1 then
@@ -1373,6 +1387,7 @@ local NO_RANGE_CHECK_SPELLS = {
   BARKSKIN             = true,
   RENEWAL              = true,
   FRENZIED_REGENERATION = true,
+  REGROWTH             = true,
 }
 
 local CLASS_RANGE_FALLBACK_SPELLS = {

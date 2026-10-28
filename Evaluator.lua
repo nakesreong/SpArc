@@ -933,6 +933,16 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   if defKey == "MIND_FLAY_INSANITY" then
     st.mfiProcUntil = 0
   end
+  if def.isSpender and SPELL_DEFS["REGROWTH"] then
+    local psEntry = { untilTime = now + 12.0, expiresAt = now + 12.0, stacks = 1 }
+    st.unitAuras.player["REGROWTH"] = psEntry
+    st.unitAuras.player[69369] = psEntry
+    st.unitAuras.player["69369"] = psEntry
+  elseif defKey == "REGROWTH" then
+    st.unitAuras.player["REGROWTH"] = nil
+    st.unitAuras.player[69369] = nil
+    st.unitAuras.player["69369"] = nil
+  end
   if def.consumesStacks and not castWasProc then
     local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
     local tKey = def.auraKey or "FREEZING"

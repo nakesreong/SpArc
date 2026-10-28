@@ -303,13 +303,27 @@ local function UpdateCooldownRow(boxes, spellKeys, states, now, gcdStart, gcdDur
         SetBoxCooldownSafe(box, 0, 0, now)
       elseif s.isReady then
         box.icon:SetDesaturated(false)
-        box.icon:SetAlpha(1.0)
-        if s.isOutOfRange then
+        if s.isProc then
+          box.icon:SetAlpha(1.0)
+          box.icon:SetVertexColor(1, 1, 1)
+          local pulse = 0.65 + 0.25 * math.sin(now * 8.0)
+          box.border:SetColorTexture(1.0, 0.82, 0.15, 1.0)
+          box.glow:SetColorTexture(1.0, 0.78, 0.10, pulse)
+          box.keybind:SetTextColor(1.0, 0.92, 0.35, 1)
+        elseif s.isOutOfRange then
+          box.icon:SetAlpha(1.0)
           box.icon:SetVertexColor(1.0, 0.24, 0.24)
           box.border:SetColorTexture(1.0, 0.12, 0.12, 0.96)
           box.glow:SetColorTexture(1.0, 0.08, 0.08, 0.45)
           box.keybind:SetTextColor(1.0, 0.30, 0.30, 1)
+        elseif key == "REGROWTH" then
+          box.icon:SetAlpha(0.55)
+          box.icon:SetVertexColor(0.75, 0.75, 0.80)
+          box.border:SetColorTexture(0.22, 0.42, 0.30, 0.85)
+          box.glow:SetColorTexture(0, 0, 0, 0)
+          box.keybind:SetTextColor(0.75, 0.75, 0.80, 0.90)
         else
+          box.icon:SetAlpha(1.0)
           box.icon:SetVertexColor(1, 1, 1)
           box.border:SetColorTexture(0.18, 0.88, 0.42, 0.95)
           box.glow:SetColorTexture(0, 0, 0, 0)

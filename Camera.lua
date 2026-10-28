@@ -45,6 +45,10 @@ local UnitCanAttack = _G.UnitCanAttack
 local UnitIsDead = _G.UnitIsDead
 local UnitIsGhost = _G.UnitIsGhost
 local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
+local UnitIsPlayer = _G.UnitIsPlayer
+local UnitIsUnit = _G.UnitIsUnit
+local RegisterStateDriver = _G.RegisterStateDriver
+local UnregisterStateDriver = _G.UnregisterStateDriver
 local pcall = _G.pcall
 local ipairs = _G.ipairs
 local pairs = _G.pairs
@@ -60,6 +64,7 @@ local manualToggleUnlocked = false
 local holdPollRunning = false
 local pendingBindingSync = false
 local loadingScreenActive = false
+local barberShopActive = false
 local hardwareCursorFlushed = false
 
 SpArc.COMBAT_CAM_SLOT_KEYBINDS = {
@@ -136,7 +141,9 @@ local UNLOCK_FRAME_WATCHLIST = {
   "ScrappingMachineFrame",
   "WeeklyRewardsFrame",
   "FlightMapFrame",
-  -- Transmog, Wardrobe, Outfits
+  -- Transmog, Wardrobe, Outfits, Barbershop
+  "BarberShopFrame",
+  "CharCustomizeFrame",
   "DressUpFrame",
   "SideDressUpFrame",
   "TransmogFrame",
@@ -160,6 +167,23 @@ local UNLOCK_FRAME_WATCHLIST = {
   "Baganator_SingleViewBankViewFrame",
   "Baganator_CategoryViewBackpackViewFrame",
   "Baganator_CategoryViewBankViewFrame",
+  "Baganator_SingleViewBackpackViewFrameelvui",
+  "Baganator_SingleViewBankViewFrameelvui",
+  "Baganator_CategoryViewBackpackViewFrameelvui",
+  "Baganator_CategoryViewBankViewFrameelvui",
+  "Baganator_SingleViewGuildViewFrameelvui",
+  "Baganator_CharacterSelectFrameelvui",
+  "Baganator_CurrencyPanelFrameelvui",
+  "Baganator_SingleViewBackpackViewFrameblizzard",
+  "Baganator_SingleViewBankViewFrameblizzard",
+  "Baganator_CategoryViewBackpackViewFrameblizzard",
+  "Baganator_CategoryViewBankViewFrameblizzard",
+  "Baganator_SingleViewGuildViewFrameblizzard",
+  "Baganator_SingleViewBackpackViewFramedark",
+  "Baganator_SingleViewBankViewFramedark",
+  "Baganator_CategoryViewBackpackViewFramedark",
+  "Baganator_CategoryViewBankViewFramedark",
+  "Baganator_SingleViewGuildViewFramedark",
   "BagnonInventory1",
   "BetterBagsBagBackpack",
   "BetterBagsBagBank",
@@ -247,14 +271,16 @@ end
 local function IsSpArcOwnBindingAction(action)
   if not action or action == "" or action == "NONE" then return true end
   if action:find("^SpArc") or action:find("^Combat Mode") then return true end
-  if action == "CLICK SpArcCamHoldButton:LeftButton" or action == "CLICK SpArcCamToggleButton:LeftButton" then
+  if action == "CLICK SpArcCamHoldButton:LeftButton"
+    or action == "CLICK SpArcCamToggleButton:LeftButton"
+    or action == "CLICK SpArcCamInteractButton:LeftButton" then
     return true
   end
   return false
 end
 
 local function IsInteractBindingAction(action)
-  return action == "INTERACTTARGET" or action == "INTERACTMOUSEOVER"
+  return action == "INTERACTTARGET" or action == "INTERACTMOUSEOVER" or action == "CLICK SpArcCamInteractButton:LeftButton"
 end
 
 local function GetRawGameBindingAction(key)
@@ -488,10 +514,12 @@ local function EnsureBaseCameraCVars()
   -- so @mouseover and @cursor macros hit the exact crosshair position without unhiding the OS cursor.
   pcall(C_CVar.SetCVar, "CursorStickyCentering", "0")
   SyncCursorCenteredYPos(false)
-  -- Keep SoftTarget Interact active so F / interact key works smoothly
+  -- Keep SoftTarget Interact, Enemy & Friend active so E / interact key both targets and interacts smoothly
   pcall(C_CVar.SetCVar, "SoftTargetInteract", "3")
   pcall(C_CVar.SetCVar, "SoftTargetInteractArc", "1")
   pcall(C_CVar.SetCVar, "SoftTargetInteractRange", "15")
+  pcall(C_CVar.SetCVar, "SoftTargetEnemy", "3")
+  pcall(C_CVar.SetCVar, "SoftTargetFriend", "3")
   pcall(C_CVar.SetCVar, "interactKeyWarningTutorial", "1")
 end
 
@@ -724,6 +752,32 @@ local function IsAnyWatchedFrameVisible()
     end
   end
 
+  if type(_G.UISpecialFrames) == "table" then
+    for i = 1, #_G.UISpecialFrames do
+      local fName = _G.UISpecialFrames[i]
+      if type(fName) == "string" and (
+        fName:find("^Baganator")
+        or fName:find("^Syndicator")
+        or fName:find("^Auctionator")
+        or fName:find("^BetterBags")
+        or fName:find("^Bagnon")
+        or fName:find("^AdiBags")
+        or fName:find("^ArkInventory")
+        or fName:find("^BarberShop")
+        or fName:find("^CharCustomize")
+      ) then
+        local f = _G[fName]
+        if f and f.IsVisible and SafeBool(f.IsVisible, f) then
+          if not f.GetAlpha then return true end
+          local okA, alpha = pcall(f.GetAlpha, f)
+          if not okA or (not SpArc.IsSecret(alpha) and type(alpha) == "number" and alpha > 0.05) then
+            return true
+          end
+        end
+      end
+    end
+  end
+
   if _G.MovieFrame and _G.MovieFrame.IsVisible and SafeBool(_G.MovieFrame.IsVisible, _G.MovieFrame) then
     return true
   end
@@ -770,6 +824,13 @@ local function ShouldUnlockCamera()
     return true
   end
   if IsInCinematicScene and SafeBool(IsInCinematicScene) then
+    return true
+  end
+  if barberShopActive then
+    return true
+  end
+  if (_G.BarberShopFrame and _G.BarberShopFrame.IsShown and SafeBool(_G.BarberShopFrame.IsShown, _G.BarberShopFrame))
+    or (_G.CharCustomizeFrame and _G.CharCustomizeFrame.IsShown and SafeBool(_G.CharCustomizeFrame.IsShown, _G.CharCustomizeFrame)) then
     return true
   end
   if C_PetBattles and C_PetBattles.IsInBattle and SafeBool(C_PetBattles.IsInBattle) then
@@ -958,6 +1019,130 @@ toggleBtn:SetScript("OnClick", function()
   _G.SpArc_CameraToggleKey("down")
 end)
 
+local interactBtn = CreateFrame("Button", "SpArcCamInteractButton", UIParent, "SecureActionButtonTemplate, SecureHandlerStateTemplate")
+interactBtn:RegisterForClicks("AnyDown", "AnyUp")
+interactBtn:SetAttribute("type", "macro")
+interactBtn:SetAttribute("macrotext", "/target [@mouseover,exists][@softinteract,exists][@softenemy,exists][@softfriend,exists]")
+interactBtn:SetAttribute("_onstate-caminteract", [[
+  if not self:GetAttribute("camenabled") then
+    self:ClearBindings()
+    return
+  end
+  local key = self:GetAttribute("interactkey")
+  self:ClearBindings()
+  if not key or key == "" then return end
+  if newstate == "target" then
+    self:SetBindingClick(true, key, self, "LeftButton")
+  elseif newstate == "interactmo" then
+    self:SetBinding(true, key, "INTERACTMOUSEOVER")
+  else
+    self:SetBinding(true, key, "INTERACTTARGET")
+  end
+]])
+
+local lastInteractMode = nil
+local lastInteractKey = nil
+
+local function ComputeDesiredInteractMode()
+  local hasMO = UnitExists and SafeBool(UnitExists, "mouseover")
+  local hasSI = UnitExists and SafeBool(UnitExists, "softinteract")
+
+  if hasMO then
+    local isPlayer = UnitIsPlayer and SafeBool(UnitIsPlayer, "mouseover")
+    local isEnemy = UnitCanAttack and SafeBool(UnitCanAttack, "player", "mouseover")
+    local isDead = UnitIsDead and SafeBool(UnitIsDead, "mouseover")
+    local hasTarget = UnitExists and SafeBool(UnitExists, "target")
+    local alreadyTarget = hasTarget and UnitIsUnit and SafeBool(UnitIsUnit, "target", "mouseover")
+    local moIsSI = hasSI and UnitIsUnit and SafeBool(UnitIsUnit, "mouseover", "softinteract")
+
+    -- 1. Live enemy under crosshair: always target it
+    if isEnemy and not isDead then
+      return "TARGET"
+    end
+    -- 2. Another player under crosshair: target the player (unless already targeted and a softinteract object is right here)
+    if isPlayer then
+      if alreadyTarget and hasSI then
+        return "INTERACT"
+      end
+      return "TARGET"
+    end
+    -- 3. Interactable NPC or lootable corpse under crosshair (mouseover == softinteract)
+    if moIsSI then
+      if isDead then
+        return "INTERACT_MO"
+      end
+      -- If we are currently holding the interact key down after triggering INTERACTMOUSEOVER,
+      -- switch to TARGET so the key-up release also selects mouseover as our hard target!
+      local interactKey = SpArc:GetCamInteractKey()
+      if interactKey and interactKey ~= "" and IsBindKeyPhysicallyDown(interactKey) and not alreadyTarget then
+        return "TARGET"
+      end
+      if alreadyTarget or not hasTarget then
+        return "INTERACT"
+      end
+      return "INTERACT_MO"
+    end
+    -- 4. Non-interactable or distant (>15yd) NPC under crosshair: target it
+    if alreadyTarget and hasSI then
+      return "INTERACT"
+    end
+    return "TARGET"
+  end
+
+  -- No unit under crosshair (e.g. Game Object: Barbershop chair, Chest, Herb, Mailbox, Portal, Door)
+  if hasSI then
+    return "INTERACT"
+  end
+
+  if (UnitExists and SafeBool(UnitExists, "softenemy")) or (UnitExists and SafeBool(UnitExists, "softfriend")) then
+    return "TARGET"
+  end
+
+  return "INTERACT"
+end
+
+local function UpdateInteractBindingMode(force)
+  if InCombatLockdown and InCombatLockdown() then return end
+  if not SpArc:IsCombatCameraEnabled() then return end
+  local interactKey = SpArc:GetCamInteractKey()
+  if not interactKey or interactKey == "" then
+    if lastInteractKey ~= "" then
+      if ClearOverrideBindings then pcall(ClearOverrideBindings, interactBtn) end
+      lastInteractKey = ""
+      lastInteractMode = nil
+    end
+    return
+  end
+
+  local mode = ComputeDesiredInteractMode()
+  if not force and mode == lastInteractMode and interactKey == lastInteractKey then
+    return
+  end
+
+  lastInteractMode = mode
+  lastInteractKey = interactKey
+  if ClearOverrideBindings then
+    pcall(ClearOverrideBindings, interactBtn)
+  end
+  if mode == "TARGET" and SetOverrideBindingClick then
+    pcall(SetOverrideBindingClick, interactBtn, true, interactKey, "SpArcCamInteractButton", "LeftButton")
+  elseif mode == "INTERACT_MO" and SetOverrideBinding then
+    pcall(SetOverrideBinding, interactBtn, true, interactKey, "INTERACTMOUSEOVER")
+  elseif SetOverrideBinding then
+    pcall(SetOverrideBinding, interactBtn, true, interactKey, "INTERACTTARGET")
+  end
+end
+
+interactBtn:HookScript("PostClick", function()
+  UpdateInteractBindingMode(true)
+end)
+
+interactBtn:HookScript("OnAttributeChanged", function(_, name)
+  if name == "state-caminteract" then
+    UpdateInteractBindingMode(true)
+  end
+end)
+
 local function ResolveBartenderKeybindCommand(key, fallbackAction)
   if not key or key == "" then return nil end
   local action = fallbackAction or DEFAULT_MOUSE_KEY_TO_ACTION[key]
@@ -1002,11 +1187,16 @@ function SpArc:ApplyCombatCameraBindings(reason)
 
   if ClearOverrideBindings then
     pcall(ClearOverrideBindings, bindOwner)
+    pcall(ClearOverrideBindings, interactBtn)
   end
 
   SpArc:CheckAndResolveCameraBindConflicts(reason or "SYNC")
 
   if not SpArc:IsCombatCameraEnabled() then
+    interactBtn:SetAttribute("camenabled", false)
+    if UnregisterStateDriver then
+      pcall(UnregisterStateDriver, interactBtn, "caminteract")
+    end
     if SetMouselookOverrideBinding then
       for key in pairs(DEFAULT_MOUSE_KEY_TO_ACTION) do
         pcall(SetMouselookOverrideBinding, key, nil)
@@ -1049,9 +1239,16 @@ function SpArc:ApplyCombatCameraBindings(reason)
     end
   end
 
-  if SetOverrideBinding and interactKey and interactKey ~= "" then
-    pcall(SetOverrideBinding, bindOwner, true, interactKey, "INTERACTTARGET")
+  interactBtn:SetAttribute("camenabled", true)
+  interactBtn:SetAttribute("interactkey", interactKey or "")
+  if RegisterStateDriver then
+    if interactKey and interactKey ~= "" then
+      pcall(RegisterStateDriver, interactBtn, "caminteract", "[@mouseover,harm,nodead] target; [@softinteract,exists] interact; [@mouseover,exists] target; [@softenemy,exists] target; [@softfriend,exists] target; interact")
+    elseif UnregisterStateDriver then
+      pcall(UnregisterStateDriver, interactBtn, "caminteract")
+    end
   end
+  UpdateInteractBindingMode(true)
 
   -- 2. Bind LMB/RMB + Shift/Ctrl/Alt Mouselook Click-Casting directly to Bartender4 :Keybind (or ActionButton 1..8)
   if SetMouselookOverrideBinding then
@@ -1087,6 +1284,14 @@ camDriver:RegisterEvent("ACTIONBAR_PAGE_CHANGED")
 camDriver:RegisterEvent("LOADING_SCREEN_ENABLED")
 camDriver:RegisterEvent("LOADING_SCREEN_DISABLED")
 camDriver:RegisterEvent("PLAYER_LOGOUT")
+camDriver:RegisterEvent("BARBER_SHOP_OPEN")
+camDriver:RegisterEvent("BARBER_SHOP_CLOSE")
+camDriver:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
+camDriver:RegisterEvent("PLAYER_TARGET_CHANGED")
+camDriver:RegisterUnitEvent("UNIT_TARGET", "player")
+pcall(camDriver.RegisterEvent, camDriver, "PLAYER_SOFT_INTERACT_CHANGED")
+pcall(camDriver.RegisterEvent, camDriver, "PLAYER_SOFT_ENEMY_CHANGED")
+pcall(camDriver.RegisterEvent, camDriver, "PLAYER_SOFT_FRIEND_CHANGED")
 
 -- Critical: Always stop Mouselook BEFORE ReloadUI so WoW's Win32 ShowCursor counter never desyncs!
 if _G.hooksecurefunc and _G.ReloadUI then
@@ -1172,6 +1377,19 @@ camDriver:SetScript("OnEvent", function(_, event)
     if not isApplyingBindings then
       SpArc:ApplyCombatCameraBindings("ACTIONBAR_PAGE_CHANGED")
     end
+  elseif event == "BARBER_SHOP_OPEN" then
+    barberShopActive = true
+    SpArc:UpdateCameraState()
+  elseif event == "BARBER_SHOP_CLOSE" then
+    barberShopActive = false
+    SpArc:UpdateCameraState()
+  elseif event == "UPDATE_MOUSEOVER_UNIT"
+    or event == "PLAYER_TARGET_CHANGED"
+    or event == "UNIT_TARGET"
+    or event == "PLAYER_SOFT_INTERACT_CHANGED"
+    or event == "PLAYER_SOFT_ENEMY_CHANGED"
+    or event == "PLAYER_SOFT_FRIEND_CHANGED" then
+    UpdateInteractBindingMode(false)
   end
 end)
 
@@ -1186,6 +1404,7 @@ camDriver:SetScript("OnUpdate", function(_, elapsed)
     return
   end
 
+  UpdateInteractBindingMode(false)
   SpArc:UpdateCameraState()
 end)
 

@@ -694,227 +694,244 @@ SpArc.DEFAULT_ENERGY_COST = {
   FEROCIOUS_BITE = 25,
 }
 
-local DEFAULT_DOT_IDS = { 34914, 589, 772, 388539, 1943, 155722, 1079 }
 local EMPTY_TABLE = {}
 
-local DEFAULT_BURST_DURATIONS = {
-  DEATHMARK = 16.0,
-  KINGSBANE = 14.0,
-  ICY_VEINS = 25.0,
-  VOIDFORM = 20.0,
-  POWER_INFUSION = 15.0,
-  AVATAR = 20.0,
-  COLOSSUS_SMASH = 10.0,
-  COMBUSTION = 12.0,
-  ARCANE_SURGE = 15.0,
-  SHADOW_BLADES = 16.0,
-  ADRENALINE_RUSH = 20.0,
-  TIGERS_FURY = 20.0,
-  BERSERK = 15.0,
-}
-
-function SpArc:IsSpellBurstActive(defKey, sObj, now)
-  if not defKey then return false end
+-- Unified WeakAuras-style Aura Inspector:
+-- Returns (isActive: boolean, remSec: number, stacks: number) for any Aura (DoT, Debuff, Buff, Burst, Enrage)
+-- on `unit` ("target" or "player") by `.MD` Spell/Aura KEY or numeric Wowhead Aura Spell ID.
+function SpArc:GetUnitAuraState(unit, keyOrID, parsed, assistedKey, now)
+  if not keyOrID then return false, 0, 0 end
+  unit = (unit and unit:lower() == "player") and "player" or "target"
   now = now or GetTime()
-  local def = SPELL_DEFS[defKey]
-  local burstDur = (def and def.burstDuration) or DEFAULT_BURST_DURATIONS[defKey] or 0
-  if burstDur <= 0 then
-    return false
-  end
 
-  local last = st.lastCastAt and st.lastCastAt[defKey]
-  if last and (now - last) >= 0 and (now - last) < burstDur then
-    return true
-  end
-
-  if sObj and (not sObj.ready) and sObj.durSec and sObj.durSec >= 45 and sObj.remSec and sObj.remSec > 0 then
-    local elapsed = sObj.durSec - sObj.remSec
-    if elapsed >= 0 and elapsed < burstDur then
-      return true
+  if SpArc.testMode then
+    if keyOrID == "FREEZING" or keyOrID == "TARGET_DEBUFF" then
+      return true, 12.0, 4
     end
   end
 
-  if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID and def and def.ids then
-    for _, id in ipairs(def.ids) do
-      local okP, auraP = pcall(C_UnitAuras.GetUnitAuraBySpellID, "player", id)
-      if okP and type(auraP) == "table" then
-        return true
+  if unit == "target" then
+    if not (_G.UnitExists and SafeBool(_G.UnitExists, "target")) then
+      return false, 0, 0
+    end
+    if _G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, "target") then
+      return false, 0, 0
+    end
+  end
+
+  local numID = tonumber(keyOrID)
+  local def = (not numID) and ((parsed and parsed.auras and parsed.auras[keyOrID]) or SPELL_DEFS[keyOrID]) or nil
+  local checkIDs = (def and (def.auraIDs or def.debuffIDs or def.ids)) or (numID and { numID }) or EMPTY_TABLE
+  local checkNames = (def and def.names) or EMPTY_TABLE
+  local wantIcon = def and (def.liveIcon or def.fallbackIcon) or nil
+  local defaultDur = (def and (def.auraDuration or def.dotDuration or def.burstDuration)) or 15.0
+
+  if unit == "player" then
+    if keyOrID == "STEALTH" or keyOrID == "PROWL" or numID == 1784 or numID == 5215 then
+      if _G.IsStealthed and SafeBool(_G.IsStealthed) then
+        return true, 3600, 1
       end
-      local okT, auraT = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", id)
-      if okT and type(auraT) == "table" then
-        return true
+    elseif (keyOrID == "SHADOWFORM" or keyOrID == "CAT_FORM" or numID == 232698 or numID == 768) and _G.GetShapeshiftForm then
+      local okF, form = pcall(_G.GetShapeshiftForm)
+      if okF and not IsSecret(form) and type(form) == "number" and form > 0 then
+        return true, 3600, 1
       end
     end
   end
 
-  return false
-end
+  local uMap = st.unitAuras and st.unitAuras[unit]
 
-function SpArc:IsPlayerInBurst(states, now)
-  now = now or GetTime()
-  for defKey, def in pairs(SPELL_DEFS or EMPTY_TABLE) do
-    local burstDur = def.burstDuration or DEFAULT_BURST_DURATIONS[defKey] or 0
-    if burstDur > 0 then
-      local sObj = states and states[defKey] or nil
-      if SpArc:IsSpellBurstActive(defKey, sObj, now) then
-        return true
+  local function ExtractAuraRemAndStacks(aura, matchedID)
+    local rem = nil
+    if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" then
+      if aura.expirationTime == 0 then
+        rem = 3600
+      else
+        rem = math.max(0, aura.expirationTime - now)
+      end
+    else
+      local fb = uMap and ((matchedID and uMap[matchedID]) or uMap[keyOrID])
+      if fb and fb.expiresAt and fb.expiresAt > now then
+        rem = fb.expiresAt - now
+      else
+        rem = defaultDur
       end
     end
-  end
-  return false
-end
-
-function SpArc:TargetHasSpellDoT(defKey, now)
-  if not defKey then return false end
-  now = now or GetTime()
-  if not (_G.UnitExists and SafeBool(_G.UnitExists, "target")) then
-    return false
-  end
-  if _G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, "target") then
-    return false
+    local stacks = 1
+    if not IsSecret(aura.applications) and type(aura.applications) == "number" then
+      stacks = math.max(1, aura.applications)
+    else
+      local fb = uMap and ((matchedID and uMap[matchedID]) or uMap[keyOrID])
+      if fb and fb.stacks and fb.stacks > 0 then
+        stacks = fb.stacks
+      end
+    end
+    return rem, stacks
   end
 
-  local def = SPELL_DEFS[defKey]
-  local refreshLeadSec = 1.0
-
-  if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID and def then
-    for _, dID in ipairs(def.debuffIDs or EMPTY_TABLE) do
-      local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", dID)
-      if ok and type(aura) == "table" then
-        if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
-          return (aura.expirationTime - now) > refreshLeadSec
+  -- 1. Direct lookup by Aura Spell ID via C_UnitAuras
+  if C_UnitAuras and #checkIDs > 0 then
+    for _, id in ipairs(checkIDs) do
+      if C_UnitAuras.GetUnitAuraBySpellID then
+        local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, unit, id)
+        if ok and type(aura) == "table" then
+          local rem, stacks = ExtractAuraRemAndStacks(aura, id)
+          if rem > 0 then
+            return true, rem, stacks
+          end
+        end
+      end
+      if unit == "player" and C_UnitAuras.GetPlayerAuraBySpellID then
+        local okP, auraP = pcall(C_UnitAuras.GetPlayerAuraBySpellID, id)
+        if okP and type(auraP) == "table" then
+          local rem, stacks = ExtractAuraRemAndStacks(auraP, id)
+          if rem > 0 then
+            return true, rem, stacks
+          end
         end
       end
     end
-    for _, sID in ipairs(def.ids or EMPTY_TABLE) do
-      local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", sID)
-      if ok and type(aura) == "table" then
-        if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
-          return (aura.expirationTime - now) > refreshLeadSec
+  end
+
+  -- 2. Indexed Aura Scan (matches by ID or localized/English Name across Debuffs & Buffs)
+  if C_UnitAuras and (#checkIDs > 0 or #checkNames > 0) then
+    local idLookup = {}
+    for _, id in ipairs(checkIDs) do
+      idLookup[id] = true
+    end
+
+    local function ScanAuraSlots(fetchFn, filter)
+      if not fetchFn then return nil, nil end
+      for i = 1, 16 do
+        local ok, aura = pcall(fetchFn, unit, i, filter)
+        if not ok or type(aura) ~= "table" then
+          break
         end
+        local sid = (not IsSecret(aura.spellId) and type(aura.spellId) == "number") and aura.spellId or nil
+        local nm = (not IsSecret(aura.name) and type(aura.name) == "string") and aura.name or nil
+        local matched = false
+        if sid and idLookup[sid] then
+          matched = true
+        elseif nm and #checkNames > 0 then
+          local lowerNm = SpArc.UTF8Lower(nm)
+          for _, wantNm in ipairs(checkNames) do
+            local lowerWant = SpArc.UTF8Lower(wantNm)
+            if nm == wantNm or lowerNm == lowerWant or lowerNm:find(lowerWant, 1, true) then
+              matched = true
+              break
+            end
+          end
+        end
+        if matched then
+          local rem, stacks = ExtractAuraRemAndStacks(aura, sid)
+          if rem > 0 then
+            return rem, stacks
+          end
+        end
+      end
+      return nil, nil
+    end
+
+    if unit == "target" then
+      local rem, stacks = ScanAuraSlots(C_UnitAuras.GetDebuffDataByIndex, "HARMFUL|PLAYER")
+      if not rem then
+        rem, stacks = ScanAuraSlots(C_UnitAuras.GetDebuffDataByIndex, "HARMFUL")
+      end
+      if not rem then
+        rem, stacks = ScanAuraSlots(C_UnitAuras.GetBuffDataByIndex, "HELPFUL")
+      end
+      if rem and rem > 0 then
+        return true, rem, stacks
+      end
+    else
+      local rem, stacks = ScanAuraSlots(C_UnitAuras.GetBuffDataByIndex, "HELPFUL")
+      if not rem then
+        rem, stacks = ScanAuraSlots(C_UnitAuras.GetDebuffDataByIndex, "HARMFUL")
+      end
+      if rem and rem > 0 then
+        return true, rem, stacks
       end
     end
   end
 
-  if def then
-    local wantIcon = def.liveIcon or def.fallbackIcon
+  -- 3. ElvUI Target Debuff Frames fallback (when C_UnitAuras is restricted in 12.0 combat)
+  if unit == "target" and (#checkIDs > 0 or wantIcon) then
+    local idLookup = {}
+    for _, id in ipairs(checkIDs) do
+      idLookup[id] = true
+    end
     for i = 1, 16 do
       local btn = _G["ElvUF_TargetDebuffsButton" .. i]
       if btn and SafeBool(btn.IsShown, btn) then
         local sid = btn.spellID
         local matched = false
-        if not IsSecret(sid) and type(sid) == "number" then
-          if def.idSet and def.idSet[sid] then
-            matched = true
-          elseif def.debuffIDs then
-            for _, dID in ipairs(def.debuffIDs) do
-              if sid == dID then matched = true; break end
-            end
-          end
-        end
-        if not matched and wantIcon and btn.Icon and btn.Icon.GetTexture then
+        if not IsSecret(sid) and type(sid) == "number" and idLookup[sid] then
+          matched = true
+        elseif wantIcon and btn.Icon and btn.Icon.GetTexture then
           local okTex, iconTex = pcall(btn.Icon.GetTexture, btn.Icon)
           if okTex and not IsSecret(iconTex) and iconTex == wantIcon then
             matched = true
           end
         end
-        if matched and not IsSecret(btn.expiration) and type(btn.expiration) == "number" and btn.expiration > 0 then
-          return (btn.expiration - now) > refreshLeadSec
+        if matched and not IsSecret(btn.expiration) and type(btn.expiration) == "number" and btn.expiration > now then
+          return true, (btn.expiration - now), 1
         end
       end
     end
   end
 
-  local dotMap = st.targetSpellDoTs
-  if dotMap then
-    local untilT = dotMap[defKey]
-    if (not untilT or untilT <= now) and def and def.debuffIDs then
-      for _, dID in ipairs(def.debuffIDs) do
-        local u = dotMap[dID]
-        if u and u > now then
-          untilT = u
+  -- 4. Unified Cast-Timer & Stack Fallback (st.unitAuras[unit])
+  if uMap then
+    local entry = uMap[keyOrID]
+    if not (entry and entry.expiresAt and entry.expiresAt > now) then
+      for _, id in ipairs(checkIDs) do
+        local e = uMap[id]
+        if e and e.expiresAt and e.expiresAt > now then
+          entry = e
           break
         end
       end
     end
-    if untilT and untilT > 0 then
-      return now < untilT
+    if entry and entry.expiresAt and entry.expiresAt > now then
+      return true, (entry.expiresAt - now), math.max(1, entry.stacks or 1)
     end
   end
 
+  return false, 0, 0
+end
+
+function SpArc:IsSpellBurstActive(defKey, sObj, parsed, now)
+  if not defKey then return false end
+  now = now or GetTime()
+  local def = SPELL_DEFS[defKey]
+  local burstDur = def and def.burstDuration or 0
+  if burstDur <= 0 then
+    return false
+  end
+  local unit = (def and def.auraUnit) or "player"
+  local active = SpArc:GetUnitAuraState(unit, defKey, parsed, nil, now)
+  if active then
+    return true
+  end
+  if sObj and (not sObj.isReady) and sObj.durSec and sObj.durSec >= 30 and sObj.remSec and sObj.remSec > 0 then
+    local elapsed = sObj.durSec - sObj.remSec
+    if elapsed >= 0 and elapsed < burstDur then
+      return true
+    end
+  end
   return false
 end
 
-function SpArc:CheckTargetHasDoTs(assistedKey)
-  local now = GetTime()
-  if not (_G.UnitExists and SafeBool(_G.UnitExists, "target")) then
-    return false
-  end
-  if _G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, "target") then
-    return false
-  end
-
-  local refreshLeadSec = 1.2
-
-  if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID then
-    for _, def in pairs(SPELL_DEFS or EMPTY_TABLE) do
-      if def.appliesDoTs then
-        for _, dID in ipairs(def.debuffIDs or EMPTY_TABLE) do
-          local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", dID)
-          if ok and type(aura) == "table" then
-            if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
-              return (aura.expirationTime - now) > refreshLeadSec
-            end
-          end
-        end
-        for _, dotID in ipairs(def.ids or EMPTY_TABLE) do
-          local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", dotID)
-          if ok and type(aura) == "table" then
-            if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
-              return (aura.expirationTime - now) > refreshLeadSec
-            end
-          end
-        end
-      end
-    end
-    for _, dotID in ipairs(DEFAULT_DOT_IDS) do
-      local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", dotID)
-      if ok and type(aura) == "table" then
-        if not IsSecret(aura.expirationTime) and type(aura.expirationTime) == "number" and aura.expirationTime > 0 then
-          return (aura.expirationTime - now) > refreshLeadSec
-        end
+function SpArc:IsPlayerInBurst(states, parsed, now)
+  now = now or GetTime()
+  for defKey, def in pairs(SPELL_DEFS or EMPTY_TABLE) do
+    if def.burstDuration and def.burstDuration > 0 then
+      local sObj = states and states[defKey] or nil
+      if SpArc:IsSpellBurstActive(defKey, sObj, parsed, now) then
+        return true
       end
     end
   end
-
-  for i = 1, 16 do
-    local btn = _G["ElvUF_TargetDebuffsButton" .. i]
-    if btn and SafeBool(btn.IsShown, btn) then
-      local sid = btn.spellID
-      local isDotBtn = false
-      if not IsSecret(sid) and (sid == 34914 or sid == 589 or sid == 772 or sid == 388539 or sid == 1943) then
-        isDotBtn = true
-      else
-        local okTex, iconTex = false, nil
-        if btn.Icon and btn.Icon.GetTexture then
-          okTex, iconTex = pcall(btn.Icon.GetTexture, btn.Icon)
-        end
-        if okTex and not IsSecret(iconTex) and (iconTex == 135978 or iconTex == 136207 or iconTex == 132155 or iconTex == 132302) then
-          isDotBtn = true
-        end
-      end
-      if isDotBtn then
-        if not IsSecret(btn.expiration) and type(btn.expiration) == "number" and btn.expiration > 0 then
-          return (btn.expiration - now) > refreshLeadSec
-        end
-      end
-    end
-  end
-
-  if st.targetDoTsUntil and st.targetDoTsUntil > 0 then
-    return now < st.targetDoTsUntil
-  end
-
   return false
 end
 
@@ -974,94 +991,6 @@ function SpArc:RefreshTrackedInsanity()
       st.trackedInsanity = p
     end
   end
-end
-
-function SpArc:GetTargetDebuffStacks(parsed, assistedKey)
-  if SpArc.testMode then
-    return 4
-  end
-  local now = GetTime()
-  if st.targetDebuffUntil and st.targetDebuffUntil > 0 and now >= st.targetDebuffUntil then
-    st.targetDebuffStacks = 0
-    st.targetDebuffUntil = 0
-  end
-
-  local debuffIDs = (parsed and parsed.targetDebuffIDs) or {}
-  local debuffNames = (parsed and parsed.targetDebuffNames) or {}
-  local idLookup = {}
-  for _, id in ipairs(debuffIDs) do
-    idLookup[id] = true
-  end
-
-  if C_UnitAuras and C_UnitAuras.GetUnitAuraBySpellID and #debuffIDs > 0 then
-    for _, debuffID in ipairs(debuffIDs) do
-      local ok, aura = pcall(C_UnitAuras.GetUnitAuraBySpellID, "target", debuffID)
-      if ok and type(aura) == "table" then
-        if not IsSecret(aura.applications) and type(aura.applications) == "number" then
-          local apps = math.max(1, aura.applications)
-          st.targetDebuffStacks = apps
-          st.targetDebuffUntil = now + 15.0
-          return apps
-        end
-      end
-    end
-  end
-
-  if C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex then
-    local bestPlayerApps = nil
-    for i = 1, 16 do
-      local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, "target", i, "HARMFUL|PLAYER")
-      if not ok or type(aura) ~= "table" then
-        break
-      end
-      local apps = (not IsSecret(aura.applications) and type(aura.applications) == "number") and aura.applications or nil
-      local sid = (not IsSecret(aura.spellId) and type(aura.spellId) == "number") and aura.spellId or nil
-      local nm = (not IsSecret(aura.name) and type(aura.name) == "string") and aura.name or nil
-
-      if sid and idLookup[sid] and apps then
-        local c = math.max(1, apps)
-        st.targetDebuffStacks = c
-        st.targetDebuffUntil = now + 15.0
-        return c
-      end
-      if nm and #debuffNames > 0 and apps then
-        local lowerNm = SpArc.UTF8Lower(nm)
-        for _, wantNm in ipairs(debuffNames) do
-          local lowerWant = SpArc.UTF8Lower(wantNm)
-          if nm == wantNm or lowerNm == lowerWant or lowerNm:find(lowerWant, 1, true) then
-            local c = math.max(1, apps)
-            st.targetDebuffStacks = c
-            st.targetDebuffUntil = now + 15.0
-            return c
-          end
-        end
-      end
-      if apps and apps > 0 and (not bestPlayerApps or apps > bestPlayerApps) then
-        bestPlayerApps = apps
-      end
-    end
-    if bestPlayerApps and (#debuffIDs > 0 or #debuffNames > 0) then
-      st.targetDebuffStacks = bestPlayerApps
-      st.targetDebuffUntil = now + 15.0
-      return bestPlayerApps
-    end
-  end
-
-  if assistedKey then
-    local aDef = SPELL_DEFS[assistedKey]
-    local aAudit = st.lastSpellAudit and st.lastSpellAudit[assistedKey]
-    if aDef and aDef.consumesStacks and not (aAudit and aAudit.isProc) then
-      local needed = aDef.stacksCost or 4
-      if (st.targetDebuffStacks or 0) < needed then
-        st.targetDebuffStacks = needed
-        st.targetDebuffUntil = now + 12.0
-      end
-    elseif assistedKey == "FROSTBOLT" and (st.targetDebuffStacks or 0) >= 4 then
-      st.targetDebuffStacks = 3
-    end
-  end
-
-  return st.targetDebuffStacks or 0
 end
 
 local MELEE_RANGE_CHECK_SPELLS = {
@@ -1268,83 +1197,6 @@ function SpArc:GetNearbyEnemyCount(now, assistedKey)
   end
 
   return st.enemyCount or rawCount
-end
-
-local EXTRA_BUFF_SPELL_IDS = {
-  DEADLY_POISON        = { 2823, 315584, 8679 },
-  CRIPPLING_POISON     = { 3408, 5761 },
-  SLICE_AND_DICE       = { 315496 },
-  STEALTH              = { 1784, 115191, 115192, 5215 },
-  PROWL                = { 5215 },
-  CAT_FORM             = { 768 },
-  MARK_OF_THE_WILD     = { 1126 },
-  TIGERS_FURY          = { 5217 },
-  BERSERK              = { 106951, 102543 },
-  SWEEPING_STRIKES     = { 260708 },
-  BATTLE_SHOUT         = { 6673 },
-  ARCANE_INTELLECT     = { 1459 },
-  ICE_BARRIER          = { 11426, 235313, 431038, 235450 },
-  POWER_WORD_FORTITUDE = { 21562 },
-  SHADOWFORM           = { 232698 },
-  POWER_WORD_SHIELD    = { 17 },
-}
-
-local DEFAULT_BUFF_REM_DUR = {
-  DEADLY_POISON        = 3600,
-  CRIPPLING_POISON     = 3600,
-  BATTLE_SHOUT         = 3600,
-  ARCANE_INTELLECT     = 3600,
-  POWER_WORD_FORTITUDE = 3600,
-  MARK_OF_THE_WILD     = 3600,
-  SHADOWFORM           = 3600,
-  CAT_FORM             = 3600,
-  ICE_BARRIER          = 60,
-  SLICE_AND_DICE       = 30,
-  SWEEPING_STRIKES     = 15,
-  TIGERS_FURY          = 20,
-  BERSERK              = 15,
-  POWER_WORD_SHIELD    = 15,
-}
-
-function SpArc:PlayerHasBuff(defKey, now)
-  if not defKey then return false end
-  now = now or GetTime()
-  if defKey == "STEALTH" then
-    return _G.IsStealthed and SafeBool(_G.IsStealthed) or false
-  elseif defKey == "SHADOWFORM" and _G.GetShapeshiftForm then
-    local okF, form = pcall(_G.GetShapeshiftForm)
-    if okF and not IsSecret(form) and type(form) == "number" and form > 0 then
-      return true
-    end
-  end
-
-  local def = SPELL_DEFS[defKey]
-  local checkIDs = EXTRA_BUFF_SPELL_IDS[defKey] or (def and def.ids) or {}
-
-  if C_UnitAuras then
-    for _, id in ipairs(checkIDs) do
-      if C_UnitAuras.GetPlayerAuraBySpellID then
-        local okA, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, id)
-        if okA and type(aura) == "table" then
-          return true
-        end
-      end
-      if C_UnitAuras.GetUnitAuraBySpellID then
-        local okU, auraU = pcall(C_UnitAuras.GetUnitAuraBySpellID, "player", id)
-        if okU and type(auraU) == "table" then
-          return true
-        end
-      end
-    end
-  end
-
-  local last = st.lastCastAt and st.lastCastAt[defKey]
-  local remDur = (def and def.burstDuration) or DEFAULT_BUFF_REM_DUR[defKey] or 20
-  if last and (now - last) >= 0 and (now - last) < remDur then
-    return true
-  end
-
-  return false
 end
 
 local PICK_POCKET_CREATURE_TYPES = {

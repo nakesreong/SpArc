@@ -469,9 +469,9 @@ SPELL <KEY> = ID:<id1,id2> | NAME:"Russian Name","English Name" | CD:<sec> | ICO
   - `CHARGES:<N>` : Max charges for multi-charge abilities (e.g., `CHARGES:2`).
   - `GAIN:<N>` : Primary resource generated on cast (0..100 scale; for Combo Point classes 1 CP = 20).
   - `COST:<N> | SPENDER:true` : Primary resource cost (for 4+ CP spenders use `COST:80 | SPENDER:true`).
-  - `BURST:<sec>` : Marks ability as a burst window cooldown lasting `<sec>` seconds (enables `ACTIVE(KEY)` and `player.in_burst`).
-  - `DOTS:true` or `DOTS:<sec>` : Applies or refreshes target DoT (`target.has_dots` and `DOT(KEY)`). Optional `DEBUFF_ID:<id>` specifies the target aura ID if different from the cast ID.
-  - `STACKS:+N` / `STACKS:-N | CONSUMES_STACKS:true` : Generates or consumes `TARGET_DEBUFF` stacks.
+  - `BURST:<sec>` : Marks ability as a burst window cooldown lasting `<sec>` seconds (enables `player.in_burst`).
+  - `AURA_ID:<id1,id2> | AURA_DUR:<sec> | AURA_UNIT:<target|player>` : WeakAuras-style aura metadata! Any DoT, debuff, stackable aura, or player buff is queried uniformly via `target.aura(KEY).rem`, `target.aura(KEY).stacks`, `player.aura(KEY).rem`, `player.aura(KEY).stacks` (or standalone `AURA <KEY> = ID:<id1,id2> | AURA_UNIT:target | NAME:"..."`).
+  - `STACKS:+N` / `STACKS:-N | CONSUMES_STACKS:true` : Generates or consumes target aura stacks in lookahead simulation.
   - `PROC_ONLY:true` : Only castable when glowing (`IsSpellOverlayed`) or active as a temporary spell override.
   - `OVERRIDE_OF:<BASE_KEY>` : For combo/transformation spells that replace another spell.
   - `GRANTS:<PROC_KEY>` : Casting this spell guarantees a proc of `<PROC_KEY>`.
@@ -498,17 +498,16 @@ Use `IF <condition> THEN` / `ELSE IF <condition> THEN` / `ELSE` / `END IF` with 
   - `READY(KEY)` / `NOT READY(KEY)` — spell is off cooldown (or has >= 1 charge).
   - `USABLE(KEY)` — spell is off cooldown AND player has enough resource/mana/target state.
   - `PROC(KEY)` / `NOT PROC(KEY)` — spell has an active proc overlay or active `OVERRIDE_OF` transformation.
-  - `ACTIVE(KEY)` / `NOT ACTIVE(KEY)` — burst window of `KEY` (`BURST:<sec>`) is currently active.
-  - `BUFF(KEY)` / `NOT BUFF(KEY)` — player currently has the buff `KEY` active.
+  - `target.aura(KEY_OR_ID).rem <= 1` / `target.aura(KEY_OR_ID).rem > 0` — WeakAuras-style remaining duration (in seconds) of aura `KEY` or numeric Wowhead SpellID on `target` (`0` if absent).
+  - `target.aura(KEY_OR_ID).stacks >= N` — current stack count of aura `KEY` or numeric SpellID on `target`.
+  - `player.aura(KEY_OR_ID).rem > 0` / `player.aura(KEY_OR_ID).stacks >= N` — remaining duration or stack count of buff/debuff on `player`.
   - `player.in_burst` / `NOT player.in_burst` — any `BURST:<sec>` cooldown is currently active.
+  - `player.energy <= N` / `player.combo_points <= N` / `player.insanity >= N` — current player resource check.
   - `enemies >= N` (or `AOE`, `CLEAVE`, `SINGLE_TARGET`) — number of nearby enemies in combat range.
   - `player.stealthed` / `NOT player.stealthed` — player is currently in Stealth.
   - `player.in_combat` / `NOT player.in_combat` — player is currently in combat.
   - `target.can_pick_pocket` — stealthed, humanoid/undead/demon NPC target in 10yd range not yet pick-pocketed.
   - `CHARGES(KEY) >= N` — current charge count.
-  - `DOT(KEY)` / `NOT DOT(KEY)` — target has active DoT from specific spell `KEY` (`DOTS:<sec>` / `DEBUFF_ID:<id>`).
-  - `target.has_dots` / `NOT target.has_dots` — target has active DoTs from a `DOTS:true` spell.
-  - `target.debuff_stacks >= N` (or `target.freezing_stacks >= N`) — current stacks of `TARGET_DEBUFF`.
 • Always end with an unconditional `ELSE` -> `RETURN CAST(<FILLER_KEY>)` and `END IF`.]]
 
 SpArc.AIPromptTemplate = [[Привет, Gemini / ChatGPT / Claude!
@@ -517,7 +516,7 @@ SpArc.AIPromptTemplate = [[Привет, Gemini / ChatGPT / Claude!
 ====================================================================
 1. ПАРАМЕТРЫ ПЕРСОНАЖА И КОНТЕНТА
 ====================================================================
-• Класс и спек: [УКАЖИ КЛАСС И СПЕК, например: Разбойник Ликвидация / Воин Оружие / Маг Льда / Жрец Тьмы]
+• Класс и спек: [УКАЖИ КЛАСС И СПЕК, например: Друид Сила зверя / Разбойник Ликвидация / Воин Оружие / Маг Льда / Жрец Тьмы]
 • Героические таланты / билд: [ПО ЖЕЛАНИЮ]
 • Тип контента: [Универсальный СТ + АоЕ (с авто-определением числа врагов рядом и подхватом бурста)]
 
@@ -530,21 +529,21 @@ SpArc.AIPromptTemplate = [[Привет, Gemini / ChatGPT / Claude!
 СЕКЦИЯ А — МЕТАДАННЫЕ ПРОФИЛЯ (ШАПКА):
 # PROFILE: <Название пресета>
 # CLASS: <WARRIOR | PALADIN | HUNTER | ROGUE | PRIEST | DEATHKNIGHT | SHAMAN | MAGE | WARLOCK | MONK | DRUID | DEMONHUNTER | EVOKER>
-# SPEC: <Английское название спека, например: Frost, Shadow, Assassination, Arms>
+# SPEC: <Английское название спека, например: Feral, Frost, Shadow, Assassination, Arms>
 # MODE: <PVE | BOSS | PVP>
-# TARGET_DEBUFF: ID:<id1,id2> | NAME:"Русское название","English Name"
 
-СЕКЦИЯ Б — ## SPELL_BOOK (КНИГА ЗАКЛИНАНИЙ):
-Каждое заклинание (включая урон, сейвы, КД, баффы и инвиз/misc), которое используется в профиле, ОБЯЗАТЕЛЬНО объявляется отдельной строкой:
+СЕКЦИЯ Б — ## SPELL_BOOK (КНИГА ЗАКЛИНАНИЙ И АУР):
+Каждое заклинание и аура (включая урон, доты, стаки, сейвы, КД, баффы и инвиз/misc), которые используются в профиле, ОБЯЗАТЕЛЬНО объявляются отдельной строкой:
 SPELL <КЛЮЧ_КАПСОМ> = ID:<id1,id2> | NAME:"Русское имя","English Name" | CD:<сек> | ICON:<FileDataID> [| доп. флаги]
+AURA <КЛЮЧ_КАПСОМ> = ID:<id1,id2> | AURA_UNIT:<target|player> | AURA_DUR:<сек> | NAME:"Русское имя","English Name"
 • Доступные флаги поведения (разделяются через ` | `):
   - `CD:<секунды>` — базовое время восстановления (`0`, если без КД).
   - `CHARGES:<N>` — максимум зарядов, если у спелла 2+ заряда.
   - `GAIN:<N>` — сколько ресурса генерирует каст (0..100; для комбо-поинтов 1 КП = 20).
   - `COST:<N> | SPENDER:true` — сколько ресурса тратит спелл (для финишеров от 4+ КП ставь `COST:80 | SPENDER:true`).
-  - `BURST:<секунды>` — помечает способность как бурст-окно длительностью `<секунды>` (включает `ACTIVE(KEY)` и `player.in_burst`).
-  - `DOTS:true` или `DOTS:<секунды>` — спелл вешает/обновляет доту на цели (`target.has_dots` и `DOT(KEY)`). При необходимости `DEBUFF_ID:<id>` задаёт ID дебаффа на цели.
-  - `STACKS:+N` / `STACKS:-N | CONSUMES_STACKS:true` — генерация и трата стаков `TARGET_DEBUFF`.
+  - `BURST:<секунды>` — помечает способность как бурст-окно длительностью `<секунды>` (включает `player.in_burst`).
+  - `AURA_ID:<id1,id2> | AURA_DUR:<секунды> | AURA_UNIT:<target|player>` — единая система аур (как в WeakAuras)! В игре доты, дебаффы со стаками и баффы — это всё ауры с ID с Wowhead, временем (`rem`) и стаками (`stacks`). Если ID ауры совпадает с ID спелла, достаточно `AURA_DUR:<сек>`.
+  - `STACKS:+N` / `STACKS:-N | CONSUMES_STACKS:true` — генерация и трата стаков ауры на цели в симуляции очереди.
   - `PROC_ONLY:true` — спелл доступен ТОЛЬКО при свечении прока (`IsSpellOverlayed`) или активной подмене `OVERRIDE_OF`.
   - `OVERRIDE_OF:<БАЗОВЫЙ_КЛЮЧ>` — для комбо-заклинаний, заменяющих базовую кнопку.
   - `GRANTS:<КЛЮЧ_ПРОКА>` — каст гарантированно даёт прок `<КЛЮЧ_ПРОКА>`.
@@ -571,17 +570,16 @@ END IF
   - `READY(KEY)` / `NOT READY(KEY)` — спелл откатился (или имеет >= 1 заряда).
   - `USABLE(KEY)` — спелл откатился И хватает ресурса/маны/условий.
   - `PROC(KEY)` / `NOT PROC(KEY)` — активен прок (свечение кнопки) или подмена `OVERRIDE_OF`.
-  - `ACTIVE(KEY)` / `NOT ACTIVE(KEY)` — активно окно бурста способности `KEY` (`BURST:<сек>`).
-  - `BUFF(KEY)` / `NOT BUFF(KEY)` — висит ли на игроке бафф `KEY` (например, `BATTLE_SHOUT`, `ARCANE_INTELLECT`, `SWEEPING_STRIKES`).
+  - `target.aura(KEY_OR_ID).rem <= 1` / `target.aura(KEY_OR_ID).rem > 0` — единая проверка времени ауры (доты, дебаффа или баффа на цели) по ключу или прямо по числовому ID с Wowhead (если ауры нет — `rem` равен `0`, поэтому `rem <= 1` покрывает и первое наложение, и обновление на последней секунде!).
+  - `target.aura(KEY_OR_ID).stacks >= N` — проверка числа стаков ауры на цели.
+  - `player.aura(KEY_OR_ID).rem > 0` / `player.aura(KEY_OR_ID).stacks >= N` — проверка времени или стаков ауры (баффа/бурста/дебаффа) на самом игроке.
   - `player.in_burst` / `NOT player.in_burst` — активно ли любое бурст-окно (`BURST:<сек>`).
+  - `player.energy <= N` / `player.combo_points <= N` / `player.insanity >= N` — проверка ресурсов игрока.
   - `enemies >= N` (или `AOE`, `CLEAVE`, `SINGLE_TARGET`) — количество врагов рядом в радиусе боя (как в WeakAuras по неймплейтам и дистанции).
   - `player.stealthed` / `NOT player.stealthed` — находится ли персонаж в Незаметности (Stealth).
   - `player.in_combat` / `NOT player.in_combat` — находится ли персонаж в бою.
   - `target.can_pick_pocket` — игрок в инвизе, цель — гуманоид/нежить/демон в радиусе 10м с ещё не обчищенными карманами.
   - `CHARGES(KEY) >= N` — проверка числа зарядов.
-  - `DOT(KEY)` / `NOT DOT(KEY)` — висит ли на цели конкретная дота `KEY` (`DOTS:<сек>` / `DEBUFF_ID:<id>`).
-  - `target.has_dots` / `NOT target.has_dots` — висят ли на цели доты (`DOTS:true`).
-  - `target.debuff_stacks >= N` (или `target.freezing_stacks >= N`) — число стаков `TARGET_DEBUFF`.
 • В самом конце ОБЯЗАТЕЛЬНО должна быть ветка `ELSE` -> `RETURN CAST(<КЛЮЧ_ФИЛЛЕРА>)` и закрывающий `END IF`.]]
 
 function SpArc:GetAIPromptHeader()
@@ -617,7 +615,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 24
+SpArc.PROFILE_SCHEMA_VERSION = 25
 
 ---------------------------------------------------------------------------------------
 --         5 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID)           --
@@ -646,12 +644,12 @@ RegisterPreset("PRIEST_01_SHADOW_PVE", "PRIEST", "1. Жрец: Тьма (ШП �
 # MODE: PVE
 
 ## SPELL_BOOK
-SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | GAIN:15 | DOTS:true | ICON:136201
-SPELL VAMPIRIC_TOUCH = ID:34914 | NAME:"Прикосновение вампира","Vampiric Touch" | CD:0 | CHARGES:1 | GAIN:6 | DOTS:true | ICON:135978
-SPELL VOID_ERUPTION = ID:228260,391109,194249 | NAME:"Вхождение в Бездну","Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | BURST:20 | ICON:537079
-SPELL POWER_INFUSION = ID:10060 | NAME:"Придание сил","Power Infusion" | CD:120 | BURST:15 | ICON:135939
+SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | GAIN:15 | ICON:136201
+SPELL VAMPIRIC_TOUCH = ID:34914 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Прикосновение вампира","Vampiric Touch" | CD:0 | CHARGES:1 | GAIN:6 | ICON:135978
+SPELL VOID_ERUPTION = ID:228260,391109,194249 | AURA_ID:194249,391109 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | NAME:"Вхождение в Бездну","Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | ICON:537079
+SPELL POWER_INFUSION = ID:10060 | AURA_ID:10060 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | NAME:"Придание сил","Power Infusion" | CD:120 | ICON:135939
 SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела Бездны","Void Volley","Void Bolt" | CD:6 | GAIN:10 | OVERRIDE_OF:VOID_ERUPTION | PROC_ONLY:true | ICON:1386548
-SPELL DEVOURING_PLAGUE = ID:335467 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума","Shadow Word: Madness","Devouring Plague" | CD:0 | COST:50 | GRANTS:MIND_FLAY_INSANITY | SPENDER:true | ICON:252997
+SPELL DEVOURING_PLAGUE = ID:335467 | AURA_ID:335467 | AURA_DUR:6 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума","Shadow Word: Madness","Devouring Plague" | CD:0 | COST:50 | GRANTS:MIND_FLAY_INSANITY | SPENDER:true | ICON:252997
 SPELL SHADOW_WORD_DEATH = ID:32379 | NAME:"Слово Тьмы: Смерть","Shadow Word: Death" | CD:10 | GAIN:10 | EXECUTE:true | ICON:136149
 SPELL MIND_BLAST = ID:450983,8092 | NAME:"Выброс Бездны","Взрыв разума","Void Blast","Mind Blast" | CD:7.5 | CHARGES:1 | GAIN:15 | ICON:136224
 SPELL VOID_TORRENT = ID:263165 | NAME:"Поток бездны","Поток Бездны","Void Torrent" | CD:45 | CHARGES:1 | GAIN:35 | GRANTS:MIND_FLAY_INSANITY | LOCK_CHANNEL:true | ICON:1386551
@@ -682,9 +680,9 @@ ELSE IF player.hp_percent <= 25 AND READY(VAMPIRIC_EMBRACE) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF NOT target.has_dots AND READY(TENTACLE_SLAM) THEN
+IF target.aura(VAMPIRIC_TOUCH).rem <= 1 AND READY(TENTACLE_SLAM) THEN
     RETURN CAST(TENTACLE_SLAM)
-ELSE IF NOT target.has_dots AND NOT READY(TENTACLE_SLAM) THEN
+ELSE IF target.aura(VAMPIRIC_TOUCH).rem <= 1 AND NOT READY(TENTACLE_SLAM) THEN
     RETURN CAST(VAMPIRIC_TOUCH)
 ELSE IF PROC(VOID_BOLT) AND READY(VOID_BOLT) THEN
     RETURN CAST(VOID_BOLT)
@@ -717,9 +715,9 @@ RegisterPreset("MAGE_04_FROST_PVE", "MAGE", "2. Маг: Лёд (Фрост — �
 # CLASS: MAGE
 # SPEC: Frost
 # MODE: PVE
-# TARGET_DEBUFF: NAME:"Обледенение","Замерзание","Freezing","Зимняя стужа","Winter's Chill"
 
 ## SPELL_BOOK
+AURA FREEZING = ID:1221389,228358,205708 | AURA_UNIT:target | AURA_DUR:15 | NAME:"Обледенение","Замерзание","Freezing","Зимняя стужа","Winter's Chill"
 SPELL RAY_OF_FROST = ID:205021 | NAME:"Морозный луч","Луч холода","Ray of Frost" | CD:60 | CHARGES:1 | STACKS:+3 | LOCK_CHANNEL:true | ICON:1698700
 SPELL COMET_STORM = ID:153595,455396 | NAME:"Кометная буря","Comet Storm" | CD:30 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:RAY_OF_FROST | ICON:1033912
 SPELL GLACIAL_SPIKE = ID:199786,257537 | NAME:"Ледниковый шип","Черная стрела","Glacial Spike","Ebonbolt" | CD:0 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:FROSTBOLT | ICON:1394891
@@ -768,7 +766,7 @@ ELSE IF READY(FLURRY) THEN
     RETURN CAST(FLURRY)
 ELSE IF PROC(ICE_LANCE) AND READY(ICE_LANCE) THEN
     RETURN CAST(ICE_LANCE)
-ELSE IF target.freezing_stacks >= 4 AND READY(ICE_LANCE) THEN
+ELSE IF target.aura(FREEZING).stacks >= 4 AND READY(ICE_LANCE) THEN
     RETURN CAST(ICE_LANCE)
 ELSE
     RETURN CAST(FROSTBOLT)
@@ -785,12 +783,12 @@ RegisterPreset("ROGUE_01_ASSA_PVE", "ROGUE", "3. Разбойник: Ликви�
 # MODE: PVE
 
 ## SPELL_BOOK
-SPELL DEATHMARK = ID:360194 | NAME:"Знак смерти","Метка смерти","Deathmark" | CD:120 | BURST:16 | ICON:4667421
-SPELL KINGSBANE = ID:385627 | NAME:"Погибель королей","Kingsbane" | CD:60 | BURST:14 | GAIN:20 | ICON:1373906
+SPELL DEATHMARK = ID:360194 | AURA_ID:360194 | AURA_UNIT:target | AURA_DUR:16 | BURST:16 | NAME:"Знак смерти","Метка смерти","Deathmark" | CD:120 | ICON:4667421
+SPELL KINGSBANE = ID:385627 | AURA_ID:385627 | AURA_UNIT:target | AURA_DUR:14 | BURST:14 | NAME:"Погибель королей","Kingsbane" | CD:60 | GAIN:20 | ICON:1373906
 SPELL SHIV = ID:5938,319504 | NAME:"Отравляющий укол","Shiv" | CD:30 | CHARGES:1 | GAIN:20 | ICON:135428
-SPELL GARROTE = ID:703 | NAME:"Гаррота","Garrote" | CD:13 | GAIN:20 | ICON:132297
-SPELL RUPTURE = ID:1943 | NAME:"Рваная рана","Rupture" | CD:0 | COST:80 | SPENDER:true | DOTS:true | ICON:132302
-SPELL CRIMSON_TEMPEST = ID:1247227,121411 | NAME:"Кровавый вихрь","Crimson Tempest" | CD:14 | COST:80 | SPENDER:true | ICON:461860
+SPELL GARROTE = ID:703 | AURA_ID:703 | AURA_DUR:18 | NAME:"Гаррота","Garrote" | CD:13 | GAIN:20 | ICON:132297
+SPELL RUPTURE = ID:1943 | AURA_ID:1943 | AURA_DUR:24 | NAME:"Рваная рана","Rupture" | CD:0 | COST:80 | SPENDER:true | ICON:132302
+SPELL CRIMSON_TEMPEST = ID:1247227,121411 | AURA_ID:121411 | AURA_DUR:12 | NAME:"Кровавый вихрь","Crimson Tempest" | CD:14 | COST:80 | SPENDER:true | ICON:461860
 SPELL ENVENOM = ID:32645,196819 | NAME:"Отравление","Потрошение","Envenom","Eviscerate" | CD:0 | COST:80 | SPENDER:true | ICON:132287
 SPELL AMBUSH = ID:8676 | NAME:"Внезапный удар","Ambush" | CD:0 | GAIN:40 | PROC_ONLY:true | OVERRIDE_OF:MUTILATE | ICON:132282
 SPELL MUTILATE = ID:1329,1752 | NAME:"Расправа","Коварный удар","Mutilate","Sinister Strike" | CD:0 | GAIN:40 | FILLER_INTERRUPTIBLE:true | ICON:132304
@@ -815,11 +813,11 @@ ELSE IF player.hp_percent <= 20 AND READY(CLOAK_OF_SHADOWS) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF READY(GARROTE) THEN
+IF target.aura(GARROTE).rem <= 1 AND READY(GARROTE) THEN
     RETURN CAST(GARROTE)
-ELSE IF NOT target.has_dots AND READY(RUPTURE) THEN
+ELSE IF target.aura(RUPTURE).rem <= 1 AND READY(RUPTURE) THEN
     RETURN CAST(RUPTURE)
-ELSE IF ACTIVE(DEATHMARK) AND READY(KINGSBANE) THEN
+ELSE IF target.aura(DEATHMARK).rem > 0 AND READY(KINGSBANE) THEN
     RETURN CAST(KINGSBANE)
 ELSE IF player.in_burst AND READY(SHIV) THEN
     RETURN CAST(SHIV)
@@ -846,16 +844,16 @@ RegisterPreset("WARRIOR_02_ARGS_BOSS", "WARRIOR", "4. Воин: Оружие (А
 # MODE: PVE
 
 ## SPELL_BOOK
-SPELL COLOSSUS_SMASH = ID:167105,262161,436358 | NAME:"Удар колосса","Миротворец","Сокрушение","Colossus Smash","Warbreaker","Demolish" | CD:45 | CHARGES:1 | BURST:10 | ICON:132355
+SPELL COLOSSUS_SMASH = ID:167105,262161,436358 | AURA_ID:208086 | AURA_DUR:10 | BURST:10 | NAME:"Удар колосса","Миротворец","Сокрушение","Colossus Smash","Warbreaker","Demolish" | CD:45 | CHARGES:1 | ICON:132355
 SPELL BLADESTORM = ID:227847,389774,228920 | NAME:"Вихрь клинков","Опустошитель","Bladestorm","Ravager" | CD:90 | CHARGES:1 | ICON:236303
 SPELL EXECUTE = ID:163201,5308,281000 | NAME:"Казнь","Execute" | CD:0 | CHARGES:1 | EXECUTE:true | ICON:135358
-SPELL SWEEPING_STRIKES = ID:260708 | NAME:"Размашистые удары","Sweeping Strikes" | CD:30 | CHARGES:1 | ICON:132366
-SPELL REND = ID:772,384318,376079 | NAME:"Кровопускание","Громогласный рык","Копье чемпиона","Rend","Thunderous Roar","Champion's Spear" | CD:0 | CHARGES:1 | DOTS:true | ICON:132155
-SPELL AVATAR = ID:107574 | NAME:"Аватара","Avatar" | CD:90 | CHARGES:1 | BURST:20 | ICON:613534
+SPELL SWEEPING_STRIKES = ID:260708 | AURA_ID:260708 | AURA_UNIT:player | AURA_DUR:15 | NAME:"Размашистые удары","Sweeping Strikes" | CD:30 | CHARGES:1 | ICON:132366
+SPELL REND = ID:772,384318,376079 | AURA_ID:772,388539 | AURA_DUR:15 | NAME:"Кровопускание","Громогласный рык","Копье чемпиона","Rend","Thunderous Roar","Champion's Spear" | CD:0 | CHARGES:1 | ICON:132155
+SPELL AVATAR = ID:107574 | AURA_ID:107574 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | NAME:"Аватара","Avatar" | CD:90 | CHARGES:1 | ICON:613534
 SPELL MORTAL_STRIKE = ID:12294 | NAME:"Смертельный удар","Mortal Strike" | CD:6 | CHARGES:1 | ICON:132355
 SPELL OVERPOWER = ID:7384 | NAME:"Превосходство","Overpower" | CD:12 | CHARGES:2 | ICON:132223
 SPELL CLEAVE = ID:845 | NAME:"Рассекающий удар","Cleave" | CD:4.5 | CHARGES:1 | ICON:132338
-SPELL SLAM = ID:1680,1464,6343 | NAME:"Вихрь","Мощный удар","Удар грома","Whirlwind","Slam","Thunder Clap" | CD:0 | CHARGES:1 | DOTS:true | FILLER_INTERRUPTIBLE:true | ICON:132369
+SPELL SLAM = ID:1680,1464,6343 | NAME:"Вихрь","Мощный удар","Удар грома","Whirlwind","Slam","Thunder Clap" | CD:0 | CHARGES:1 | FILLER_INTERRUPTIBLE:true | ICON:132369
 SPELL DIE_BY_THE_SWORD = ID:118038 | NAME:"Бой насмерть","Die by the Sword" | CD:120 | CHARGES:1 | ICON:132336
 SPELL RALLYING_CRY = ID:97462,383762 | NAME:"Ободряющий клич","Горестная невосприимчивость","Rallying Cry","Bitter Immunity" | CD:180 | CHARGES:1 | ICON:132351
 SPELL SPELL_REFLECTION = ID:23920 | NAME:"Отражение заклинаний","Spell Reflection" | CD:25 | CHARGES:1 | ICON:132361
@@ -879,7 +877,7 @@ ELSE IF PROC(EXECUTE) AND READY(EXECUTE) THEN
     RETURN CAST(EXECUTE)
 ELSE IF USABLE(EXECUTE) AND READY(EXECUTE) THEN
     RETURN CAST(EXECUTE)
-ELSE IF NOT target.has_dots AND READY(REND) THEN
+ELSE IF target.aura(REND).rem <= 1 AND READY(REND) THEN
     RETURN CAST(REND)
 ELSE IF READY(COLOSSUS_SMASH) THEN
     RETURN CAST(COLOSSUS_SMASH)
@@ -908,13 +906,13 @@ RegisterPreset("DRUID_01_FERAL_PVE", "DRUID", "5. Друид: Сила звер�
 # MODE: PVE
 
 ## SPELL_BOOK
-SPELL TIGERS_FURY = ID:5217 | NAME:"Тигриное неистовство","Tiger's Fury" | CD:30 | BURST:20 | ICON:132242
-SPELL BERSERK = ID:106951,102543,343223 | NAME:"Берсерк","Воплощение: аватара Ашаманы","Berserk","Incarnation: Avatar of Ashamane" | CD:120 | BURST:15 | ICON:236149
+SPELL TIGERS_FURY = ID:5217 | AURA_ID:5217 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | NAME:"Тигриное неистовство","Tiger's Fury" | CD:30 | ICON:132242
+SPELL BERSERK = ID:106951,102543,343223 | AURA_ID:106951,102543 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | NAME:"Берсерк","Воплощение: аватара Ашаманы","Berserk","Incarnation: Avatar of Ashamane" | CD:120 | ICON:236149
 SPELL CONVOKE_THE_SPIRITS = ID:391528 | NAME:"Созыв духов","Convoke the Spirits" | CD:120 | LOCK_CHANNEL:true | ICON:3636839
 SPELL FERAL_FRENZY = ID:274837,1243807 | NAME:"Дикое бешенство","Безумное бешенство","Feral Frenzy","Frantic Frenzy" | CD:45 | GAIN:100 | ICON:2065580
-SPELL RAKE = ID:1822 | DEBUFF_ID:155722 | NAME:"Глубокая рана","Rake" | CD:0 | GAIN:20 | DOTS:15 | ICON:132122
-SPELL PRIMAL_WRATH = ID:285381 | DEBUFF_ID:1079 | NAME:"Первобытный гнев","Primal Wrath" | CD:0 | COST:80 | SPENDER:true | DOTS:12 | ICON:2065583
-SPELL RIP = ID:1079 | DEBUFF_ID:1079 | NAME:"Разорвать","Rip" | CD:0 | COST:80 | SPENDER:true | DOTS:24 | ICON:132152
+SPELL RAKE = ID:1822 | AURA_ID:155722 | AURA_DUR:15 | NAME:"Глубокая рана","Rake" | CD:0 | GAIN:20 | ICON:132122
+SPELL PRIMAL_WRATH = ID:285381 | AURA_ID:1079 | AURA_DUR:12 | NAME:"Первобытный гнев","Primal Wrath" | CD:0 | COST:80 | SPENDER:true | ICON:2065583
+SPELL RIP = ID:1079 | AURA_ID:1079 | AURA_DUR:24 | NAME:"Разорвать","Rip" | CD:0 | COST:80 | SPENDER:true | ICON:132152
 SPELL FEROCIOUS_BITE = ID:22568,441583,441591 | NAME:"Свирепый укус","Опустошение","Ferocious Bite","Ravage" | CD:0 | COST:80 | SPENDER:true | ICON:132127
 SPELL SWIPE = ID:106785,213764 | NAME:"Размах","Swipe" | CD:0 | GAIN:20 | ICON:132141
 SPELL SHRED = ID:5221 | NAME:"Полоснуть","Shred" | CD:0 | GAIN:20 | FILLER_INTERRUPTIBLE:true | ICON:136231
@@ -948,17 +946,17 @@ ELSE IF PROC(FEROCIOUS_BITE) AND READY(FEROCIOUS_BITE) THEN
     RETURN CAST(FEROCIOUS_BITE)
 ELSE IF player.energy <= 40 AND READY(TIGERS_FURY) THEN
     RETURN CAST(TIGERS_FURY)
-ELSE IF enemies >= 2 AND NOT DOT(RIP) AND USABLE(PRIMAL_WRATH) THEN
+ELSE IF enemies >= 2 AND target.aura(RIP).rem <= 1 AND USABLE(PRIMAL_WRATH) THEN
     RETURN CAST(PRIMAL_WRATH)
-ELSE IF NOT DOT(RIP) AND USABLE(RIP) THEN
+ELSE IF target.aura(RIP).rem <= 1 AND USABLE(RIP) THEN
     RETURN CAST(RIP)
 ELSE IF USABLE(FEROCIOUS_BITE) THEN
     RETURN CAST(FEROCIOUS_BITE)
-ELSE IF NOT DOT(RAKE) AND READY(RAKE) THEN
+ELSE IF target.aura(RAKE).rem <= 1 AND READY(RAKE) THEN
     RETURN CAST(RAKE)
 ELSE IF player.combo_points <= 2 AND READY(FERAL_FRENZY) THEN
     RETURN CAST(FERAL_FRENZY)
-ELSE IF ACTIVE(BERSERK) AND player.combo_points <= 2 AND READY(CONVOKE_THE_SPIRITS) THEN
+ELSE IF player.aura(BERSERK).rem > 0 AND player.combo_points <= 2 AND READY(CONVOKE_THE_SPIRITS) THEN
     RETURN CAST(CONVOKE_THE_SPIRITS)
 ELSE IF enemies >= 2 AND READY(SWIPE) THEN
     RETURN CAST(SWIPE)

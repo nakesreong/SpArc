@@ -62,6 +62,10 @@ function SpArc:SyncSpellDefsFromProfile(parsed, presetID)
       dst.consumesStacks = spDef.consumesStacks
       dst.overrideOf = spDef.overrideOf
       dst.debuffIDs = spDef.debuffIDs
+      dst.auraIDs = spDef.auraIDs
+      dst.auraDuration = spDef.auraDuration
+      dst.auraUnit = spDef.auraUnit
+      dst.auraKey = spDef.auraKey
       dst.burstDuration = spDef.burstDuration
     end
   end
@@ -224,6 +228,20 @@ local function CompareNum(lhs, op, rhs)
   return false
 end
 
+local function GetSimAura(simCtx, u, k)
+  if not simCtx or not simCtx.auraRem or not simCtx.auraStacks then return 0, 0 end
+  local rem = simCtx.auraRem[u] and simCtx.auraRem[u][k]
+  local stacks = simCtx.auraStacks[u] and simCtx.auraStacks[u][k]
+  if rem == nil and tonumber(k) and SpArc.GetUnitAuraState then
+    local _, r, s = SpArc:GetUnitAuraState(u, k, st.activeParsed, nil, GetTime())
+    rem = r or 0
+    stacks = s or 0
+    simCtx.auraRem[u][k] = rem
+    simCtx.auraStacks[u][k] = stacks
+  end
+  return rem or 0, stacks or 0
+end
+
 local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx)
   if c == "" or c == "ALWAYS" then
     return true
@@ -257,34 +275,76 @@ local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, si
     return ((simCtx and simCtx.enemies) or 1) <= 1
   end
 
+  -- WeakAuras-style unified Aura conditions:
+  --   target.aura(KEY_OR_ID).rem <= 1.0  /  player.aura(KEY_OR_ID).rem > 0
+  --   target.aura(KEY_OR_ID).stacks >= 4 /  player.aura(KEY_OR_ID).stacks >= 2
+  local aUnit, aKey, aProp, aOp, aVal = c:match("^([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)%.([a-zA-Z_]+)%s*([><=]+)%s*([%d%.]+)$")
+  if aUnit and aKey and aProp and aOp and aVal then
+    local u = (aUnit:lower() == "player") and "player" or "target"
+    local k = aKey:upper()
+    local prop = aProp:lower()
+    local curR, curS = GetSimAura(simCtx, u, k)
+    if prop == "stacks" or prop == "stack" or prop == "applications" then
+      return CompareNum(curS, aOp, tonumber(aVal) or 0)
+    else
+      return CompareNum(curR, aOp, tonumber(aVal) or 0)
+    end
+  end
+
+  -- Boolean shorthand: target.aura(KEY) / NOT target.aura(KEY) / player.aura(KEY) / NOT player.aura(KEY)
+  local bUnit, bKey = c:match("^([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)$")
+  if bUnit and bKey then
+    local u = (bUnit:lower() == "player") and "player" or "target"
+    local k = bKey:upper()
+    local curR = GetSimAura(simCtx, u, k)
+    return curR > 0
+  end
+
+  local nbUnit, nbKey = c:match("^NOT%s+([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)$")
+  if nbUnit and nbKey then
+    local u = (nbUnit:lower() == "player") and "player" or "target"
+    local k = nbKey:upper()
+    local curR = GetSimAura(simCtx, u, k)
+    return curR <= 0
+  end
+
+  -- Legacy aliases mapped onto unified Aura tables for custom profile compatibility
   local activeSp = c:match("^ACTIVE%(([A-Z0-9_]+)%)$")
   if activeSp then
-    return (simActive and simActive[activeSp]) and true or false
+    local rP = (simCtx and simCtx.auraRem and simCtx.auraRem.player and simCtx.auraRem.player[activeSp]) or 0
+    local rT = (simCtx and simCtx.auraRem and simCtx.auraRem.target and simCtx.auraRem.target[activeSp]) or 0
+    return (rP > 0 or rT > 0 or (simActive and simActive[activeSp])) and true or false
   end
 
   local notActiveSp = c:match("^NOT%s+ACTIVE%(([A-Z0-9_]+)%)$")
   if notActiveSp then
-    return not (simActive and simActive[notActiveSp])
+    local rP = (simCtx and simCtx.auraRem and simCtx.auraRem.player and simCtx.auraRem.player[notActiveSp]) or 0
+    local rT = (simCtx and simCtx.auraRem and simCtx.auraRem.target and simCtx.auraRem.target[notActiveSp]) or 0
+    return not (rP > 0 or rT > 0 or (simActive and simActive[notActiveSp]))
   end
 
   local buffSp = c:match("^BUFF%(([A-Z0-9_]+)%)$")
   if buffSp then
-    return (simCtx and simCtx.buffs and simCtx.buffs[buffSp]) and true or false
+    local rP = (simCtx and simCtx.auraRem and simCtx.auraRem.player and simCtx.auraRem.player[buffSp]) or 0
+    return rP > 0
   end
 
   local notBuffSp = c:match("^NOT%s+BUFF%(([A-Z0-9_]+)%)$")
   if notBuffSp then
-    return not (simCtx and simCtx.buffs and simCtx.buffs[notBuffSp])
+    local rP = (simCtx and simCtx.auraRem and simCtx.auraRem.player and simCtx.auraRem.player[notBuffSp]) or 0
+    return rP <= 0
   end
 
   local dotSp = c:match("^DOT%(([A-Z0-9_]+)%)$")
   if dotSp then
-    return (simCtx and simCtx.dots and simCtx.dots[dotSp]) and true or false
+    local rT = (simCtx and simCtx.auraRem and simCtx.auraRem.target and simCtx.auraRem.target[dotSp]) or 0
+    return rT > 1.0
   end
 
   local notDotSp = c:match("^NOT%s+DOT%(([A-Z0-9_]+)%)$")
   if notDotSp then
-    return not (simCtx and simCtx.dots and simCtx.dots[notDotSp])
+    local rT = (simCtx and simCtx.auraRem and simCtx.auraRem.target and simCtx.auraRem.target[notDotSp]) or 0
+    return rT <= 1.0
   end
 
   local readySp = c:match("^READY%(([A-Z0-9_]+)%)$")
@@ -449,9 +509,9 @@ local simCD = {}
 local simKnown = {}
 local simActive = {}
 local simNoResource = {}
-local simBuffs = {}
-local simDoTs = {}
-local simCtx = { buffs = simBuffs, dots = simDoTs }
+local simAuraRem = { target = {}, player = {} }
+local simAuraStacks = { target = {}, player = {} }
+local simCtx = { auraRem = simAuraRem, auraStacks = simAuraStacks }
 local EMPTY_TABLE = {}
 
 function SpArc:BuildRotationQueue(maxSlots)
@@ -472,6 +532,11 @@ function SpArc:BuildRotationQueue(maxSlots)
     return EMPTY_TABLE, EMPTY_TABLE, parsed, nil, false, false
   end
 
+  for k in pairs(simAuraRem.target) do simAuraRem.target[k] = nil end
+  for k in pairs(simAuraRem.player) do simAuraRem.player[k] = nil end
+  for k in pairs(simAuraStacks.target) do simAuraStacks.target[k] = nil end
+  for k in pairs(simAuraStacks.player) do simAuraStacks.player[k] = nil end
+
   local states = reusableStates
   for k in pairs(states) do
     if not SPELL_DEFS[k] then
@@ -484,8 +549,6 @@ function SpArc:BuildRotationQueue(maxSlots)
       simKnown[k] = nil
       simActive[k] = nil
       simNoResource[k] = nil
-      simBuffs[k] = nil
-      simDoTs[k] = nil
     end
   end
 
@@ -530,19 +593,45 @@ function SpArc:BuildRotationQueue(maxSlots)
     simCharges[k] = charges or (isReady and 1 or 0)
     simActive[k] = (SpArc.IsSpellBurstActive and SpArc:IsSpellBurstActive(k, sObj, now)) or false
     simNoResource[k] = isNoResource or false
-    simBuffs[k] = (SpArc.PlayerHasBuff and SpArc:PlayerHasBuff(k, now)) or false
-    if def.appliesDoTs or (def.debuffIDs and #def.debuffIDs > 0) then
-      simDoTs[k] = (SpArc.TargetHasSpellDoT and SpArc:TargetHasSpellDoT(k, now)) or false
-    else
-      simDoTs[k] = false
+  end
+
+  -- Populate unified Aura state for all defined spells and standalone auras
+  local auraMap = (parsed and parsed.auras) or SPELL_DEFS
+  local simHasDoTs = false
+  local anyDoTDef = false
+  local allDoTsActive = true
+  for aKey, aDef in pairs(auraMap) do
+    local _, tRem, tStacks = SpArc:GetUnitAuraState("target", aKey, parsed, assistedKey, now)
+    local _, pRem, pStacks = SpArc:GetUnitAuraState("player", aKey, parsed, assistedKey, now)
+    simAuraRem.target[aKey] = tRem or 0
+    simAuraStacks.target[aKey] = tStacks or 0
+    simAuraRem.player[aKey] = pRem or 0
+    simAuraStacks.player[aKey] = pStacks or 0
+    local aIDs = aDef.auraIDs or aDef.debuffIDs or aDef.ids
+    if aIDs then
+      for _, id in ipairs(aIDs) do
+        local idStr = tostring(id)
+        if (tRem or 0) > (simAuraRem.target[idStr] or 0) then simAuraRem.target[idStr] = tRem end
+        if (tStacks or 0) > (simAuraStacks.target[idStr] or 0) then simAuraStacks.target[idStr] = tStacks end
+        if (pRem or 0) > (simAuraRem.player[idStr] or 0) then simAuraRem.player[idStr] = pRem end
+        if (pStacks or 0) > (simAuraStacks.player[idStr] or 0) then simAuraStacks.player[idStr] = pStacks end
+      end
+    end
+    if aDef.appliesDoTs and states[aKey] and not states[aKey].isUnavailable then
+      anyDoTDef = true
+      if (tRem or 0) <= 1.0 then
+        allDoTsActive = false
+      end
     end
   end
+  if anyDoTDef and allDoTsActive then
+    simHasDoTs = true
+  end
+  local simStacks = simAuraStacks.target["FREEZING"] or 0
+  local simBurst = (SpArc.IsPlayerInBurst and SpArc:IsPlayerInBurst(states, now)) or false
 
   local queue = reusableQueue
   local qCount = 0
-  local simHasDoTs = SpArc:CheckTargetHasDoTs(assistedKey)
-  local simStacks = (SpArc.GetTargetDebuffStacks and SpArc:GetTargetDebuffStacks(parsed, assistedKey)) or 0
-  local simBurst = (SpArc.IsPlayerInBurst and SpArc:IsPlayerInBurst(states, now)) or false
   for spK, spD in pairs(SPELL_DEFS) do
     if spD.isSpender and spD.insanityCost and spD.insanityCost > 0 and (not spD.baseCD or spD.baseCD <= 0) then
       local sSp = states[spK]
@@ -571,8 +660,8 @@ function SpArc:BuildRotationQueue(maxSlots)
   simCtx.energy = simEnergy
   simCtx.playerHP = (SpArc.GetPlayerHPPercent and SpArc:GetPlayerHPPercent()) or 100
   simCtx.targetHP = (SpArc.GetTargetHPPercent and SpArc:GetTargetHPPercent()) or 100
-  simCtx.buffs = simBuffs
-  simCtx.dots = simDoTs
+  simCtx.auraRem = simAuraRem
+  simCtx.auraStacks = simAuraStacks
 
   for step = 1, maxSlots do
     for spK, spD in pairs(SPELL_DEFS) do
@@ -629,25 +718,39 @@ function SpArc:BuildRotationQueue(maxSlots)
 
       local pickedWasProc = simProcs[pickedKey]
       simProcs[pickedKey] = false
-      simBuffs[pickedKey] = true
       if simCtx.stealthed then
         simCtx.stealthed = false
       end
       if def then
-        if def.appliesDoTs then
-          simHasDoTs = true
-          simDoTs[pickedKey] = true
-          if def.debuffIDs then
-            for _, dID in ipairs(def.debuffIDs) do
-              for otherKey, otherDef in pairs(SPELL_DEFS) do
-                if otherDef.debuffIDs then
-                  for _, oID in ipairs(otherDef.debuffIDs) do
-                    if oID == dID then simDoTs[otherKey] = true end
+        local aDur = (def.auraDuration and def.auraDuration > 0) and def.auraDuration or ((def.appliesDoTs and 21.0) or ((def.burstDuration and def.burstDuration > 0) and def.burstDuration) or 0)
+        if aDur > 0 then
+          local u = def.auraUnit or ((def.burstDuration and def.burstDuration > 0 and not def.appliesDoTs) and "player" or "target")
+          simAuraRem[u][pickedKey] = aDur
+          if (simAuraStacks[u][pickedKey] or 0) < 1 then simAuraStacks[u][pickedKey] = 1 end
+          local aIDs = def.auraIDs or def.debuffIDs or def.ids
+          if aIDs then
+            for _, aID in ipairs(aIDs) do
+              local idStr = tostring(aID)
+              simAuraRem[u][idStr] = aDur
+              if (simAuraStacks[u][idStr] or 0) < 1 then simAuraStacks[u][idStr] = 1 end
+              for otherKey, otherDef in pairs(auraMap) do
+                local oIDs = otherDef.auraIDs or otherDef.debuffIDs or otherDef.ids
+                if oIDs then
+                  for _, oID in ipairs(oIDs) do
+                    if oID == aID then
+                      simAuraRem[u][otherKey] = aDur
+                      if (simAuraStacks[u][otherKey] or 0) < 1 then simAuraStacks[u][otherKey] = 1 end
+                    end
                   end
                 end
               end
             end
           end
+        else
+          simAuraRem.player[pickedKey] = 10.0
+        end
+        if def.appliesDoTs then
+          simHasDoTs = true
         end
         if def.burstDuration and def.burstDuration > 0 then
           simActive[pickedKey] = true
@@ -672,10 +775,18 @@ function SpArc:BuildRotationQueue(maxSlots)
         end
         if def.consumesStacks and not pickedWasProc then
           local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
-          simStacks = math.max(0, (simStacks or 0) - cost)
+          local tKey = def.auraKey or "FREEZING"
+          local newSt = math.max(0, (simAuraStacks.target[tKey] or simStacks or 0) - cost)
+          simStacks = newSt
+          simAuraStacks.target[tKey] = newSt
+          if newSt <= 0 then simAuraRem.target[tKey] = 0 end
         end
         if def.stacksGain and def.stacksGain > 0 then
-          simStacks = math.min(20, (simStacks or 0) + def.stacksGain)
+          local tKey = def.auraKey or "FREEZING"
+          local newSt = math.min(20, (simAuraStacks.target[tKey] or simStacks or 0) + def.stacksGain)
+          simStacks = newSt
+          simAuraStacks.target[tKey] = newSt
+          simAuraRem.target[tKey] = def.auraDuration or 15.0
         end
         if def.procOnly or def.isSpender or def.isExecute then
           simCD[pickedKey] = 9999
@@ -701,6 +812,16 @@ function SpArc:BuildRotationQueue(maxSlots)
       for spK, _ in pairs(SPELL_DEFS) do
         if simCD[spK] and simCD[spK] < 9000 then
           simCD[spK] = math.max(0, simCD[spK] - 1.4)
+        end
+      end
+      for aK, rVal in pairs(simAuraRem.target) do
+        if rVal and rVal > 0 and rVal < 9000 then
+          simAuraRem.target[aK] = math.max(0, rVal - 1.4)
+        end
+      end
+      for aK, rVal in pairs(simAuraRem.player) do
+        if rVal and rVal > 0 and rVal < 9000 then
+          simAuraRem.player[aK] = math.max(0, rVal - 1.4)
         end
       end
 
@@ -756,20 +877,39 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   end
   local def = SPELL_DEFS[defKey]
   if not def then return end
-  if def.appliesDoTs then
-    local dotDur = (def.dotDuration and def.dotDuration > 0) and def.dotDuration or 21.0
-    local refreshLead = 1.2
-    local remPrev = (st.targetDoTsUntil and st.targetDoTsUntil > (now - refreshLead)) and math.max(0, math.min(6.3, (st.targetDoTsUntil - now) + refreshLead)) or 0
-    local newUntil = now + math.max(1.0, (dotDur + remPrev) - refreshLead)
-    st.targetDoTsUntil = newUntil
-    st.targetSpellDoTs = st.targetSpellDoTs or {}
-    st.targetSpellDoTs[defKey] = newUntil
-    if def.debuffIDs then
-      for _, dID in ipairs(def.debuffIDs) do
-        st.targetSpellDoTs[dID] = newUntil
+  st.unitAuras = st.unitAuras or { target = {}, player = {} }
+  st.unitAuras.target = st.unitAuras.target or {}
+  st.unitAuras.player = st.unitAuras.player or {}
+
+  local aDur = (def.auraDuration and def.auraDuration > 0) and def.auraDuration or ((def.appliesDoTs and 21.0) or ((def.burstDuration and def.burstDuration > 0) and def.burstDuration) or 0)
+  if aDur > 0 then
+    local u = def.auraUnit or ((def.burstDuration and def.burstDuration > 0 and not def.appliesDoTs) and "player" or "target")
+    local uMap = st.unitAuras[u]
+    local prev = uMap[defKey]
+    local remPrev = (prev and prev.untilTime and prev.untilTime > now) and math.min(aDur * 0.3, prev.untilTime - now) or 0
+    local newUntil = now + aDur + remPrev
+    local entry = { untilTime = newUntil, stacks = math.max(1, (prev and prev.stacks) or 1) }
+    uMap[defKey] = entry
+    local aIDs = def.auraIDs or def.debuffIDs or def.ids
+    if aIDs then
+      local auraMap = (st.activeParsed and st.activeParsed.auras) or SPELL_DEFS
+      for _, aID in ipairs(aIDs) do
+        uMap[aID] = entry
+        uMap[tostring(aID)] = entry
+        for otherKey, otherDef in pairs(auraMap) do
+          local oIDs = otherDef.auraIDs or otherDef.debuffIDs or otherDef.ids
+          if oIDs then
+            for _, oID in ipairs(oIDs) do
+              if oID == aID then
+                uMap[otherKey] = entry
+              end
+            end
+          end
+        end
       end
     end
   end
+
   if def.insanityGain then
     st.trackedInsanity = math.min(100, st.trackedInsanity + def.insanityGain)
   end
@@ -795,11 +935,20 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   end
   if def.consumesStacks and not castWasProc then
     local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
-    st.targetDebuffStacks = math.max(0, (st.targetDebuffStacks or 0) - cost)
+    local tKey = def.auraKey or "FREEZING"
+    local prev = st.unitAuras.target[tKey]
+    local newSt = math.max(0, ((prev and prev.stacks) or st.targetDebuffStacks or 0) - cost)
+    st.targetDebuffStacks = newSt
+    st.unitAuras.target[tKey] = { untilTime = (newSt > 0 and prev and prev.untilTime) or 0, stacks = newSt }
   end
   if def.stacksGain and def.stacksGain > 0 then
-    st.targetDebuffStacks = math.min(20, (st.targetDebuffStacks or 0) + def.stacksGain)
-    st.targetDebuffUntil = now + 15.0
+    local tKey = def.auraKey or "FREEZING"
+    local prev = st.unitAuras.target[tKey]
+    local newSt = math.min(20, ((prev and prev.stacks) or st.targetDebuffStacks or 0) + def.stacksGain)
+    local newUntil = now + (def.auraDuration or 15.0)
+    st.targetDebuffStacks = newSt
+    st.targetDebuffUntil = newUntil
+    st.unitAuras.target[tKey] = { untilTime = newUntil, stacks = newSt }
   end
   local maxCh = def.liveMaxCharges or def.maxCharges or 1
   if maxCh > 1 or (def.baseCD and def.baseCD > 0 and def.baseCD <= 30) then
@@ -899,8 +1048,9 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     local newGUID = (okG and not IsSecret(guid) and guid) or nil
     local sameTarget = (newGUID and st.lastTargetGUID and newGUID == st.lastTargetGUID) or false
     if (not hasTarget) or targetDead or (not sameTarget) then
-      st.targetDoTsUntil = 0
-      st.targetSpellDoTs = {}
+      if st.unitAuras then
+        st.unitAuras.target = {}
+      end
       st.targetDebuffStacks = 0
       st.targetDebuffUntil = 0
       st.targetPickPocketed = false

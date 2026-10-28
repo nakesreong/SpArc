@@ -202,8 +202,20 @@ function SpArc:CaptureTelemetrySnapshot(reasonTag, queue, states, parsed)
   local isRU = SpArc:IsRU()
   local resStr = GetPrimaryResourceString(isRU)
   local assistedKey, assistedID = SpArc:GetAssistedSuggestedDefKey()
-  local hasDoTs = SpArc:CheckTargetHasDoTs(assistedKey)
-  local debuffStacks = (SpArc.GetTargetDebuffStacks and SpArc:GetTargetDebuffStacks(parsed, assistedKey)) or (st.targetDebuffStacks or 0)
+  local now = GetTime()
+  local auraParts = {}
+  local auraMap = (parsed and parsed.auras) or SPELL_DEFS
+  for aKey, aDef in pairs(auraMap) do
+    if (aDef.auraDuration and aDef.auraDuration > 0) or aDef.isAuraOnly then
+      local u = aDef.auraUnit or "target"
+      local isAct, remSec, stacks = SpArc:GetUnitAuraState(u, aKey, parsed, assistedKey, now)
+      if isAct and remSec and remSec > 0 then
+        auraParts[#auraParts + 1] = string.format("%s:%s(%.1fs,x%d)", u == "player" and "P" or "T", aKey, remSec, stacks or 1)
+      end
+    end
+  end
+  table.sort(auraParts)
+  local aurasStr = (#auraParts > 0) and table.concat(auraParts, ",") or "none"
   local auditOrder = GetActiveAuditOrder(parsed)
 
   local bookDiffs = {}
@@ -232,14 +244,13 @@ function SpArc:CaptureTelemetrySnapshot(reasonTag, queue, states, parsed)
 
   local headerLine = string.format(
     isRU
-      and "[%s | %s] Загорелось: %s | %s | Доты=%s | Стаки=%d | БлиззАссист=%s(%s)"
-      or "[%s | %s] Queue: %s | %s | DoTs=%s | Stacks=%d | BlizzAssist=%s(%s)",
+      and "[%s | %s] Загорелось: %s | %s | Ауры=[%s] | БлиззАссист=%s(%s)"
+      or "[%s | %s] Queue: %s | %s | Auras=[%s] | BlizzAssist=%s(%s)",
     GetTimestampStr(),
     reasonTag or "TICK",
     qStr,
     resStr,
-    tostring(hasDoTs),
-    debuffStacks,
+    aurasStr,
     tostring(assistedKey or "nil"),
     tostring(assistedID or "nil")
   )

@@ -29,15 +29,20 @@ local function ParseCSVTokens(str)
   return list
 end
 
--- Parses a single `SPELL KEY = PROP:VAL | PROP:VAL` line from .md pseudocode
+-- Parses a single `SPELL KEY = ...` or `AURA KEY = ...` line from .md pseudocode
 local function ParseSpellDefLine(line)
-  local key, rest = line:match("^SPELL%s+([A-Z0-9_]+)%s*=%s*(.+)$")
-  if not key or not rest then return nil, nil end
+  local kind, key, rest = line:match("^(SPELL)%s+([A-Z0-9_]+)%s*=%s*(.+)$")
+  if not kind then
+    kind, key, rest = line:match("^(AURA)%s+([A-Z0-9_]+)%s*=%s*(.+)$")
+  end
+  if not key or not rest then return nil, nil, nil end
   local def = {
     key = key,
+    isAuraOnly = (kind == "AURA"),
     names = {},
     macroNames = {},
     ids = {},
+    auraIDs = {},
     baseCD = 0,
     maxCharges = 1,
     fallbackIcon = 134400,
@@ -69,7 +74,7 @@ local function ParseSpellDefLine(line)
         def.insanityGain = tonumber(val) or 0
       elseif prop == "COST" then
         def.insanityCost = tonumber(val) or 0
-      elseif prop == "STACKS" or prop == "DEBUFF_STACKS" then
+      elseif prop == "STACKS" or prop == "DEBUFF_STACKS" or prop == "AURA_STACKS" then
         local n = tonumber(val)
         if n then
           if n > 0 then
@@ -83,26 +88,44 @@ local function ParseSpellDefLine(line)
         end
       elseif prop == "CONSUMES_STACKS" then
         def.consumesStacks = (val:lower() == "true" or val == "1")
+      elseif prop == "AURA_KEY" then
+        def.auraKey = val:gsub('^"', ''):gsub('"$', '')
+      elseif prop == "AURA_UNIT" or prop == "UNIT" then
+        def.auraUnit = val:gsub('^"', ''):gsub('"$', ''):lower()
       elseif prop == "OVERRIDE_OF" then
         def.overrideOf = val:gsub('^"', ''):gsub('"$', '')
-      elseif prop == "DEBUFF_ID" or prop == "DEBUFF_IDS" then
-        def.debuffIDs = {}
+      elseif prop == "AURA_ID" or prop == "AURA_IDS" or prop == "DEBUFF_ID" or prop == "DEBUFF_IDS" then
+        def.auraIDs = {}
         for _, tok in ipairs(ParseCSVTokens(val)) do
           local n = tonumber(tok)
-          if n then def.debuffIDs[#def.debuffIDs + 1] = n end
+          if n then def.auraIDs[#def.auraIDs + 1] = n end
         end
+        def.debuffIDs = def.auraIDs
       elseif prop == "ICON" then
         def.fallbackIcon = tonumber(val) or 134400
+      elseif prop == "AURA_DUR" or prop == "AURA_DURATION" or prop == "DUR" or prop == "DURATION" then
+        local durSec = tonumber(val)
+        if durSec and durSec > 0 then
+          def.auraDuration = durSec
+        end
       elseif prop == "DOTS" then
         local dotSec = tonumber(val)
         if dotSec and dotSec > 0 then
           def.appliesDoTs = true
           def.dotDuration = dotSec
+          def.auraDuration = def.auraDuration or dotSec
+          def.auraUnit = def.auraUnit or "target"
         else
           def.appliesDoTs = (val:lower() == "true" or val == "1")
+          if def.appliesDoTs then
+            def.auraDuration = def.auraDuration or 21
+            def.auraUnit = def.auraUnit or "target"
+          end
         end
       elseif prop == "DOT_DURATION" then
-        def.dotDuration = tonumber(val)
+        local dotSec = tonumber(val)
+        def.dotDuration = dotSec
+        def.auraDuration = def.auraDuration or dotSec
       elseif prop == "GRANTS" then
         def.grantsProc = val:gsub('^"', ''):gsub('"$', '')
         if def.grantsProc == "MIND_FLAY_INSANITY" then
@@ -121,11 +144,26 @@ local function ParseSpellDefLine(line)
       elseif prop == "LOCK_CHANNEL" then
         def.lockChannel = (val:lower() == "true" or val == "1")
       elseif prop == "BURST" or prop == "BURST_DURATION" then
-        def.burstDuration = tonumber(val) or 15
+        local bDur = tonumber(val) or 15
+        def.burstDuration = bDur
+        def.auraDuration = def.auraDuration or bDur
+        def.auraUnit = def.auraUnit or "player"
       end
     end
   end
-  return key, def
+  if #def.auraIDs == 0 and #def.ids > 0 then
+    for _, id in ipairs(def.ids) do
+      def.auraIDs[#def.auraIDs + 1] = id
+    end
+  end
+  if def.auraDuration and not def.dotDuration then
+    def.dotDuration = def.auraDuration
+  end
+  if def.isAuraOnly then
+    def.auraUnit = def.auraUnit or "target"
+    def.auraDuration = def.auraDuration or 15
+  end
+  return key, def, kind
 end
 
 -- Compiles a Markdown (.md) pseudocode string into a complete FSM table:
@@ -146,6 +184,7 @@ function SpArc:ParseMarkdownFSM(mdText)
     spec = "Shadow",
     mode = "PVE",
     spells = {},
+    auras = {},
     interruptibleChannels = {},
     protectedChannels = {},
     targetDebuffIDs = {},
@@ -191,21 +230,43 @@ function SpArc:ParseMarkdownFSM(mdText)
             end
           end
         end
+        local legacyAura = {
+          key = "FREEZING",
+          isAuraOnly = true,
+          ids = parsed.targetDebuffIDs,
+          auraIDs = parsed.targetDebuffIDs,
+          names = parsed.targetDebuffNames,
+          auraUnit = "target",
+          auraDuration = 15,
+        }
+        parsed.auras["FREEZING"] = legacyAura
+        parsed.auras["TARGET_DEBUFF"] = legacyAura
       end
 
       if not line:match("^#") then
-        local spKey, spDef = ParseSpellDefLine(line)
+        local spKey, spDef, spKind = ParseSpellDefLine(line)
         if spKey and spDef then
-          parsed.spells[spKey] = spDef
-          if spDef.fillerInterruptible then
-            parsed.interruptibleChannels[spKey] = true
-          end
-          if spDef.lockChannel then
-            parsed.protectedChannels[spKey] = true
-          end
-          if spDef.debuffIDs then
-            for _, did in ipairs(spDef.debuffIDs) do
+          if spKind == "AURA" then
+            parsed.auras[spKey] = spDef
+            for _, did in ipairs(spDef.auraIDs or {}) do
               parsed.targetDebuffIDs[#parsed.targetDebuffIDs + 1] = did
+            end
+            for _, nm in ipairs(spDef.names or {}) do
+              parsed.targetDebuffNames[#parsed.targetDebuffNames + 1] = nm
+            end
+          else
+            parsed.spells[spKey] = spDef
+            parsed.auras[spKey] = spDef
+            if spDef.fillerInterruptible then
+              parsed.interruptibleChannels[spKey] = true
+            end
+            if spDef.lockChannel then
+              parsed.protectedChannels[spKey] = true
+            end
+            if spDef.debuffIDs then
+              for _, did in ipairs(spDef.debuffIDs) do
+                parsed.targetDebuffIDs[#parsed.targetDebuffIDs + 1] = did
+              end
             end
           end
         else

@@ -248,11 +248,13 @@ function SpArc:ParseMarkdownFSM(mdText)
         if spKey and spDef then
           if spKind == "AURA" then
             parsed.auras[spKey] = spDef
-            for _, did in ipairs(spDef.auraIDs or {}) do
-              parsed.targetDebuffIDs[#parsed.targetDebuffIDs + 1] = did
-            end
-            for _, nm in ipairs(spDef.names or {}) do
-              parsed.targetDebuffNames[#parsed.targetDebuffNames + 1] = nm
+            if spDef.auraUnit ~= "player" then
+              for _, did in ipairs(spDef.auraIDs or {}) do
+                parsed.targetDebuffIDs[#parsed.targetDebuffIDs + 1] = did
+              end
+              for _, nm in ipairs(spDef.names or {}) do
+                parsed.targetDebuffNames[#parsed.targetDebuffNames + 1] = nm
+              end
             end
           else
             parsed.spells[spKey] = spDef

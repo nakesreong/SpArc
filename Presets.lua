@@ -34,7 +34,7 @@ local STRINGS = {
     WINDOW_SUBTITLE = "Authors: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r  •  SpellID + Bartender4 Keybind Resolver",
     LANG_BTN = "Lang: EN",
 
-    TAB_1 = "1. Presets (4)",
+    TAB_1 = "1. Presets (6)",
     TAB_2 = "2. .MD Editor & AI",
     TAB_3 = "3. Visual & HUD",
     TAB_4 = "4. Telemetry / Debug",
@@ -231,7 +231,7 @@ local STRINGS = {
     WINDOW_SUBTITLE = "Авторы: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r  •  SpellID + Bartender4 Keybind Resolver",
     LANG_BTN = "Язык: RU",
 
-    TAB_1 = "1. Пресеты (4)",
+    TAB_1 = "1. Пресеты (6)",
     TAB_2 = "2. Импорт .MD и ИИ",
     TAB_3 = "3. Визуал и HUD",
     TAB_4 = "4. Телеметрия / Дебаг",
@@ -602,6 +602,7 @@ local EN_PRESET_TITLES = {
   ROGUE_01_ASSA_PVE    = "3. Rogue: Assassination (ST / AoE)",
   WARRIOR_02_ARGS_BOSS = "4. Warrior: Arms (ST / AoE)",
   DRUID_01_FERAL_PVE   = "5. Druid: Feral (ST / AoE)",
+  DRUID_02_BALANCE_PVE = "6. Druid: Balance (Moonkin — ST / AoE)",
 }
 
 function SpArc:GetPresetDisplayTitle(pr)
@@ -615,7 +616,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 26
+SpArc.PROFILE_SCHEMA_VERSION = 27
 
 ---------------------------------------------------------------------------------------
 --         5 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID)           --
@@ -962,6 +963,99 @@ ELSE IF enemies >= 2 AND READY(SWIPE) THEN
     RETURN CAST(SWIPE)
 ELSE
     RETURN CAST(SHRED)
+END IF
+]])
+
+-- ====================================================================================
+-- #6: DRUID — Balance (Трипобраз: Keeper of the Grove — Midnight 12.0+ ST / AoE / Delves)
+-- ====================================================================================
+RegisterPreset("DRUID_02_BALANCE_PVE", "DRUID", "6. Друид: Баланс (Сова — СТ / АоЕ)", "PVE", [[
+# PROFILE: 6. Друид: Баланс (Сова — СТ / АоЕ)
+# CLASS: DRUID
+# SPEC: Balance
+# MODE: PVE
+
+## SPELL_BOOK
+AURA ECLIPSE_LUNAR = ID:48518 | AURA_UNIT:player | AURA_DUR:15 | NAME:"Затмение (лунное)","Eclipse (Lunar)"
+AURA ECLIPSE_SOLAR = ID:48517 | AURA_UNIT:player | AURA_DUR:15 | NAME:"Затмение (солнечное)","Eclipse (Solar)"
+SPELL MOONKIN_FORM = ID:24858,197625 | AURA_ID:24858,197625 | AURA_UNIT:player | AURA_DUR:3600 | NAME:"Облик лунного совуха","Moonkin Form" | CD:0 | ICON:136036
+SPELL CELESTIAL_ALIGNMENT = ID:194223,102560,383410,390414 | AURA_ID:194223,102560,383410,390414 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | NAME:"Парад планет","Воплощение: избранный Элуны","Celestial Alignment","Incarnation: Chosen of Elune" | CD:120 | CHARGES:2 | ICON:136060
+SPELL FORCE_OF_NATURE = ID:205636 | AURA_ID:428735,205636 | AURA_UNIT:player | AURA_DUR:10 | BURST:10 | NAME:"Сила природы","Force of Nature" | CD:60 | GAIN:20 | ICON:132129
+SPELL FURY_OF_ELUNE = ID:202770 | NAME:"Ярость Элуны","Fury of Elune" | CD:60 | GAIN:40 | ICON:132123
+SPELL CONVOKE_THE_SPIRITS = ID:391528 | NAME:"Созыв духов","Convoke the Spirits" | CD:120 | LOCK_CHANNEL:true | ICON:3636839
+SPELL WARRIOR_OF_ELUNE = ID:202425 | AURA_ID:202425 | AURA_UNIT:player | AURA_DUR:25 | NAME:"Воин Элуны","Warrior of Elune" | CD:45 | ICON:135850
+SPELL NEW_MOON = ID:274281,274282,274283 | NAME:"Новолуние","Полумесяц","Полнолуние","New Moon","Half Moon","Full Moon" | CD:20 | CHARGES:3 | GAIN:10 | ICON:1392545
+SPELL WILD_MUSHROOM = ID:88747,205344 | NAME:"Дикий гриб","Wild Mushroom" | CD:30 | CHARGES:3 | ICON:464343
+SPELL MOONFIRE = ID:8921 | AURA_ID:164812,8921 | AURA_DUR:22 | NAME:"Лунный огонь","Moonfire" | CD:0 | GAIN:6 | ICON:136096
+SPELL SUNFIRE = ID:93402 | AURA_ID:164815,93402 | AURA_DUR:18 | NAME:"Солнечный огонь","Sunfire" | CD:0 | GAIN:6 | ICON:236216
+SPELL STARFALL = ID:191034 | AURA_ID:191034 | AURA_UNIT:player | AURA_DUR:8 | NAME:"Звездопад","Starfall" | CD:0 | COST:50 | SPENDER:true | ICON:236168
+SPELL STARSURGE = ID:78674 | NAME:"Звездный поток","Starsurge" | CD:0 | COST:40 | SPENDER:true | ICON:135730
+SPELL STARFIRE = ID:194153 | NAME:"Звездный огонь","Starfire" | CD:0 | GAIN:10 | ICON:135753
+SPELL WRATH = ID:190984,5176 | NAME:"Гнев","Wrath" | CD:0 | GAIN:8 | FILLER_INTERRUPTIBLE:true | ICON:136006
+SPELL BARKSKIN = ID:22812 | NAME:"Дубовая кожа","Barkskin" | CD:60 | ICON:136097
+SPELL RENEWAL = ID:108238 | NAME:"Обновление","Renewal" | CD:90 | ICON:136059
+SPELL REGROWTH = ID:8936 | NAME:"Восстановление","Regrowth" | CD:0 | ICON:136085
+SPELL BEAR_FORM = ID:5487 | AURA_ID:5487 | AURA_UNIT:player | AURA_DUR:3600 | NAME:"Облик медведя","Bear Form" | CD:0 | ICON:132276
+
+## CHANNEL_POLICY
+PROTECT_CHANNEL: CONVOKE_THE_SPIRITS
+
+## TRACKERS
+TRACK_SAVES: BARKSKIN, RENEWAL, REGROWTH, BEAR_FORM
+TRACK_CDS: CELESTIAL_ALIGNMENT, FORCE_OF_NATURE, CONVOKE_THE_SPIRITS, FURY_OF_ELUNE
+
+## EMERGENCY_SAVE
+IF player.hp_percent <= 35 AND READY(RENEWAL) THEN
+    RETURN EMERGENCY(RENEWAL)
+ELSE IF player.hp_percent <= 40 AND READY(BARKSKIN) THEN
+    RETURN EMERGENCY(BARKSKIN)
+ELSE IF player.hp_percent <= 30 AND READY(REGROWTH) THEN
+    RETURN EMERGENCY(REGROWTH)
+END IF
+
+## ROTATION_QUEUE
+IF NOT player.aura(MOONKIN_FORM) AND READY(MOONKIN_FORM) THEN
+    RETURN CAST(MOONKIN_FORM)
+ELSE IF target.aura(SUNFIRE).rem <= 3 AND READY(SUNFIRE) THEN
+    RETURN CAST(SUNFIRE)
+ELSE IF target.aura(MOONFIRE).rem <= 3 AND READY(MOONFIRE) THEN
+    RETURN CAST(MOONFIRE)
+ELSE IF PROC(STARFALL) AND enemies >= 2 AND READY(STARFALL) THEN
+    RETURN CAST(STARFALL)
+ELSE IF PROC(STARSURGE) AND READY(STARSURGE) THEN
+    RETURN CAST(STARSURGE)
+ELSE IF READY(FORCE_OF_NATURE) THEN
+    RETURN CAST(FORCE_OF_NATURE)
+ELSE IF READY(CELESTIAL_ALIGNMENT) THEN
+    RETURN CAST(CELESTIAL_ALIGNMENT)
+ELSE IF player.in_burst AND player.astral_power <= 50 AND READY(CONVOKE_THE_SPIRITS) THEN
+    RETURN CAST(CONVOKE_THE_SPIRITS)
+ELSE IF READY(FURY_OF_ELUNE) THEN
+    RETURN CAST(FURY_OF_ELUNE)
+ELSE IF enemies >= 2 AND USABLE(STARFALL) THEN
+    RETURN CAST(STARFALL)
+ELSE IF USABLE(STARSURGE) THEN
+    RETURN CAST(STARSURGE)
+ELSE IF NOT player.aura(ECLIPSE_LUNAR) AND NOT player.aura(ECLIPSE_SOLAR) AND enemies >= 2 AND READY(WRATH) THEN
+    RETURN CAST(WRATH)
+ELSE IF NOT player.aura(ECLIPSE_LUNAR) AND NOT player.aura(ECLIPSE_SOLAR) AND READY(STARFIRE) THEN
+    RETURN CAST(STARFIRE)
+ELSE IF READY(WARRIOR_OF_ELUNE) THEN
+    RETURN CAST(WARRIOR_OF_ELUNE)
+ELSE IF CHARGES(NEW_MOON) >= 2 AND READY(NEW_MOON) THEN
+    RETURN CAST(NEW_MOON)
+ELSE IF player.in_burst AND READY(NEW_MOON) THEN
+    RETURN CAST(NEW_MOON)
+ELSE IF enemies >= 3 AND READY(WILD_MUSHROOM) THEN
+    RETURN CAST(WILD_MUSHROOM)
+ELSE IF PROC(STARFIRE) AND READY(STARFIRE) THEN
+    RETURN CAST(STARFIRE)
+ELSE IF player.aura(ECLIPSE_LUNAR) AND player.aura(ECLIPSE_SOLAR) AND enemies >= 2 AND READY(STARFIRE) THEN
+    RETURN CAST(STARFIRE)
+ELSE IF player.aura(ECLIPSE_LUNAR) AND NOT player.aura(ECLIPSE_SOLAR) AND READY(STARFIRE) THEN
+    RETURN CAST(STARFIRE)
+ELSE
+    RETURN CAST(WRATH)
 END IF
 ]])
 

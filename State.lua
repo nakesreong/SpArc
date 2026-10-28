@@ -532,6 +532,36 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
             usableSource = "UnitPower(" .. tostring(rawP) .. ">=" .. tostring(cost) .. ")"
           end
         end
+      elseif defKey == "STARSURGE" or defKey == "STARFALL" or SPELL_DEFS["STARSURGE"] or SPELL_DEFS["STARFALL"] then
+        local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 40
+        local okAP, rawAP = pcall(UnitPower, "player", 8)
+        if okAP and not IsSecret(rawAP) and type(rawAP) == "number" then
+          if rawAP < (cost - 5) then
+            if hasSpellOverlayProc or isProc then
+              isUsable = true
+              isProc = true
+              gotCleanUsable = true
+              usableSource = "ProcOverlayFreeAstral(" .. tostring(rawAP) .. "AP)"
+            else
+              isUsable = false
+              isProc = false
+              gotCleanUsable = true
+              usableSource = "AstralPower(" .. tostring(rawAP) .. "<" .. tostring(cost) .. ")"
+            end
+          else
+            isUsable = true
+            gotCleanUsable = true
+            usableSource = "AstralPower(" .. tostring(rawAP) .. ">=" .. tostring(cost) .. ")"
+          end
+        elseif (st.trackedInsanity or 0) >= cost or hasSpellOverlayProc or isProc or assistedKey == defKey then
+          isUsable = true
+          gotCleanUsable = true
+          usableSource = "TrackedAP(" .. tostring(st.trackedInsanity or 0) .. ">=" .. tostring(cost) .. ")"
+        else
+          isUsable = false
+          gotCleanUsable = true
+          usableSource = "TrackedAP(" .. tostring(st.trackedInsanity or 0) .. "<" .. tostring(cost) .. ")"
+        end
       else
         local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 80
         local minCP = math.max(1, math.floor(cost / 20))
@@ -748,7 +778,22 @@ function SpArc:GetUnitAuraState(unit, keyOrID, parsed, assistedKey, now)
       if _G.IsStealthed and SafeBool(_G.IsStealthed) then
         return true, 3600, 1
       end
-    elseif (keyOrID == "SHADOWFORM" or keyOrID == "CAT_FORM" or numID == 232698 or numID == 768) and _G.GetShapeshiftForm then
+    elseif (keyOrID == "CAT_FORM" or numID == 768) and _G.GetShapeshiftFormID then
+      local okF, formID = pcall(_G.GetShapeshiftFormID)
+      if okF and not IsSecret(formID) and formID == 1 then
+        return true, 3600, 1
+      end
+    elseif (keyOrID == "MOONKIN_FORM" or numID == 24858 or numID == 197625) and _G.GetShapeshiftFormID then
+      local okF, formID = pcall(_G.GetShapeshiftFormID)
+      if okF and not IsSecret(formID) and (formID == 31 or formID == 35) then
+        return true, 3600, 1
+      end
+    elseif (keyOrID == "BEAR_FORM" or numID == 5487) and _G.GetShapeshiftFormID then
+      local okF, formID = pcall(_G.GetShapeshiftFormID)
+      if okF and not IsSecret(formID) and formID == 5 then
+        return true, 3600, 1
+      end
+    elseif (keyOrID == "SHADOWFORM" or numID == 232698) and _G.GetShapeshiftForm then
       local okF, form = pcall(_G.GetShapeshiftForm)
       if okF and not IsSecret(form) and type(form) == "number" and form > 0 then
         return true, 3600, 1
@@ -1020,7 +1065,13 @@ end
 
 function SpArc:RefreshTrackedInsanity()
   if UnitPower then
-    if not SPELL_DEFS["DEVOURING_PLAGUE"] then
+    if SPELL_DEFS["STARSURGE"] or SPELL_DEFS["STARFALL"] then
+      local okAP, ap = pcall(UnitPower, "player", 8)
+      if okAP and not IsSecret(ap) and type(ap) == "number" then
+        st.trackedInsanity = math.min(100, ap)
+        return
+      end
+    elseif not SPELL_DEFS["DEVOURING_PLAGUE"] then
       local okCP, cp = pcall(UnitPower, "player", 4)
       if okCP and not IsSecret(cp) and type(cp) == "number" then
         st.trackedInsanity = math.min(100, cp * 20)
@@ -1066,6 +1117,7 @@ local AOE_ASSIST_HINTS = {
   FROZEN_ORB       = 2,
   SWIPE            = 2,
   PRIMAL_WRATH     = 2,
+  STARFALL         = 2,
 }
 
 local function IsUnitDummyOrInCombat(unit)
@@ -1146,8 +1198,11 @@ function SpArc:GetNearbyEnemyCount(now, assistedKey)
     end
   end
 
-  local isMelee = (MELEE_RANGE_CHECK_SPELLS[playerClass] ~= nil)
-  local checkSpellIDs = MELEE_RANGE_CHECK_SPELLS[playerClass] or RANGED_RANGE_CHECK_SPELLS[playerClass]
+  local isBalanceDruid = (playerClass == "DRUID" and (SPELL_DEFS["STARSURGE"] ~= nil or SPELL_DEFS["STARFALL"] ~= nil))
+  local isMelee = (MELEE_RANGE_CHECK_SPELLS[playerClass] ~= nil) and not isBalanceDruid
+  local checkSpellIDs = isBalanceDruid and { 8921, 93402, 190984, 194153, 78674 }
+    or MELEE_RANGE_CHECK_SPELLS[playerClass]
+    or RANGED_RANGE_CHECK_SPELLS[playerClass]
   local checkSlot = nil
   for _, def in pairs(SPELL_DEFS or EMPTY_TABLE) do
     if def.slot and not def.isSpender and (def.baseCD or 0) <= 6 then
@@ -1396,6 +1451,12 @@ local NO_RANGE_CHECK_SPELLS = {
   RENEWAL              = true,
   FRENZIED_REGENERATION = true,
   REGROWTH             = true,
+  MOONKIN_FORM         = true,
+  BEAR_FORM            = true,
+  CELESTIAL_ALIGNMENT  = true,
+  FORCE_OF_NATURE      = true,
+  STARFALL             = true,
+  WARRIOR_OF_ELUNE     = true,
 }
 
 local CLASS_RANGE_FALLBACK_SPELLS = {
@@ -1403,7 +1464,7 @@ local CLASS_RANGE_FALLBACK_SPELLS = {
   WARRIOR = { 12294, 1464, 23881, 6552 },
   MAGE    = { 116, 30455, 133, 30451 },
   PRIEST  = { 8092, 589, 34914, 15407 },
-  DRUID   = { 5221, 1822, 22568, 1079 },
+  DRUID   = { 5221, 1822, 22568, 1079, 8921, 93402, 190984, 194153, 78674 },
 }
 
 local function CheckBT4ButtonOutOfRange(btBtn)

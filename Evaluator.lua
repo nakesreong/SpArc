@@ -92,11 +92,11 @@ local SPEC_ID_TO_PRESETS = {
   [71]  = { PVE = "WARRIOR_02_ARGS_BOSS",  BOSS = "WARRIOR_02_ARGS_BOSS",  PVP = "WARRIOR_02_ARGS_BOSS" },
   [72]  = { PVE = "WARRIOR_02_ARGS_BOSS",  BOSS = "WARRIOR_02_ARGS_BOSS",  PVP = "WARRIOR_02_ARGS_BOSS" },
   [73]  = { PVE = "WARRIOR_02_ARGS_BOSS",  BOSS = "WARRIOR_02_ARGS_BOSS",  PVP = "WARRIOR_02_ARGS_BOSS" },
-  -- DRUID (Feral)
-  [102] = { PVE = "DRUID_01_FERAL_PVE",    BOSS = "DRUID_01_FERAL_PVE",    PVP = "DRUID_01_FERAL_PVE" },
+  -- DRUID (Balance & Feral)
+  [102] = { PVE = "DRUID_02_BALANCE_PVE",  BOSS = "DRUID_02_BALANCE_PVE",  PVP = "DRUID_02_BALANCE_PVE" },
   [103] = { PVE = "DRUID_01_FERAL_PVE",    BOSS = "DRUID_01_FERAL_PVE",    PVP = "DRUID_01_FERAL_PVE" },
   [104] = { PVE = "DRUID_01_FERAL_PVE",    BOSS = "DRUID_01_FERAL_PVE",    PVP = "DRUID_01_FERAL_PVE" },
-  [105] = { PVE = "DRUID_01_FERAL_PVE",    BOSS = "DRUID_01_FERAL_PVE",    PVP = "DRUID_01_FERAL_PVE" },
+  [105] = { PVE = "DRUID_02_BALANCE_PVE",  BOSS = "DRUID_02_BALANCE_PVE",  PVP = "DRUID_02_BALANCE_PVE" },
 }
 
 local PRESET_SPEC_IDS = {
@@ -105,6 +105,7 @@ local PRESET_SPEC_IDS = {
   ROGUE_01_ASSA_PVE    = 259,
   WARRIOR_02_ARGS_BOSS = 71,
   DRUID_01_FERAL_PVE   = 103,
+  DRUID_02_BALANCE_PVE = 102,
 }
 
 local lastValidSpecID = nil
@@ -406,6 +407,16 @@ local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, si
     return CompareNum(curE, eOp, tonumber(eVal) or 0)
   end
 
+  local apOp, apVal = c:match("^player%.astral_power%s*([><=]+)%s*(%d+)$")
+  if not apOp then apOp, apVal = c:match("^player%.insanity%s*([><=]+)%s*(%d+)$") end
+  if not apOp then apOp, apVal = c:match("^player%.power%s*([><=]+)%s*(%d+)$") end
+  if not apOp then apOp, apVal = c:match("^ASTRAL_POWER%s*([><=]+)%s*(%d+)$") end
+  if not apOp then apOp, apVal = c:match("^INSANITY%s*([><=]+)%s*(%d+)$") end
+  if apOp and apVal then
+    local curAP = (simCtx and simCtx.insanity) or 0
+    return CompareNum(curAP, apOp, tonumber(apVal) or 0)
+  end
+
   local pHpOp, pHpVal = c:match("^player%.hp_percent%s*([><=]+)%s*(%d+)$")
   if pHpOp and pHpVal then
     local curPHP = (simCtx and simCtx.playerHP) or 100
@@ -638,7 +649,7 @@ function SpArc:BuildRotationQueue(maxSlots)
       local sSp = states[spK]
       if sSp and not sSp.isUnavailable then
         local cost = spD.insanityCost
-        local isFreeProc = (spK == "FEROCIOUS_BITE" and sSp.isProc)
+        local isFreeProc = ((spK == "FEROCIOUS_BITE" or spK == "STARSURGE" or spK == "STARFALL") and sSp.isProc)
         if not isFreeProc then
           if not sSp.isUsable and st.trackedInsanity >= cost then
             st.trackedInsanity = math.floor(cost * 0.5)
@@ -657,6 +668,7 @@ function SpArc:BuildRotationQueue(maxSlots)
   simCtx.stealthed = (_G.IsStealthed and SafeBool(_G.IsStealthed)) or false
   simCtx.inCombat = (_G.InCombatLockdown and SafeBool(_G.InCombatLockdown)) or (_G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player")) or false
   simCtx.canPickPocket = (SpArc.CanPickPocketTarget and SpArc:CanPickPocketTarget(now)) or false
+  simCtx.insanity = simInsanity
   simCtx.comboPoints = math.floor(simInsanity / 20)
   simCtx.energy = simEnergy
   simCtx.playerHP = (SpArc.GetPlayerHPPercent and SpArc:GetPlayerHPPercent()) or 100
@@ -756,11 +768,35 @@ function SpArc:BuildRotationQueue(maxSlots)
         if def.burstDuration and def.burstDuration > 0 then
           simActive[pickedKey] = true
           simBurst = true
+          if pickedKey == "CELESTIAL_ALIGNMENT" then
+            simAuraRem.player["ECLIPSE_SOLAR"] = def.burstDuration
+            simAuraRem.player["ECLIPSE_LUNAR"] = def.burstDuration
+            simAuraRem.player["48517"] = def.burstDuration
+            simAuraRem.player["48518"] = def.burstDuration
+          end
+        end
+        if (pickedKey == "STARFIRE" or pickedKey == "WRATH") and (simAuraRem.player["ECLIPSE_SOLAR"] or 0) <= 0 and (simAuraRem.player["ECLIPSE_LUNAR"] or 0) <= 0 then
+          if pickedKey == "STARFIRE" then
+            local cSt = (simAuraStacks.player["_SF_PREP"] or 0) + 1
+            simAuraStacks.player["_SF_PREP"] = cSt
+            if cSt >= 2 then
+              simAuraRem.player["ECLIPSE_SOLAR"] = 15
+              simAuraRem.player["48517"] = 15
+            end
+          else
+            local cWr = (simAuraStacks.player["_WR_PREP"] or 0) + 1
+            simAuraStacks.player["_WR_PREP"] = cWr
+            if cWr >= 2 then
+              simAuraRem.player["ECLIPSE_LUNAR"] = 15
+              simAuraRem.player["48518"] = 15
+            end
+          end
         end
         if def.insanityGain then simInsanity = math.min(100, simInsanity + def.insanityGain) end
         if def.insanityCost and not (def.isSpender and pickedWasProc) then
           simInsanity = math.max(0, simInsanity - def.insanityCost)
         end
+        simCtx.insanity = simInsanity
         simCtx.comboPoints = math.floor(simInsanity / 20)
         if pickedKey == "TIGERS_FURY" then
           simEnergy = math.min(100, simEnergy + 50)

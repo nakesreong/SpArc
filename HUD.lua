@@ -316,7 +316,7 @@ local function UpdateCooldownRow(boxes, spellKeys, states, now, gcdStart, gcdDur
           box.border:SetColorTexture(1.0, 0.12, 0.12, 0.96)
           box.glow:SetColorTexture(1.0, 0.08, 0.08, 0.45)
           box.keybind:SetTextColor(1.0, 0.30, 0.30, 1)
-        elseif key == "REGROWTH" then
+        elseif key == "REGROWTH" and def and def.auraIDs and def.auraIDs[1] == 69369 then
           box.icon:SetAlpha(0.55)
           box.icon:SetVertexColor(0.75, 0.75, 0.80)
           box.border:SetColorTexture(0.22, 0.42, 0.30, 0.85)

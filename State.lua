@@ -720,6 +720,9 @@ function SpArc:GetUnitAuraState(unit, keyOrID, parsed, assistedKey, now)
   end
 
   local numID = tonumber(keyOrID)
+  if type(parsed) ~= "table" then
+    parsed = st.activeParsed
+  end
   local def = (not numID) and ((parsed and parsed.auras and parsed.auras[keyOrID]) or SPELL_DEFS[keyOrID]) or nil
   local checkIDs = (def and (def.auraIDs or def.debuffIDs or def.ids)) or (numID and { numID }) or EMPTY_TABLE
   local checkNames = (def and def.names) or EMPTY_TABLE
@@ -751,8 +754,9 @@ function SpArc:GetUnitAuraState(unit, keyOrID, parsed, assistedKey, now)
       end
     else
       local fb = uMap and ((matchedID and uMap[matchedID]) or uMap[keyOrID])
-      if fb and fb.expiresAt and fb.expiresAt > now then
-        rem = fb.expiresAt - now
+      local fbExp = fb and (fb.expiresAt or fb.untilTime)
+      if fbExp and fbExp > now then
+        rem = fbExp - now
       else
         rem = defaultDur
       end
@@ -883,17 +887,20 @@ function SpArc:GetUnitAuraState(unit, keyOrID, parsed, assistedKey, now)
   -- 4. Unified Cast-Timer & Stack Fallback (st.unitAuras[unit])
   if uMap then
     local entry = uMap[keyOrID]
-    if not (entry and entry.expiresAt and entry.expiresAt > now) then
+    local exp = entry and (entry.expiresAt or entry.untilTime)
+    if not (exp and exp > now) then
       for _, id in ipairs(checkIDs) do
         local e = uMap[id]
-        if e and e.expiresAt and e.expiresAt > now then
+        local eExp = e and (e.expiresAt or e.untilTime)
+        if eExp and eExp > now then
           entry = e
+          exp = eExp
           break
         end
       end
     end
-    if entry and entry.expiresAt and entry.expiresAt > now then
-      return true, (entry.expiresAt - now), math.max(1, entry.stacks or 1)
+    if exp and exp > now then
+      return true, (exp - now), math.max(1, entry.stacks or 1)
     end
   end
 
@@ -902,6 +909,10 @@ end
 
 function SpArc:IsSpellBurstActive(defKey, sObj, parsed, now)
   if not defKey then return false end
+  if type(parsed) == "number" then
+    now = parsed
+    parsed = st.activeParsed
+  end
   now = now or GetTime()
   local def = SPELL_DEFS[defKey]
   local burstDur = def and def.burstDuration or 0
@@ -919,10 +930,18 @@ function SpArc:IsSpellBurstActive(defKey, sObj, parsed, now)
       return true
     end
   end
+  local lastAt = st.lastCastAt and st.lastCastAt[defKey]
+  if lastAt and (now - lastAt) >= 0 and (now - lastAt) < burstDur then
+    return true
+  end
   return false
 end
 
 function SpArc:IsPlayerInBurst(states, parsed, now)
+  if type(parsed) == "number" then
+    now = parsed
+    parsed = st.activeParsed
+  end
   now = now or GetTime()
   for defKey, def in pairs(SPELL_DEFS or EMPTY_TABLE) do
     if def.burstDuration and def.burstDuration > 0 then

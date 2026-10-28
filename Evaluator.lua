@@ -591,7 +591,7 @@ function SpArc:BuildRotationQueue(maxSlots)
     simUsable[k] = isUsable
     simProcs[k] = isProc
     simCharges[k] = charges or (isReady and 1 or 0)
-    simActive[k] = (SpArc.IsSpellBurstActive and SpArc:IsSpellBurstActive(k, sObj, now)) or false
+    simActive[k] = (SpArc.IsSpellBurstActive and SpArc:IsSpellBurstActive(k, sObj, parsed, now)) or false
     simNoResource[k] = isNoResource or false
   end
 
@@ -628,7 +628,7 @@ function SpArc:BuildRotationQueue(maxSlots)
     simHasDoTs = true
   end
   local simStacks = simAuraStacks.target["FREEZING"] or 0
-  local simBurst = (SpArc.IsPlayerInBurst and SpArc:IsPlayerInBurst(states, now)) or false
+  local simBurst = (SpArc.IsPlayerInBurst and SpArc:IsPlayerInBurst(states, parsed, now)) or false
 
   local queue = reusableQueue
   local qCount = 0

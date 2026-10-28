@@ -3,7 +3,7 @@
 ## Notes: Data-driven Markdown (.md) Pseudocode Rotation Queue, Dual-Direction Castbar, Macro Generator & Cooldown Tracker. AI-Ready (Gemini / ChatGPT).
 ## Notes-ruRU: Полукруг очереди ротации на базе .MD псевдокода (FSM), двунаправленный кастбар, макросогенератор, трекер КД/сейвов и генератор промптов для ИИ.
 ## Author: Gemini (Tiger) | QA & Vision: Anya (5cr3am1ng5oul)
-## Version: v2.9.1
+## Version: v2.9.2
 ## IconTexture: 1386548
 ## DefaultState: enabled
 ## SavedVariables: SpArcDB, SparkArcDB

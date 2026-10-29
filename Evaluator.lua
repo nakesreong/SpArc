@@ -768,29 +768,6 @@ function SpArc:BuildRotationQueue(maxSlots)
         if def.burstDuration and def.burstDuration > 0 then
           simActive[pickedKey] = true
           simBurst = true
-          if pickedKey == "CELESTIAL_ALIGNMENT" then
-            simAuraRem.player["ECLIPSE_SOLAR"] = def.burstDuration
-            simAuraRem.player["ECLIPSE_LUNAR"] = def.burstDuration
-            simAuraRem.player["48517"] = def.burstDuration
-            simAuraRem.player["48518"] = def.burstDuration
-          end
-        end
-        if (pickedKey == "STARFIRE" or pickedKey == "WRATH") and (simAuraRem.player["ECLIPSE_SOLAR"] or 0) <= 0 and (simAuraRem.player["ECLIPSE_LUNAR"] or 0) <= 0 then
-          if pickedKey == "STARFIRE" then
-            local cSt = (simAuraStacks.player["_SF_PREP"] or 0) + 1
-            simAuraStacks.player["_SF_PREP"] = cSt
-            if cSt >= 2 then
-              simAuraRem.player["ECLIPSE_SOLAR"] = 15
-              simAuraRem.player["48517"] = 15
-            end
-          else
-            local cWr = (simAuraStacks.player["_WR_PREP"] or 0) + 1
-            simAuraStacks.player["_WR_PREP"] = cWr
-            if cWr >= 2 then
-              simAuraRem.player["ECLIPSE_LUNAR"] = 15
-              simAuraRem.player["48518"] = 15
-            end
-          end
         end
         if def.insanityGain then simInsanity = math.min(100, simInsanity + def.insanityGain) end
         if def.insanityCost and not (def.isSpender and pickedWasProc) then

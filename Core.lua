@@ -10,7 +10,7 @@ _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
 SpArc.VERSION = "2.9.2"
-SpArc.PROFILE_SCHEMA_VERSION = SpArc.PROFILE_SCHEMA_VERSION or 27
+SpArc.PROFILE_SCHEMA_VERSION = SpArc.PROFILE_SCHEMA_VERSION or 28
 
 local C_CVar = _G.C_CVar
 local issecretvalue = _G.issecretvalue

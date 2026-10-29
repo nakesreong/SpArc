@@ -1454,6 +1454,7 @@ local NO_RANGE_CHECK_SPELLS = {
   MOONKIN_FORM         = true,
   BEAR_FORM            = true,
   CELESTIAL_ALIGNMENT  = true,
+  SOLAR_ECLIPSE        = true,
   FORCE_OF_NATURE      = true,
   STARFALL             = true,
   WARRIOR_OF_ELUNE     = true,

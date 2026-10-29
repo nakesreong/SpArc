@@ -997,10 +997,13 @@ local function OpenControlCenter(initialTab)
       CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_Y", "camCrosshairOffsetY", -200, 250, 2, 16, -46, 280)
       CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_SCALE", "camCrosshairScale", 0.50, 2.50, 0.05, 336, -46, 280)
 
-      local m6ClickBox = RegisterGroupBox(p6, "M6_GRP_CLICK", 0, -402, 640, 75)
-      CreateElvCheck(m6ClickBox, "CK_CAM_CLICKCAST", "enableCamClickCast", 16, -14, false, false, function()
+      local m6ClickBox = RegisterGroupBox(p6, "M6_GRP_CLICK", 0, -402, 640, 105)
+      CreateElvCheck(m6ClickBox, "CK_CAM_CLICKCAST", "enableCamClickCast", 16, -12, false, false, function()
         if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
         SpArc:ScanActionSlotsAndSpells(true)
+      end)
+      CreateElvCheck(m6ClickBox, "CK_AUTO_UNSHIFT", "autoUnshiftOutOfCombat", 16, -40, true, false, function()
+        if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
       end)
 
       local p7 = pages[7]

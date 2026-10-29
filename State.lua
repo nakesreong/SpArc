@@ -1452,6 +1452,7 @@ local NO_RANGE_CHECK_SPELLS = {
   FRENZIED_REGENERATION = true,
   REGROWTH             = true,
   MOONKIN_FORM         = true,
+  SHADOWFORM           = true,
   BEAR_FORM            = true,
   CELESTIAL_ALIGNMENT  = true,
   SOLAR_ECLIPSE        = true,

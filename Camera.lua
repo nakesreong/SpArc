@@ -234,6 +234,11 @@ function SpArc:IsCameraCrosshairEnabled()
   return SpArc:IsCombatCameraEnabled() and not (db and db.visual and db.visual.showCameraCrosshair == false)
 end
 
+function SpArc:IsAutoUnshiftEnabled()
+  local db = SpArc:EnsureDB()
+  return not (db and db.visual and db.visual.autoUnshiftOutOfCombat == false)
+end
+
 function SpArc:GetCamHoldKey()
   local db = SpArc:EnsureDB()
   local k = db and db.visual and db.visual.camHoldKey
@@ -1019,10 +1024,115 @@ toggleBtn:SetScript("OnClick", function()
   _G.SpArc_CameraToggleKey("down")
 end)
 
+local BASE_INTERACT_MACRO = "/target [@mouseover,exists][@softinteract,exists][@softenemy,exists][@softfriend,exists]"
+local UNSHIFT_INTERACT_MACRO = "/cancelform [nocombat,nostealth,noform:3,noform:4,noform:27,noform:29]\n/cancelaura [nocombat] Облик Тьмы\n/cancelaura [nocombat] Shadowform\n" .. BASE_INTERACT_MACRO
+
+local pendingPostCombatUnshift = false
+local unshiftBindingsArmed = false
+local unshiftCooldownUntil = 0
+
+function SpArc:ClearPendingAutoUnshift()
+  pendingPostCombatUnshift = false
+end
+
+local function IsInUnshiftableCombatForm()
+  if _G.IsStealthed and SafeBool(_G.IsStealthed) then
+    return false
+  end
+  if _G.GetShapeshiftFormID then
+    local okF, formID = pcall(_G.GetShapeshiftFormID)
+    if okF and not SpArc.IsSecret(formID) and type(formID) == "number" then
+      -- 31/35 = Moonkin, 5/8 = Bear, 1 = Cat (non-stealthed). Keep Travel(3), Aquatic(4), Flight(27/29)
+      if formID == 31 or formID == 35 or formID == 5 or formID == 8 or formID == 1 then
+        return true
+      elseif formID == 3 or formID == 4 or formID == 27 or formID == 29 then
+        return false
+      end
+    end
+  end
+  local C_UnitAuras = _G.C_UnitAuras
+  if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+    local checkIDs = { 24858, 197625, 5487, 768, 232698 }
+    for i = 1, #checkIDs do
+      local okA, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, checkIDs[i])
+      if okA and type(aura) == "table" then
+        return true
+      end
+    end
+  end
+  if _G.UnitClass and _G.GetShapeshiftForm then
+    local okC, _, cls = pcall(_G.UnitClass, "player")
+    if okC and not SpArc.IsSecret(cls) and cls == "PRIEST" then
+      local okS, sForm = pcall(_G.GetShapeshiftForm)
+      if okS and not SpArc.IsSecret(sForm) and type(sForm) == "number" and sForm > 0 then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+local function ShouldAutoUnshiftNow()
+  if not SpArc:IsAutoUnshiftEnabled() then return false end
+  if InCombatLockdown and InCombatLockdown() then return false end
+  if _G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player") then return false end
+  if (_G.IsMounted and SafeBool(_G.IsMounted)) or (_G.IsFlying and SafeBool(_G.IsFlying)) then return false end
+  local now = (_G.GetTime and _G.GetTime()) or 0
+  if now < unshiftCooldownUntil then return false end
+  if not IsInUnshiftableCombatForm() then
+    pendingPostCombatUnshift = false
+    return false
+  end
+  local st = SpArc.state
+  if st and st.lastManualFormCastAt and (now - st.lastManualFormCastAt) < 4.0 and not pendingPostCombatUnshift then
+    return false
+  end
+  if pendingPostCombatUnshift then
+    return true
+  end
+  local hasLivingEnemyTarget = UnitExists and SafeBool(UnitExists, "target")
+    and UnitCanAttack and SafeBool(UnitCanAttack, "player", "target")
+    and not (UnitIsDead and SafeBool(UnitIsDead, "target"))
+  if hasLivingEnemyTarget then
+    return false
+  end
+  return true
+end
+
+local unshiftBtn = CreateFrame("Button", "SpArcAutoUnshiftButton", UIParent, "SecureActionButtonTemplate")
+unshiftBtn:RegisterForClicks("AnyDown", "AnyUp")
+unshiftBtn:SetAttribute("type", "macro")
+unshiftBtn:SetAttribute("macrotext", "/cancelform [nocombat,nostealth,noform:3,noform:4,noform:27,noform:29]\n/cancelaura [nocombat] Облик Тьмы\n/cancelaura [nocombat] Shadowform")
+
+local function UpdateAutoUnshiftBindings(force)
+  if InCombatLockdown and InCombatLockdown() then return end
+  local want = ShouldAutoUnshiftNow()
+  if not force and want == unshiftBindingsArmed then return end
+  unshiftBindingsArmed = want
+  if ClearOverrideBindings then
+    pcall(ClearOverrideBindings, unshiftBtn)
+  end
+  if want and SetOverrideBindingClick then
+    local keys = { "BUTTON1", "BUTTON2", "SPACE", "MOUSEWHEELUP", "MOUSEWHEELDOWN" }
+    for i = 1, #keys do
+      pcall(SetOverrideBindingClick, unshiftBtn, true, keys[i], "SpArcAutoUnshiftButton", "LeftButton")
+    end
+  end
+end
+
+unshiftBtn:HookScript("PostClick", function()
+  pendingPostCombatUnshift = false
+  unshiftCooldownUntil = ((_G.GetTime and _G.GetTime()) or 0) + 0.35
+  if not (InCombatLockdown and InCombatLockdown()) and ClearOverrideBindings then
+    unshiftBindingsArmed = false
+    pcall(ClearOverrideBindings, unshiftBtn)
+  end
+end)
+
 local interactBtn = CreateFrame("Button", "SpArcCamInteractButton", UIParent, "SecureActionButtonTemplate, SecureHandlerStateTemplate")
 interactBtn:RegisterForClicks("AnyDown", "AnyUp")
 interactBtn:SetAttribute("type", "macro")
-interactBtn:SetAttribute("macrotext", "/target [@mouseover,exists][@softinteract,exists][@softenemy,exists][@softfriend,exists]")
+interactBtn:SetAttribute("macrotext", BASE_INTERACT_MACRO)
 interactBtn:SetAttribute("_onstate-caminteract", [[
   if not self:GetAttribute("camenabled") then
     self:ClearBindings()
@@ -1044,6 +1154,9 @@ local lastInteractMode = nil
 local lastInteractKey = nil
 
 local function ComputeDesiredInteractMode()
+  if ShouldAutoUnshiftNow() then
+    return "UNSHIFT_TARGET"
+  end
   local hasMO = UnitExists and SafeBool(UnitExists, "mouseover")
   local hasSI = UnitExists and SafeBool(UnitExists, "softinteract")
 
@@ -1124,7 +1237,11 @@ local function UpdateInteractBindingMode(force)
   if ClearOverrideBindings then
     pcall(ClearOverrideBindings, interactBtn)
   end
-  if mode == "TARGET" and SetOverrideBindingClick then
+  if mode == "UNSHIFT_TARGET" and SetOverrideBindingClick then
+    interactBtn:SetAttribute("macrotext", UNSHIFT_INTERACT_MACRO)
+    pcall(SetOverrideBindingClick, interactBtn, true, interactKey, "SpArcCamInteractButton", "LeftButton")
+  elseif mode == "TARGET" and SetOverrideBindingClick then
+    interactBtn:SetAttribute("macrotext", BASE_INTERACT_MACRO)
     pcall(SetOverrideBindingClick, interactBtn, true, interactKey, "SpArcCamInteractButton", "LeftButton")
   elseif mode == "INTERACT_MO" and SetOverrideBinding then
     pcall(SetOverrideBinding, interactBtn, true, interactKey, "INTERACTMOUSEOVER")
@@ -1134,6 +1251,11 @@ local function UpdateInteractBindingMode(force)
 end
 
 interactBtn:HookScript("PostClick", function()
+  if pendingPostCombatUnshift then
+    pendingPostCombatUnshift = false
+    unshiftCooldownUntil = ((_G.GetTime and _G.GetTime()) or 0) + 0.35
+  end
+  UpdateAutoUnshiftBindings(true)
   UpdateInteractBindingMode(true)
 end)
 
@@ -1354,9 +1476,15 @@ camDriver:SetScript("OnEvent", function(_, event)
       end)
     end
   elseif event == "PLAYER_REGEN_ENABLED" then
+    pendingPostCombatUnshift = true
+    if SpArc.state then
+      SpArc.state.lastManualFormCastAt = 0
+    end
     if pendingBindingSync then
       SpArc:ApplyCombatCameraBindings("REGEN_ENABLED")
     end
+    UpdateAutoUnshiftBindings(true)
+    UpdateInteractBindingMode(true)
   elseif event == "PLAYER_DEAD" or event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
     loadingScreenActive = false
     if pendingBindingSync and not (InCombatLockdown and InCombatLockdown()) then
@@ -1404,6 +1532,7 @@ camDriver:SetScript("OnUpdate", function(_, elapsed)
     return
   end
 
+  UpdateAutoUnshiftBindings(false)
   UpdateInteractBindingMode(false)
   SpArc:UpdateCameraState()
 end)

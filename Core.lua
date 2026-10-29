@@ -10,7 +10,7 @@ _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
 SpArc.VERSION = "2.9.2"
-SpArc.PROFILE_SCHEMA_VERSION = SpArc.PROFILE_SCHEMA_VERSION or 28
+SpArc.PROFILE_SCHEMA_VERSION = SpArc.PROFILE_SCHEMA_VERSION or 29
 
 local C_CVar = _G.C_CVar
 local issecretvalue = _G.issecretvalue
@@ -182,6 +182,7 @@ SpArc.DEFAULT_VISUAL = {
   macroGenIncludeSpec = true,
   macroGenTemplate = "#showtooltip\n/stopmacro [flying]\n/cast [@target] spell",
   smartBossTab = true,
+  autoUnshiftOutOfCombat = true,
   lang = "AUTO",
 }
 

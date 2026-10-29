@@ -289,6 +289,7 @@ local STRINGS = {
     SL_CAM_CROSS_SCALE = "Масштаб прицела",
     M6_GRP_CLICK = "Боевой клик-каст мыши (Mouselook Click-Casting)",
     CK_CAM_CLICKCAST = "Перехватывать ЛКМ/ПКМ (+Shift/Ctrl/Alt) под способности 1..8 при зажатой камере",
+    CK_AUTO_UNSHIFT = "Авто-выход из боевых обликов вне боя (Совух, Кот без инвиза, Медведь, Облик Тьмы) ради трансмога",
 
     M7_TITLE = "Телеметрия книги заклинаний и отладка ротации",
 
@@ -616,7 +617,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 28
+SpArc.PROFILE_SCHEMA_VERSION = 29
 
 ---------------------------------------------------------------------------------------
 --         5 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID)           --
@@ -645,6 +646,7 @@ RegisterPreset("PRIEST_01_SHADOW_PVE", "PRIEST", "1. Жрец: Тьма (ШП �
 # MODE: PVE
 
 ## SPELL_BOOK
+SPELL SHADOWFORM = ID:232698 | AURA_ID:232698 | AURA_UNIT:player | AURA_DUR:3600 | NAME:"Облик Тьмы","Shadowform" | CD:0 | ICON:136200
 SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | GAIN:15 | ICON:136201
 SPELL VAMPIRIC_TOUCH = ID:34914 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Прикосновение вампира","Vampiric Touch" | CD:0 | CHARGES:1 | GAIN:6 | ICON:135978
 SPELL VOID_ERUPTION = ID:228260,391109,194249 | AURA_ID:194249,391109 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | NAME:"Вхождение в Бездну","Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | ICON:537079
@@ -681,7 +683,9 @@ ELSE IF player.hp_percent <= 25 AND READY(VAMPIRIC_EMBRACE) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF target.aura(VAMPIRIC_TOUCH).rem <= 1 AND READY(TENTACLE_SLAM) THEN
+IF NOT player.aura(SHADOWFORM) AND NOT player.aura(VOID_ERUPTION) AND READY(SHADOWFORM) THEN
+    RETURN CAST(SHADOWFORM)
+ELSE IF target.aura(VAMPIRIC_TOUCH).rem <= 1 AND READY(TENTACLE_SLAM) THEN
     RETURN CAST(TENTACLE_SLAM)
 ELSE IF target.aura(VAMPIRIC_TOUCH).rem <= 1 AND NOT READY(TENTACLE_SLAM) THEN
     RETURN CAST(VAMPIRIC_TOUCH)

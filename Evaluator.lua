@@ -667,6 +667,13 @@ function SpArc:BuildRotationQueue(maxSlots)
   simCtx.enemies = (SpArc.GetNearbyEnemyCount and SpArc:GetNearbyEnemyCount(now, assistedKey)) or 1
   simCtx.stealthed = (_G.IsStealthed and SafeBool(_G.IsStealthed)) or false
   simCtx.inCombat = (_G.InCombatLockdown and SafeBool(_G.InCombatLockdown)) or (_G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player")) or false
+  local hasHostileTarget = _G.UnitExists and SafeBool(_G.UnitExists, "target") and _G.UnitCanAttack and SafeBool(_G.UnitCanAttack, "player", "target") and not (_G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, "target"))
+  if not simCtx.inCombat and not hasHostileTarget and not SpArc.testMode then
+    simAuraRem.player["MOONKIN_FORM"] = 3600
+    simAuraRem.player["24858"] = 3600
+    simAuraRem.player["SHADOWFORM"] = 3600
+    simAuraRem.player["232698"] = 3600
+  end
   simCtx.canPickPocket = (SpArc.CanPickPocketTarget and SpArc:CanPickPocketTarget(now)) or false
   simCtx.insanity = simInsanity
   simCtx.comboPoints = math.floor(simInsanity / 20)
@@ -882,6 +889,12 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   st.lockedTopCandidateKey = nil
   if not defKey then return end
   st.lastCastAt[defKey] = now
+  if defKey == "MOONKIN_FORM" or defKey == "SHADOWFORM" or defKey == "BEAR_FORM" or defKey == "CAT_FORM" then
+    st.lastManualFormCastAt = now
+    if SpArc.ClearPendingAutoUnshift then
+      SpArc:ClearPendingAutoUnshift()
+    end
+  end
   if defKey == "PICK_POCKET" and UnitGUID then
     local okG, guid = pcall(UnitGUID, "target")
     if okG and not IsSecret(guid) and type(guid) == "string" then

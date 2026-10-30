@@ -668,7 +668,7 @@ function SpArc:BuildRotationQueue(maxSlots)
   simCtx.stealthed = (_G.IsStealthed and SafeBool(_G.IsStealthed)) or false
   simCtx.inCombat = (_G.InCombatLockdown and SafeBool(_G.InCombatLockdown)) or (_G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player")) or false
   local hasHostileTarget = _G.UnitExists and SafeBool(_G.UnitExists, "target") and _G.UnitCanAttack and SafeBool(_G.UnitCanAttack, "player", "target") and not (_G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, "target"))
-  if not simCtx.inCombat and not hasHostileTarget and not SpArc.testMode then
+  if not simCtx.inCombat and not hasHostileTarget and not SpArc.testMode and (not SpArc.IsAutoUnshiftEnabled or SpArc:IsAutoUnshiftEnabled()) then
     simAuraRem.player["MOONKIN_FORM"] = 3600
     simAuraRem.player["24858"] = 3600
     simAuraRem.player["SHADOWFORM"] = 3600

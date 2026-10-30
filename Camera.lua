@@ -1263,6 +1263,7 @@ function SpArc:ApplyCombatCameraBindings(reason)
   if UnregisterStateDriver then
     pcall(UnregisterStateDriver, interactBtn, "caminteract")
   end
+  UpdateAutoUnshiftBindings(true)
   UpdateInteractBindingMode(true)
 
   -- 2. Bind LMB/RMB + Shift/Ctrl/Alt Mouselook Click-Casting directly to Bartender4 :Keybind (or ActionButton 1..8)

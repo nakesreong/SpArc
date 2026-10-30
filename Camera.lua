@@ -834,8 +834,8 @@ local function ShouldUnlockCamera()
   if barberShopActive then
     return true
   end
-  if (_G.BarberShopFrame and _G.BarberShopFrame.IsShown and SafeBool(_G.BarberShopFrame.IsShown, _G.BarberShopFrame))
-    or (_G.CharCustomizeFrame and _G.CharCustomizeFrame.IsShown and SafeBool(_G.CharCustomizeFrame.IsShown, _G.CharCustomizeFrame)) then
+  if (_G.BarberShopFrame and _G.BarberShopFrame.IsVisible and SafeBool(_G.BarberShopFrame.IsVisible, _G.BarberShopFrame))
+    or (_G.CharCustomizeFrame and _G.CharCustomizeFrame.IsVisible and SafeBool(_G.CharCustomizeFrame.IsVisible, _G.CharCustomizeFrame)) then
     return true
   end
   if C_PetBattles and C_PetBattles.IsInBattle and SafeBool(C_PetBattles.IsInBattle) then
@@ -1012,30 +1012,94 @@ end
 ---------------------------------------------------------------------------------------
 local bindOwner = CreateFrame("Frame", "SpArcCameraBindOwner", UIParent)
 
-local holdBtn = CreateFrame("Button", "SpArcCamHoldButton", UIParent)
+local UNSHIFT_SAFE_LINE = "/cancelform [nocombat,noharm,nostealth,noform:1,noform:2,noform:3,noform:4,noform:27,noform:29]"
+local BASE_INTERACT_MACRO = "/target [@mouseover,nodead,exists]"
+local UNSHIFT_INTERACT_MACRO = BASE_INTERACT_MACRO .. "\n" .. UNSHIFT_SAFE_LINE
+
+local holdBtn = CreateFrame("Button", "SpArcCamHoldButton", UIParent, "SecureActionButtonTemplate")
 holdBtn:RegisterForClicks("AnyDown", "AnyUp")
-holdBtn:SetScript("OnClick", function(_, _, down)
+holdBtn:SetAttribute("type", "macro")
+holdBtn:SetAttribute("macrotext", UNSHIFT_SAFE_LINE)
+holdBtn:HookScript("PostClick", function(_, _, down)
   _G.SpArc_CameraHoldKey(down and "down" or "up")
 end)
 
-local toggleBtn = CreateFrame("Button", "SpArcCamToggleButton", UIParent)
+local toggleBtn = CreateFrame("Button", "SpArcCamToggleButton", UIParent, "SecureActionButtonTemplate")
 toggleBtn:RegisterForClicks("AnyDown")
-toggleBtn:SetScript("OnClick", function()
+toggleBtn:SetAttribute("type", "macro")
+toggleBtn:SetAttribute("macrotext", UNSHIFT_SAFE_LINE)
+toggleBtn:HookScript("PostClick", function()
   _G.SpArc_CameraToggleKey("down")
 end)
-
-local BASE_INTERACT_MACRO = "/target [@mouseover,nodead,exists]"
-
-function SpArc:ClearPendingAutoUnshift()
-end
-
-local function UpdateAutoUnshiftBindings()
-end
 
 local interactBtn = CreateFrame("Button", "SpArcCamInteractButton", UIParent, "SecureActionButtonTemplate")
 interactBtn:RegisterForClicks("AnyDown")
 interactBtn:SetAttribute("type", "macro")
-interactBtn:SetAttribute("macrotext", BASE_INTERACT_MACRO)
+interactBtn:SetAttribute("macrotext", UNSHIFT_INTERACT_MACRO)
+
+local lastAutoUnshiftAttr = nil
+
+function SpArc:ClearPendingAutoUnshift()
+end
+
+local function IsInCosmeticCombatForm()
+  if not SpArc:IsAutoUnshiftEnabled() then
+    return false
+  end
+  if InCombatLockdown and SafeBool(InCombatLockdown) then
+    return false
+  end
+  if _G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player") then
+    return false
+  end
+  if _G.IsMounted and SafeBool(_G.IsMounted) then
+    return false
+  end
+  if UnitExists and SafeBool(UnitExists, "target")
+    and UnitCanAttack and SafeBool(UnitCanAttack, "player", "target")
+    and not (UnitIsDeadOrGhost and SafeBool(UnitIsDeadOrGhost, "target")) then
+    return false
+  end
+
+  local st = SpArc.state
+  if st and st.lastManualFormCastAt and _G.GetTime then
+    local now = _G.GetTime()
+    if (now - st.lastManualFormCastAt) < 10.0 then
+      return false
+    end
+  end
+
+  if _G.GetShapeshiftFormID then
+    local okF, formID = pcall(_G.GetShapeshiftFormID)
+    if okF and not SpArc.IsSecret(formID) and (formID == 31 or formID == 35) then
+      return true
+    end
+  end
+
+  if _G.UnitClass and _G.GetShapeshiftForm then
+    local okC, _, cls = pcall(_G.UnitClass, "player")
+    if okC and not SpArc.IsSecret(cls) and cls == "PRIEST" then
+      local okS, sForm = pcall(_G.GetShapeshiftForm)
+      if okS and not SpArc.IsSecret(sForm) and type(sForm) == "number" and sForm > 0 then
+        return true
+      end
+    end
+  end
+
+  return false
+end
+
+local function UpdateAutoUnshiftBindings(force)
+  if InCombatLockdown and InCombatLockdown() then return end
+  local enabled = SpArc:IsAutoUnshiftEnabled()
+  if not force and enabled == lastAutoUnshiftAttr then return end
+  lastAutoUnshiftAttr = enabled
+  local holdMacro = enabled and UNSHIFT_SAFE_LINE or ""
+  local intMacro = enabled and UNSHIFT_INTERACT_MACRO or BASE_INTERACT_MACRO
+  holdBtn:SetAttribute("macrotext", holdMacro)
+  toggleBtn:SetAttribute("macrotext", holdMacro)
+  interactBtn:SetAttribute("macrotext", intMacro)
+end
 
 local lastInteractMode = nil
 local lastInteractKey = nil
@@ -1046,7 +1110,7 @@ local function ComputeDesiredInteractMode()
     return "INTERACT"
   end
 
-  -- 2. Only when pointing directly at a LIVE unit under crosshair (not a corpse!) that is not already our target, target it on E
+  -- 2. When pointing directly at a LIVE unit under crosshair (not a corpse!) that is not already our target, target it on E
   if UnitExists and SafeBool(UnitExists, "mouseover") then
     local isDead = UnitIsDead and SafeBool(UnitIsDead, "mouseover")
     if not isDead then
@@ -1055,6 +1119,11 @@ local function ComputeDesiredInteractMode()
         return "TARGET"
       end
     end
+  end
+
+  -- 3. When out of combat in Moonkin Form / Shadowform with no lootable object nearby, arm E to unshift back to normal model
+  if IsInCosmeticCombatForm() then
+    return "TARGET"
   end
 
   return "INTERACT"
@@ -1218,7 +1287,7 @@ end
 ---------------------------------------------------------------------------------------
 --  7. EVENT DRIVER, RELOAD SAFETY & 20HZ UPDATE LOOP
 ---------------------------------------------------------------------------------------
-local camDriver = CreateFrame("Frame", "SpArcCameraDriver", UIParent)
+local camDriver = CreateFrame("Frame", "SpArcCameraDriver")
 camDriver:RegisterEvent("PLAYER_LOGIN")
 camDriver:RegisterEvent("PLAYER_ENTERING_WORLD")
 camDriver:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -1232,6 +1301,7 @@ camDriver:RegisterEvent("LOADING_SCREEN_DISABLED")
 camDriver:RegisterEvent("PLAYER_LOGOUT")
 camDriver:RegisterEvent("BARBER_SHOP_OPEN")
 camDriver:RegisterEvent("BARBER_SHOP_CLOSE")
+camDriver:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 camDriver:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 camDriver:RegisterEvent("PLAYER_TARGET_CHANGED")
 camDriver:RegisterUnitEvent("UNIT_TARGET", "player")
@@ -1334,8 +1404,16 @@ camDriver:SetScript("OnEvent", function(_, event)
     SpArc:UpdateCameraState()
   elseif event == "BARBER_SHOP_CLOSE" then
     barberShopActive = false
+    SpArc:ApplyCombatCameraBindings("BARBER_SHOP_CLOSE")
     SpArc:UpdateCameraState()
-  elseif event == "UPDATE_MOUSEOVER_UNIT"
+    if C_Timer and C_Timer.After then
+      C_Timer.After(0.15, function()
+        barberShopActive = false
+        SpArc:UpdateCameraState()
+      end)
+    end
+  elseif event == "UPDATE_SHAPESHIFT_FORM"
+    or event == "UPDATE_MOUSEOVER_UNIT"
     or event == "PLAYER_TARGET_CHANGED"
     or event == "UNIT_TARGET"
     or event == "PLAYER_SOFT_INTERACT_CHANGED"

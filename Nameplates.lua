@@ -77,6 +77,8 @@ local SPELL_AURA_ALIASES = {
   [405233]  = { 106832, 106830 },
   [205385]  = { 34914, 589 },     -- Shadow Crash -> VT + SW:P
   [457042]  = { 34914, 589 },     -- Tentacle Slam / Shadow Crash -> VT + SW:P
+  [1227280] = { 34914, 589 },     -- Tentacle Slam (12.x) -> VT + SW:P
+  [1234796] = { 34914, 589 },     -- Tentacle Slam (12.x alt) -> VT + SW:P
   [1247227] = { 121411 },         -- Crimson Tempest
   [121411]  = { 1247227 },
   [384318]  = { 772, 388539 },    -- Thunderous Roar / Rend
@@ -88,6 +90,8 @@ local AOE_DOT_SPELLS = {
   [164815]  = { auras = { 164815, 93402 },  dur = 18.0 },
   [205385]  = { auras = { 34914, 589 },     dur = 21.0 }, -- Shadow Crash
   [457042]  = { auras = { 34914, 589 },     dur = 21.0 }, -- Tentacle Slam
+  [1227280] = { auras = { 34914, 589 },     dur = 21.0 }, -- Tentacle Slam (12.x)
+  [1234796] = { auras = { 34914, 589 },     dur = 21.0 }, -- Tentacle Slam (12.x alt)
   [285381]  = { auras = { 1079, 285381 },   dur = 16.0 }, -- Primal Wrath
   [106832]  = { auras = { 405233, 106832 }, dur = 15.0 }, -- Thrash
   [121411]  = { auras = { 121411 },         dur = 12.0 }, -- Crimson Tempest
@@ -118,6 +122,9 @@ local questCacheByGUID = {}   -- [guid] = boolean
 local compiledAuraRules = {}
 local elvUINPSuppressed = false
 local previewColorMode = 0    -- 0 = auto cycle/base, 1..N = rule index
+local UpdateMetroHealthAndColor
+local UpdateMetroCastbar
+local FullUpdateMetroPlate
 ---------------------------------------------------------------------------------------
 --  1. AURA RULE COMPILER & RESOLVER
 ---------------------------------------------------------------------------------------
@@ -252,11 +259,17 @@ local function RecordAuraOnMetroAndUnit(metro, unit, guid, auraID, lowName, unti
 end
 function SpArc:SnapshotNameplateCastTarget(spellID, defKey, isHardCastStart, now)
   now = now or GetTime()
-  local moMetro, moUnit = GetMetroForUnitToken("mouseover")
   local tgtMetro, tgtUnit = GetMetroForUnitToken("target")
+  if not tgtMetro and st.currentTargetMetro and st.currentTargetMetro.unit then
+    tgtMetro, tgtUnit = st.currentTargetMetro, st.currentTargetMetro.unit
+  end
+  local moMetro, moUnit = GetMetroForUnitToken("mouseover")
   local softMetro, softUnit = GetMetroForUnitToken("softenemy")
   local pickedMetro, pickedUnit = nil, nil
-  if moMetro and moMetro.isEnemy then
+  -- Standard offensive spells always hit "target" first if an enemy target exists; fallback to mouseover/softenemy
+  if tgtMetro and tgtMetro.isEnemy then
+    pickedMetro, pickedUnit = tgtMetro, tgtUnit
+  elseif moMetro and moMetro.isEnemy then
     pickedMetro, pickedUnit = moMetro, moUnit
   elseif tgtMetro then
     pickedMetro, pickedUnit = tgtMetro, tgtUnit
@@ -313,12 +326,14 @@ function SpArc:RecordNameplateAuraCast(spellID, defKey, now, wasHardCast)
   end
   -- Shadow Priest Misery (238558): Vampiric Touch (34914) also applies Shadow Word: Pain (589)
   local isVTCast = (castID == 34914 or defKey == "VAMPIRIC_TOUCH")
-  if isVTCast and _G.IsPlayerSpell and SafeBool(_G.IsPlayerSpell, 238558) then
+  if isVTCast then
     AddRecordID(589)
   end
   local nm = GetSpellNameAndIconSafe(castID)
   local lowName = (nm and SpArc.UTF8Lower and SpArc.UTF8Lower(nm)) or (nm and nm:lower()) or nil
-  -- Resolve recipient nameplate (Hard-cast snapshot -> Mouseover -> Target -> SoftEnemy)
+  -- Resolve recipient nameplate:
+  -- 1. If hard-cast (e.g. Vampiric Touch), use the target snapshotted when the cast started (immune to mid-cast target switching!)
+  -- 2. Otherwise use live "target" -> currentTargetMetro -> recent pendingCastMetro -> mouseover -> softenemy
   local targetMetro, targetPlateUnit = nil, nil
   if wasHardCast and st.hardCastMetro and st.hardCastSnapshotAt and (now - st.hardCastSnapshotAt) < 5.0 then
     targetMetro = st.hardCastMetro
@@ -326,7 +341,15 @@ function SpArc:RecordNameplateAuraCast(spellID, defKey, now, wasHardCast)
   end
   st.hardCastMetro = nil
   st.hardCastPlateUnit = nil
-  if not targetMetro and st.pendingCastMetro and st.pendingCastSnapshotAt and (now - st.pendingCastSnapshotAt) < 1.2 then
+  if not targetMetro then
+    local tgtM, tgtU = GetMetroForUnitToken("target")
+    if tgtM and tgtM.isEnemy then
+      targetMetro, targetPlateUnit = tgtM, tgtU
+    elseif st.currentTargetMetro and st.currentTargetMetro.unit and st.currentTargetMetro.isEnemy then
+      targetMetro, targetPlateUnit = st.currentTargetMetro, st.currentTargetMetro.unit
+    end
+  end
+  if not targetMetro and st.pendingCastMetro and st.pendingCastSnapshotAt and (now - st.pendingCastSnapshotAt) < 0.35 then
     targetMetro = st.pendingCastMetro
     targetPlateUnit = st.pendingCastPlateUnit or targetMetro.unit
   end
@@ -335,9 +358,6 @@ function SpArc:RecordNameplateAuraCast(spellID, defKey, now, wasHardCast)
     if moMetro and moMetro.isEnemy then
       targetMetro, targetPlateUnit = moMetro, moUnit
     end
-  end
-  if not targetMetro then
-    targetMetro, targetPlateUnit = GetMetroForUnitToken("target")
   end
   if not targetMetro then
     local softMetro, softUnit = GetMetroForUnitToken("softenemy")
@@ -365,7 +385,7 @@ function SpArc:RecordNameplateAuraCast(spellID, defKey, now, wasHardCast)
     local aDur = DEFAULT_AURA_DURATIONS[aID] or dur
     RecordAuraOnMetroAndUnit(targetMetro, targetPlateUnit, tGUID, aID, lowName, now + aDur, now)
   end
-  -- Record last cast DoT info so UNIT_AURA / playerDebuffCount delta on neighboring nameplates can correlate spreads/missiles
+  -- Record last cast DoT info so UNIT_AURA on neighboring nameplates correlates AoE / projectile spreads
   local isTrackedDoT = false
   if compiledAuraRules then
     for _, r in ipairs(compiledAuraRules) do
@@ -381,8 +401,9 @@ function SpArc:RecordNameplateAuraCast(spellID, defKey, now, wasHardCast)
       if isTrackedDoT then break end
     end
   end
-  if isTrackedDoT or AOE_DOT_SPELLS[castID] then
-    local aoeInfo = AOE_DOT_SPELLS[castID]
+  local aoeInfo = AOE_DOT_SPELLS[castID]
+  local isTwinMoons = (castID == 8921 or castID == 164812) and (_G.IsPlayerSpell and SafeBool(_G.IsPlayerSpell, 279620)) or false
+  if isTrackedDoT or aoeInfo then
     st.lastCastDoTInfo = {
       ids = (aoeInfo and aoeInfo.auras) or idsToRecord,
       lowName = lowName,
@@ -390,37 +411,36 @@ function SpArc:RecordNameplateAuraCast(spellID, defKey, now, wasHardCast)
       castAt = now,
       isVT = isVTCast,
       isAoE = (aoeInfo ~= nil),
+      primaryMetro = targetMetro,
+      unclaimedSpreads = isTwinMoons and 1 or 0,
     }
   end
-  -- 2. If AoE DoT (e.g. Sunfire, Shadow Crash, Thrash, Primal Wrath), also tag nearby engaged enemy nameplates
-  local aoeInfo = AOE_DOT_SPELLS[castID]
+  -- 2. If AoE DoT (e.g. Sunfire, Tentacle Slam / Shadow Crash, Thrash, Primal Wrath), also tag nearby engaged enemy nameplates
   if aoeInfo then
     local aoeUntil = now + (aoeInfo.dur or dur)
     for npUnit, metro in pairs(unitToMetro) do
-      if metro and metro.isEnemy and (metro == targetMetro or SafeBool(UnitAffectingCombat, npUnit) or metro.reaction == 4 or (metro._lastPlayerDebuffCount and metro._lastPlayerDebuffCount > 0)) then
+      if metro and metro.isEnemy and (metro == targetMetro or SafeBool(UnitAffectingCombat, npUnit) or metro.reaction == 4) then
         local npGUID = metro.unitGUID
         for _, aID in ipairs(aoeInfo.auras) do
-          RecordAuraOnMetroAndUnit(metro, npUnit, npGUID, aID, lowName, aoeUntil, now)
+          local aDur = DEFAULT_AURA_DURATIONS[aID] or (aoeInfo.dur or dur)
+          RecordAuraOnMetroAndUnit(metro, npUnit, npGUID, aID, lowName, now + aDur, now)
         end
       end
     end
-  elseif castID == 8921 or castID == 164812 then
-    -- Twin Moons (279620): Moonfire also hits a 2nd nearby enemy
-    local hasTwinMoons = (_G.IsPlayerSpell and SafeBool(_G.IsPlayerSpell, 279620)) or false
-    if hasTwinMoons then
-      for npUnit, metro in pairs(unitToMetro) do
-        if metro and metro.isEnemy and metro ~= targetMetro and (SafeBool(UnitAffectingCombat, npUnit) or metro.reaction == 4) then
-          local npGUID = metro.unitGUID
-          for _, aID in ipairs(idsToRecord) do
-            RecordAuraOnMetroAndUnit(metro, npUnit, npGUID, aID, lowName, untilTime, now)
-          end
-          break
+  elseif isTwinMoons then
+    for npUnit, metro in pairs(unitToMetro) do
+      if metro and metro.isEnemy and metro ~= targetMetro and (SafeBool(UnitAffectingCombat, npUnit) or metro.reaction == 4) then
+        local npGUID = metro.unitGUID
+        for _, aID in ipairs(idsToRecord) do
+          RecordAuraOnMetroAndUnit(metro, npUnit, npGUID, aID, lowName, untilTime, now)
         end
+        if st.lastCastDoTInfo then st.lastCastDoTInfo.unclaimedSpreads = 0 end
+        break
       end
     end
   end
   -- Immediately refresh nameplate colors so the user sees instant feedback
-  if SpArc:IsNameplatesEnabled() then
+  if SpArc:IsNameplatesEnabled() and UpdateMetroHealthAndColor then
     for _, metro in pairs(unitToMetro) do
       if metro and metro.unit and metro:IsShown() then
         UpdateMetroHealthAndColor(metro, now)
@@ -510,64 +530,53 @@ local function EvaluateNameplateAuraColor(unit, metro, now)
   for k in pairs(reusableLiveNameSet) do reusableLiveNameSet[k] = nil end
   for k in pairs(reusableLiveIconSet) do reusableLiveIconSet[k] = nil end
   local playerDebuffCount = 0
-  local debuffQuerySucceeded = false
   if C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex then
-    for i = 1, 16 do
-      local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, unit, i, "HARMFUL|PLAYER")
-      if ok then
-        debuffQuerySucceeded = true
-      end
-      if not ok or type(aura) ~= "table" then
-        break
-      end
-      playerDebuffCount = playerDebuffCount + 1
-      local exp = aura.expirationTime
-      if IsSecret(exp) or type(exp) ~= "number" or exp == 0 or exp > now then
-        if not IsSecret(aura.spellId) and type(aura.spellId) == "number" then
-          reusableLiveIDSet[aura.spellId] = true
-          if metro then
-            metro.trackedAuras = metro.trackedAuras or {}
-            local dur = DEFAULT_AURA_DURATIONS[aura.spellId] or 18.0
-            local uTime = (not IsSecret(exp) and type(exp) == "number" and exp > now) and exp or (now + dur)
-            metro.trackedAuras[aura.spellId] = uTime
+    local function ScanUnitDebuffs(filter)
+      local count = 0
+      for i = 1, 16 do
+        local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, unit, i, filter)
+        if not ok or type(aura) ~= "table" then
+          break
+        end
+        local src = aura.sourceUnit
+        if filter == "HARMFUL|PLAYER" or IsSecret(src) or src == nil or src == "player" or src == "pet" then
+          count = count + 1
+          local exp = aura.expirationTime
+          if IsSecret(exp) or type(exp) ~= "number" or exp == 0 or exp > now then
+            if not IsSecret(aura.spellId) and type(aura.spellId) == "number" then
+              reusableLiveIDSet[aura.spellId] = true
+              if metro then
+                metro.trackedAuras = metro.trackedAuras or {}
+                local dur = DEFAULT_AURA_DURATIONS[aura.spellId] or 18.0
+                local uTime = (not IsSecret(exp) and type(exp) == "number" and exp > now) and exp or (now + dur)
+                metro.trackedAuras[aura.spellId] = uTime
+              end
+            end
+            if not IsSecret(aura.name) and type(aura.name) == "string" and aura.name ~= "" then
+              local low = SpArc.UTF8Lower and SpArc.UTF8Lower(aura.name) or aura.name:lower()
+              reusableLiveNameSet[low] = true
+            end
+            if not IsSecret(aura.icon) and type(aura.icon) == "number" then
+              reusableLiveIconSet[aura.icon] = true
+            end
           end
         end
-        if not IsSecret(aura.name) and type(aura.name) == "string" and aura.name ~= "" then
-          local low = SpArc.UTF8Lower and SpArc.UTF8Lower(aura.name) or aura.name:lower()
-          reusableLiveNameSet[low] = true
-        end
-        if not IsSecret(aura.icon) and type(aura.icon) == "number" then
-          reusableLiveIconSet[aura.icon] = true
-        end
       end
+      return count
+    end
+    playerDebuffCount = ScanUnitDebuffs("HARMFUL|PLAYER")
+    if playerDebuffCount == 0 then
+      ScanUnitDebuffs("HARMFUL")
     end
   end
-  -- Correlate live HARMFUL|PLAYER debuff count with per-plate tracked auras (essential when 12.x marks aura fields secret)
-  if metro and debuffQuerySucceeded then
-    local prevCount = metro._lastPlayerDebuffCount or 0
-    metro._lastPlayerDebuffCount = playerDebuffCount
-    if playerDebuffCount == 0 then
-      -- If WoW confirms 0 player debuffs on this unit (and cast grace window has passed), clear stale tracked auras
-      if metro.trackedAuras and (now - (metro.lastAuraCastAt or 0)) > 0.55 then
-        for k in pairs(metro.trackedAuras) do metro.trackedAuras[k] = nil end
-        if unit and st.nameplateUnitAuras and st.nameplateUnitAuras[unit] then
-          for k in pairs(st.nameplateUnitAuras[unit]) do st.nameplateUnitAuras[unit][k] = nil end
-        end
-      end
-    else
-      -- Unit has >= 1 active player debuff!
-      local info = st.lastCastDoTInfo
-      if info and (playerDebuffCount > prevCount or not metro.trackedAuras or next(metro.trackedAuras) == nil) and (now - (info.castAt or 0)) < 2.6 then
-        local untilTime = now + (info.dur or 18.0)
-        for _, aID in ipairs(info.ids or {}) do
-          RecordAuraOnMetroAndUnit(metro, unit, metro.unitGUID, aID, info.lowName, untilTime, now)
-        end
-      end
-      -- Shadow Priest Misery: if Vampiric Touch (34914) is active on this unit and playerDebuffCount >= 2, SW:P (589) is also active
-      if playerDebuffCount >= 2 and metro.trackedAuras and metro.trackedAuras[34914] and metro.trackedAuras[34914] > now then
-        if not metro.trackedAuras[589] or metro.trackedAuras[589] <= now then
-          RecordAuraOnMetroAndUnit(metro, unit, metro.unitGUID, 589, nil, now + (DEFAULT_AURA_DURATIONS[589] or 16.0), now)
-        end
+  -- Out of combat only: if WoW confirms 0 player debuffs on this unit after cast grace window, clean up expired/reset dummy state.
+  -- NEVER wipe metro.trackedAuras in 12.x combat because "HARMFUL|PLAYER" can return 0 when sourceUnit is secret!
+  if metro then
+    local inCombat = (InCombatLockdown and InCombatLockdown()) or false
+    if not inCombat and playerDebuffCount == 0 and metro.trackedAuras and (now - (metro.lastAuraCastAt or 0)) > 1.8 then
+      for k in pairs(metro.trackedAuras) do metro.trackedAuras[k] = nil end
+      if unit and st.nameplateUnitAuras and st.nameplateUnitAuras[unit] then
+        for k in pairs(st.nameplateUnitAuras[unit]) do st.nameplateUnitAuras[unit][k] = nil end
       end
     end
   end
@@ -1125,6 +1134,11 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
   local reactNum = (okR and not IsSecret(reaction) and type(reaction) == "number" and reaction) or (isEnemy and 2 or 5)
   local tgtMetro = GetMetroForUnitToken("target")
   local isTarget = (tgtMetro ~= nil and tgtMetro == metro) or SafeBool(UnitIsUnit, unit, "target")
+  if isTarget then
+    st.currentTargetMetro = metro
+  elseif st.currentTargetMetro == metro then
+    st.currentTargetMetro = nil
+  end
   local okG, guid = pcall(UnitGUID, unit)
   local cleanGUID = (okG and not IsSecret(guid) and type(guid) == "string" and guid) or nil
   metro.unitGUID = cleanGUID
@@ -1177,7 +1191,7 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
   -- Non-quest Friendly/Neutral out-of-combat NPCs are hidden to keep towns clean
   return false
 end
-local function UpdateMetroHealthAndColor(metro, now)
+UpdateMetroHealthAndColor = function(metro, now)
   local unit = metro and metro.unit
   if not unit then return end
   now = now or GetTime()
@@ -1241,7 +1255,7 @@ local function UpdateMetroHealthAndColor(metro, now)
   end
   metro.healthBar:SetStatusBarColor(r, g, b, 1.0)
 end
-local function UpdateMetroCastbar(metro, now)
+UpdateMetroCastbar = function(metro, now)
   local unit = metro and metro.unit
   if not unit then return end
   now = now or GetTime()
@@ -1301,7 +1315,7 @@ local function UpdateMetroCastbar(metro, now)
     cbCont:Show()
   end
 end
-local function FullUpdateMetroPlate(metro)
+FullUpdateMetroPlate = function(metro)
   if not metro or not metro.unit then return end
   if not SpArc:IsNameplatesEnabled() or IsBlockedByUnresolvedConflict() then
     metro:Hide()
@@ -1481,6 +1495,9 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
     if unit then
       local metro = unitToMetro[unit]
       if metro then
+        if st.currentTargetMetro == metro then
+          st.currentTargetMetro = nil
+        end
         metro:Hide()
         metro.unit = nil
         metro.unitGUID = nil
@@ -1504,10 +1521,14 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
     if event == "PLAYER_TARGET_CHANGED" then
       local now = GetTime()
       local tgtMetro = GetMetroForUnitToken("target")
+      st.currentTargetMetro = tgtMetro
       for _, metro in pairs(unitToMetro) do
         if metro and metro.unit then
           local wasTarget = metro.isTarget
           local isNowTarget = (tgtMetro ~= nil and tgtMetro == metro) or SafeBool(UnitIsUnit, metro.unit, "target")
+          if isNowTarget then
+            st.currentTargetMetro = metro
+          end
           if wasTarget ~= isNowTarget or not metro:IsShown() then
             FullUpdateMetroPlate(metro)
           elseif isNowTarget then
@@ -1530,6 +1551,26 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
   if unit and not IsSecret(unit) and type(unit) == "string" then
     local metro = unitToMetro[unit]
     if metro then
+      if event == "UNIT_AURA" and metro.isEnemy and st.lastCastDoTInfo then
+        local now = GetTime()
+        local info = st.lastCastDoTInfo
+        local dt = now - (info.castAt or 0)
+        if (info.isAoE and dt < 2.6) or (not info.isAoE and info.primaryMetro == nil and dt < 0.45) then
+          for _, aID in ipairs(info.ids or {}) do
+            local aDur = DEFAULT_AURA_DURATIONS[aID] or (info.dur or 18.0)
+            RecordAuraOnMetroAndUnit(metro, unit, metro.unitGUID, aID, info.lowName, now + aDur, now)
+          end
+          if not info.isAoE and info.primaryMetro == nil then
+            info.primaryMetro = metro
+          end
+        elseif info.unclaimedSpreads and info.unclaimedSpreads > 0 and dt < 1.2 and metro ~= info.primaryMetro then
+          info.unclaimedSpreads = info.unclaimedSpreads - 1
+          for _, aID in ipairs(info.ids or {}) do
+            local aDur = DEFAULT_AURA_DURATIONS[aID] or (info.dur or 18.0)
+            RecordAuraOnMetroAndUnit(metro, unit, metro.unitGUID, aID, info.lowName, now + aDur, now)
+          end
+        end
+      end
       if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_AURA" then
         if metro:IsShown() then
           UpdateMetroHealthAndColor(metro, GetTime())

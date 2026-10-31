@@ -1238,11 +1238,23 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
         SpArc:MarkTargetPickPocketed(true)
       end
     end
-    if event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
-      st.castingDefKey = nil
+    local stillCasting = false
+    if event == "UNIT_SPELLCAST_FAILED" then
+      local okC, cName = pcall(UnitCastingInfo, "player")
+      local okCh, chName = pcall(UnitChannelInfo, "player")
+      if (okC and cName ~= nil) or (okCh and chName ~= nil) then
+        stillCasting = true
+      end
     end
-    st.castState.active = false
-    st.castState.defKey = nil
+    if not stillCasting then
+      if event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
+        st.castingDefKey = nil
+        st.hardCastMetro = nil
+        st.hardCastPlateUnit = nil
+      end
+      st.castState.active = false
+      st.castState.defKey = nil
+    end
   elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
     st.lastAnyCastAt = now
     st.lockedTopKey = nil

@@ -10,7 +10,7 @@ _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
 SpArc.VERSION = "2.9.2"
-SpArc.PROFILE_SCHEMA_VERSION = SpArc.PROFILE_SCHEMA_VERSION or 30
+SpArc.PROFILE_SCHEMA_VERSION = SpArc.PROFILE_SCHEMA_VERSION or 31
 
 local C_CVar = _G.C_CVar
 local issecretvalue = _G.issecretvalue
@@ -168,6 +168,8 @@ SpArc.DEFAULT_VISUAL = {
   showMinimapButton = true,
   minimapAngle = 205,
   enableArcHUD = true,
+  enableBossRotation = false,
+  enablePvPRotation = false,
   enablePressFeedback = true,
   enableCombatCamera = true,
   enableCamClickCast = true,
@@ -212,6 +214,7 @@ SpArc.state = {
   lastShouldInterrupt = false,
   lastIsProtectedChannel = false,
   lastNextKeybind = "",
+  unitCastState = {},
   castState = {
     active = false,
     isChannel = false,
@@ -222,6 +225,16 @@ SpArc.state = {
     endTime = 0,
   },
 }
+
+function SpArc:IsBossRotationEnabled()
+  local db = SpArc:EnsureDB()
+  return (db and db.visual and db.visual.enableBossRotation == true) or false
+end
+
+function SpArc:IsPvPRotationEnabled()
+  local db = SpArc:EnsureDB()
+  return (db and db.visual and db.visual.enablePvPRotation == true) or false
+end
 
 local cachedCharKey = nil
 local cachedDB = nil

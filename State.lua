@@ -122,6 +122,74 @@ function SpArc:GetTargetHPPercent()
   return nil
 end
 
+-- Returns: isCasting, isInterruptible, isChannel, spellName, spellIcon, remSec, durSec, spellID
+function SpArc:GetUnitCastInterruptState(unit, now)
+  unit = unit or "target"
+  now = now or GetTime()
+  st.unitCastState = st.unitCastState or {}
+  local uEv = st.unitCastState[unit]
+
+  if _G.UnitExists and not SafeBool(_G.UnitExists, unit) then
+    if uEv then uEv.active = false end
+    return false, false, false, nil, nil, 0, 0, nil
+  end
+  if _G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, unit) then
+    if uEv then uEv.active = false end
+    return false, false, false, nil, nil, 0, 0, nil
+  end
+
+  -- 1. Check regular cast via UnitCastingInfo (8th return = notInterruptible)
+  if _G.UnitCastingInfo then
+    local ok, name, _, texture, startTimeMS, endTimeMS, _, _, notInterruptible, spellID = pcall(_G.UnitCastingInfo, unit)
+    if ok and name ~= nil then
+      local isInt = true
+      if not IsSecret(notInterruptible) and type(notInterruptible) == "boolean" then
+        isInt = not notInterruptible
+      elseif uEv and uEv.active and uEv.interruptible ~= nil then
+        isInt = uEv.interruptible
+      end
+      local sSec = (not IsSecret(startTimeMS) and type(startTimeMS) == "number" and (startTimeMS / 1000.0)) or (uEv and uEv.startTime) or now
+      local eSec = (not IsSecret(endTimeMS) and type(endTimeMS) == "number" and (endTimeMS / 1000.0)) or (uEv and uEv.endTime) or (sSec + 2.0)
+      local durSec = math.max(0.1, eSec - sSec)
+      local remSec = math.max(0, eSec - now)
+      local cleanName = (not IsSecret(name) and type(name) == "string" and name) or (uEv and uEv.name) or "Cast"
+      local cleanIcon = (not IsSecret(texture) and texture) or (uEv and uEv.icon) or 136243
+      local cleanID = (not IsSecret(spellID) and type(spellID) == "number" and spellID) or (uEv and uEv.spellID) or nil
+      return true, isInt, false, cleanName, cleanIcon, remSec, durSec, cleanID
+    end
+  end
+
+  -- 2. Check channel / empowered cast via UnitChannelInfo (7th return = notInterruptible)
+  if _G.UnitChannelInfo then
+    local ok, name, _, texture, startTimeMS, endTimeMS, _, notInterruptible, spellID = pcall(_G.UnitChannelInfo, unit)
+    if ok and name ~= nil then
+      local isInt = true
+      if not IsSecret(notInterruptible) and type(notInterruptible) == "boolean" then
+        isInt = not notInterruptible
+      elseif uEv and uEv.active and uEv.interruptible ~= nil then
+        isInt = uEv.interruptible
+      end
+      local sSec = (not IsSecret(startTimeMS) and type(startTimeMS) == "number" and (startTimeMS / 1000.0)) or (uEv and uEv.startTime) or now
+      local eSec = (not IsSecret(endTimeMS) and type(endTimeMS) == "number" and (endTimeMS / 1000.0)) or (uEv and uEv.endTime) or (sSec + 3.0)
+      local durSec = math.max(0.1, eSec - sSec)
+      local remSec = math.max(0, eSec - now)
+      local cleanName = (not IsSecret(name) and type(name) == "string" and name) or (uEv and uEv.name) or "Channel"
+      local cleanIcon = (not IsSecret(texture) and texture) or (uEv and uEv.icon) or 136243
+      local cleanID = (not IsSecret(spellID) and type(spellID) == "number" and spellID) or (uEv and uEv.spellID) or nil
+      return true, isInt, true, cleanName, cleanIcon, remSec, durSec, cleanID
+    end
+  end
+
+  -- 3. Fallback to event-tracked cast window if UnitCastingInfo returned nil/secret during active window
+  if uEv and uEv.active and uEv.endTime and now < uEv.endTime then
+    local durSec = math.max(0.1, uEv.endTime - (uEv.startTime or now))
+    local remSec = math.max(0, uEv.endTime - now)
+    return true, (uEv.interruptible ~= false), (uEv.isChannel or false), (uEv.name or "Cast"), (uEv.icon or 136243), remSec, durSec, uEv.spellID
+  end
+
+  return false, false, false, nil, nil, 0, 0, nil
+end
+
 local function FormatSecretOrVal(v)
   if IsSecret(v) then return "SECRET" end
   return tostring(v)

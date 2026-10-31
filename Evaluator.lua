@@ -67,6 +67,9 @@ function SpArc:SyncSpellDefsFromProfile(parsed, presetID)
       dst.auraUnit = spDef.auraUnit
       dst.auraKey = spDef.auraKey
       dst.burstDuration = spDef.burstDuration
+      dst.isBossSkill = spDef.isBossSkill
+      dst.isPvPSkill = spDef.isPvPSkill
+      dst.isInterrupt = spDef.isInterrupt
     end
   end
   if changed then
@@ -274,6 +277,24 @@ local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, si
     return ((simCtx and simCtx.enemies) or 1) >= 2
   elseif c == "SINGLE_TARGET" then
     return ((simCtx and simCtx.enemies) or 1) <= 1
+  elseif c == "BOSS" or c == "player.boss_mode" or c == "BURST_MODE" then
+    return (simCtx and simCtx.bossMode) and true or false
+  elseif c == "NOT BOSS" or c == "NOT player.boss_mode" or c == "NOT BURST_MODE" then
+    return not (simCtx and simCtx.bossMode)
+  elseif c == "PVP" or c == "player.pvp_mode" or c == "PVP_MODE" then
+    return (simCtx and simCtx.pvpMode) and true or false
+  elseif c == "NOT PVP" or c == "NOT player.pvp_mode" or c == "NOT PVP_MODE" then
+    return not (simCtx and simCtx.pvpMode)
+  elseif c == "target.casting_interruptible" or c == "target.interruptible" or c == "INTERRUPTIBLE" then
+    return (simCtx and simCtx.targetCastingInterruptible) and true or false
+  elseif c == "NOT target.casting_interruptible" or c == "NOT target.interruptible" or c == "NOT INTERRUPTIBLE" then
+    return not (simCtx and simCtx.targetCastingInterruptible)
+  elseif c == "target.casting_uninterruptible" or c == "UNINTERRUPTIBLE" then
+    return (simCtx and simCtx.targetIsCasting and not simCtx.targetCastingInterruptible) and true or false
+  elseif c == "target.is_casting" or c == "target.casting" then
+    return (simCtx and simCtx.targetIsCasting) and true or false
+  elseif c == "NOT target.is_casting" or c == "NOT target.casting" then
+    return not (simCtx and simCtx.targetIsCasting)
   end
 
   -- WeakAuras-style unified Aura conditions:
@@ -675,6 +696,14 @@ function SpArc:BuildRotationQueue(maxSlots)
     simAuraRem.player["232698"] = 3600
   end
   simCtx.canPickPocket = (SpArc.CanPickPocketTarget and SpArc:CanPickPocketTarget(now)) or false
+  simCtx.bossMode = (SpArc.IsBossRotationEnabled and SpArc:IsBossRotationEnabled()) or false
+  simCtx.pvpMode = (SpArc.IsPvPRotationEnabled and SpArc:IsPvPRotationEnabled()) or false
+  local tCast, tInt = false, false
+  if SpArc.GetUnitCastInterruptState then
+    tCast, tInt = SpArc:GetUnitCastInterruptState("target", now)
+  end
+  simCtx.targetIsCasting = tCast or false
+  simCtx.targetCastingInterruptible = (tCast and tInt) or false
   simCtx.insanity = simInsanity
   simCtx.comboPoints = math.floor(simInsanity / 20)
   simCtx.energy = simEnergy
@@ -682,6 +711,23 @@ function SpArc:BuildRotationQueue(maxSlots)
   simCtx.targetHP = (SpArc.GetTargetHPPercent and SpArc:GetTargetHPPercent()) or 100
   simCtx.auraRem = simAuraRem
   simCtx.auraStacks = simAuraStacks
+
+  local function IsSpellAllowedByToggles(spKey, stepIdx)
+    local d = SPELL_DEFS[spKey]
+    if not d then return true end
+    if d.isBossSkill and not simCtx.bossMode then
+      return false
+    end
+    if d.isPvPSkill and not simCtx.pvpMode then
+      return false
+    end
+    if d.isInterrupt then
+      if stepIdx ~= 1 or not simCtx.targetCastingInterruptible then
+        return false
+      end
+    end
+    return true
+  end
 
   for step = 1, maxSlots do
     for spK, spD in pairs(SPELL_DEFS) do
@@ -695,7 +741,7 @@ function SpArc:BuildRotationQueue(maxSlots)
     local pickedIsNoResource = false
     for _, rule in ipairs(parsed.rules) do
       local sp = rule.spell
-      if simReady[sp] and simUsable[sp] and not (step == 1 and simNoResource[sp]) then
+      if simReady[sp] and simUsable[sp] and IsSpellAllowedByToggles(sp, step) and not (step == 1 and simNoResource[sp]) then
         if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
           pickedKey = sp
           break
@@ -706,7 +752,7 @@ function SpArc:BuildRotationQueue(maxSlots)
     if not pickedKey and step == 1 then
       for _, rule in ipairs(parsed.rules) do
         local sp = rule.spell
-        if simReady[sp] and simUsable[sp] and simNoResource[sp] then
+        if simReady[sp] and simUsable[sp] and IsSpellAllowedByToggles(sp, step) and simNoResource[sp] then
           if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
             pickedKey = sp
             pickedIsNoResource = true
@@ -738,6 +784,10 @@ function SpArc:BuildRotationQueue(maxSlots)
 
       local pickedWasProc = simProcs[pickedKey]
       simProcs[pickedKey] = false
+      if def and def.isInterrupt then
+        simCtx.targetCastingInterruptible = false
+        simCtx.targetIsCasting = false
+      end
       if simCtx.stealthed then
         simCtx.stealthed = false
       end
@@ -1093,6 +1143,9 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
       st.targetDebuffStacks = 0
       st.targetDebuffUntil = 0
       st.targetPickPocketed = false
+      if st.unitCastState then
+        st.unitCastState["target"] = nil
+      end
       st.lastCastAt["GARROTE"] = nil
       st.lastCastAt["CRIMSON_TEMPEST"] = nil
       st.lastCastAt["PICK_POCKET"] = nil
@@ -1178,5 +1231,63 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     if defKey and not isChan then
       SpArc:RecordSpellCastSuccess(defKey, now)
     end
+  end
+end)
+
+-- Target & Nameplate Cast / Interruptibility Tracker (Secret-Safe for WoW 12.x)
+local unitCastFrame = CreateFrame("Frame")
+unitCastFrame:RegisterEvent("UNIT_SPELLCAST_START")
+unitCastFrame:RegisterEvent("UNIT_SPELLCAST_STOP")
+unitCastFrame:RegisterEvent("UNIT_SPELLCAST_FAILED")
+unitCastFrame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+unitCastFrame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+unitCastFrame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+pcall(unitCastFrame.RegisterEvent, unitCastFrame, "UNIT_SPELLCAST_EMPOWER_START")
+pcall(unitCastFrame.RegisterEvent, unitCastFrame, "UNIT_SPELLCAST_EMPOWER_STOP")
+pcall(unitCastFrame.RegisterEvent, unitCastFrame, "UNIT_SPELLCAST_INTERRUPTIBLE")
+pcall(unitCastFrame.RegisterEvent, unitCastFrame, "UNIT_SPELLCAST_NOT_INTERRUPTIBLE")
+
+unitCastFrame:SetScript("OnEvent", function(_, event, unit, _, spellID)
+  if not unit or IsSecret(unit) or type(unit) ~= "string" or unit == "player" then return end
+  if unit ~= "target" and unit ~= "focus" and not unit:find("^nameplate") and not unit:find("^boss") then
+    return
+  end
+  st.unitCastState = st.unitCastState or {}
+  local uEv = st.unitCastState[unit]
+  if not uEv then
+    uEv = {}
+    st.unitCastState[unit] = uEv
+  end
+  local now = GetTime()
+
+  if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_EMPOWER_START" then
+    local isChan = (event ~= "UNIT_SPELLCAST_START")
+    local dur = isChan and 3.0 or 2.0
+    local sName, sIcon
+    if spellID and not IsSecret(spellID) and C_Spell and C_Spell.GetSpellInfo then
+      local okI, info = pcall(C_Spell.GetSpellInfo, spellID)
+      if okI and type(info) == "table" then
+        sName = not IsSecret(info.name) and info.name or nil
+        sIcon = not IsSecret(info.iconID) and info.iconID or nil
+        local cMS = not IsSecret(info.castTime) and info.castTime or nil
+        if cMS and type(cMS) == "number" and cMS > 0 then
+          dur = cMS / 1000.0
+        end
+      end
+    end
+    uEv.active = true
+    uEv.isChannel = isChan
+    uEv.interruptible = true
+    uEv.startTime = now
+    uEv.endTime = now + dur
+    uEv.spellID = (not IsSecret(spellID) and type(spellID) == "number" and spellID) or nil
+    uEv.name = sName
+    uEv.icon = sIcon
+  elseif event == "UNIT_SPELLCAST_INTERRUPTIBLE" then
+    uEv.interruptible = true
+  elseif event == "UNIT_SPELLCAST_NOT_INTERRUPTIBLE" then
+    uEv.interruptible = false
+  elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP" or event == "UNIT_SPELLCAST_INTERRUPTED" or event == "UNIT_SPELLCAST_FAILED" then
+    uEv.active = false
   end
 end)

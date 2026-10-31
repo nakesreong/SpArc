@@ -747,7 +747,12 @@ local function OpenControlCenter(initialTab)
       ui.m3Title:SetPoint("TOPLEFT", 0, 0)
       ui.m3Title:SetTextColor(1, 0.85, 0.25, 1)
 
-      CreateElvCheck(p3, "MOD_ENABLE", "enableArcHUD", 0, -24, true, false)
+      local cArcEnable = CreateElvCheck(p3, "MOD_ENABLE", "enableArcHUD", 0, -24, true, false)
+      cArcEnable:SetWidth(120)
+      local cBossRot = CreateElvCheck(p3, "CK_BOSS_ROT", "enableBossRotation", 130, -24, true, false)
+      cBossRot:SetWidth(230)
+      local cPvPRot = CreateElvCheck(p3, "CK_PVP_ROT", "enablePvPRotation", 370, -24, true, false)
+      cPvPRot:SetWidth(270)
 
       local m3GeoBox = RegisterGroupBox(p3, "M3_GRP_GEO", 0, -56, 640, 162)
       CreateElvSlider(m3GeoBox, "SL_ARC_RADIUS", "arcRadius", 50, 260, 5, 18, -14, 280)

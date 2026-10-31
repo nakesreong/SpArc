@@ -148,6 +148,12 @@ local function ParseSpellDefLine(line)
         def.burstDuration = bDur
         def.auraDuration = def.auraDuration or bDur
         def.auraUnit = def.auraUnit or "player"
+      elseif prop == "BOSS" or prop == "BURST_SKILL" then
+        def.isBossSkill = (val:lower() == "true" or val == "1")
+      elseif prop == "PVP" or prop == "PVP_SKILL" then
+        def.isPvPSkill = (val:lower() == "true" or val == "1")
+      elseif prop == "INTERRUPT" or prop == "KICK" then
+        def.isInterrupt = (val:lower() == "true" or val == "1")
       end
     end
   end

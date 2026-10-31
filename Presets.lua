@@ -56,6 +56,8 @@ local STRINGS = {
     TOP_FIX_CURSOR = "Reset Cursor",
 
     M3_TITLE = "Rotation Arc (Semicircle Queue)",
+    CK_BOSS_ROT = "Boss (include Burst CDs in rotation)",
+    CK_PVP_ROT = "PvP (include PvP & CC skills in rotation)",
     M3_GRP_GEO = "Arc Geometry & Position",
     M3_GRP_ICONS = "Queue Icons & Scaling",
     M3_GRP_FEEDBACK = "Press Animation & Feedback",
@@ -254,6 +256,8 @@ local STRINGS = {
     TOP_FIX_CURSOR = "Сброс курсора",
 
     M3_TITLE = "Дуга ротации (Полукруг очереди заклинаний)",
+    CK_BOSS_ROT = "Босс (включать бурсты в ротацию)",
+    CK_PVP_ROT = "ПвП (включать ПвП-скиллы и контроль в ротацию)",
     M3_GRP_GEO = "Геометрия и положение дуги",
     M3_GRP_ICONS = "Масштаб и количество иконок",
     M3_GRP_FEEDBACK = "Отклик нажатия кнопок",
@@ -618,10 +622,10 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 29
+SpArc.PROFILE_SCHEMA_VERSION = 31
 
 ---------------------------------------------------------------------------------------
---         5 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID)           --
+--         6 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID)           --
 ---------------------------------------------------------------------------------------
 SpArc.BuiltInPresetOrder = {}
 SpArc.BuiltInPresets = {}
@@ -648,10 +652,12 @@ RegisterPreset("PRIEST_01_SHADOW_PVE", "PRIEST", "1. Жрец: Тьма (ШП �
 
 ## SPELL_BOOK
 SPELL SHADOWFORM = ID:232698 | AURA_ID:232698 | AURA_UNIT:player | AURA_DUR:3600 | NAME:"Облик Тьмы","Shadowform" | CD:0 | ICON:136200
+SPELL SILENCE = ID:15487 | NAME:"Безмолвие","Silence" | CD:45 | INTERRUPT:true | ICON:458230
+SPELL PSYCHIC_HORROR = ID:64044,8122 | NAME:"Глубинный ужас","Ментальный крик","Psychic Horror","Psychic Scream" | CD:45 | PVP:true | ICON:237568
 SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | GAIN:15 | ICON:136201
 SPELL VAMPIRIC_TOUCH = ID:34914 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Прикосновение вампира","Vampiric Touch" | CD:0 | CHARGES:1 | GAIN:6 | ICON:135978
-SPELL VOID_ERUPTION = ID:228260,391109,194249 | AURA_ID:194249,391109 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | NAME:"Вхождение в Бездну","Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | ICON:537079
-SPELL POWER_INFUSION = ID:10060 | AURA_ID:10060 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | NAME:"Придание сил","Power Infusion" | CD:120 | ICON:135939
+SPELL VOID_ERUPTION = ID:228260,391109,194249 | AURA_ID:194249,391109 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | BOSS:true | NAME:"Вхождение в Бездну","Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | ICON:537079
+SPELL POWER_INFUSION = ID:10060 | AURA_ID:10060 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | BOSS:true | NAME:"Придание сил","Power Infusion" | CD:120 | ICON:135939
 SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела Бездны","Void Volley","Void Bolt" | CD:6 | GAIN:10 | OVERRIDE_OF:VOID_ERUPTION | PROC_ONLY:true | ICON:1386548
 SPELL DEVOURING_PLAGUE = ID:335467 | AURA_ID:335467 | AURA_DUR:6 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума","Shadow Word: Madness","Devouring Plague" | CD:0 | COST:50 | GRANTS:MIND_FLAY_INSANITY | SPENDER:true | ICON:252997
 SPELL SHADOW_WORD_DEATH = ID:32379 | NAME:"Слово Тьмы: Смерть","Shadow Word: Death" | CD:10 | GAIN:10 | EXECUTE:true | ICON:136149
@@ -659,7 +665,7 @@ SPELL MIND_BLAST = ID:450983,8092 | NAME:"Выброс Бездны","Взрыв
 SPELL VOID_TORRENT = ID:263165 | NAME:"Поток бездны","Поток Бездны","Void Torrent" | CD:45 | CHARGES:1 | GAIN:35 | GRANTS:MIND_FLAY_INSANITY | LOCK_CHANNEL:true | ICON:1386551
 SPELL MIND_FLAY_INSANITY = ID:391403 | NAME:"Пытка разума: безумие","Mind Flay: Insanity" | CD:0 | GAIN:16 | OVERRIDE_OF:MIND_FLAY | PROC_ONLY:true | ICON:136208
 SPELL MIND_FLAY = ID:15407 | NAME:"Пытка разума","Mind Flay" | CD:0 | GAIN:12 | FILLER_INTERRUPTIBLE:true | ICON:136208
-SPELL PSYFIEND = ID:34433,211522,375901,451235,200174 | NAME:"Исчадие Тьмы","Ментальный демон","Игры разума","Призрак Бездны","Shadowfiend","Psyfiend" | CD:60 | ICON:136199
+SPELL PSYFIEND = ID:34433,211522,375901,451235,200174 | BOSS:true | NAME:"Исчадие Тьмы","Ментальный демон","Игры разума","Призрак Бездны","Shadowfiend","Psyfiend" | CD:60 | ICON:136199
 SPELL DISPERSION = ID:47585 | NAME:"Слияние с тьмой","Слияние с Тьмой","Dispersion" | CD:90 | ICON:237563
 SPELL DESPERATE_PRAYER = ID:19236 | NAME:"Молитва отчаяния","Desperate Prayer" | CD:90 | ICON:237550
 SPELL VAMPIRIC_EMBRACE = ID:15286 | NAME:"Объятия вампира","Vampiric Embrace" | CD:120 | ICON:136230
@@ -672,7 +678,7 @@ PROTECT_CHANNEL: VOID_TORRENT
 
 ## TRACKERS
 TRACK_SAVES: DISPERSION, DESPERATE_PRAYER, VAMPIRIC_EMBRACE, FADE
-TRACK_CDS: POWER_INFUSION, VOID_ERUPTION, VOID_TORRENT, PSYFIEND
+TRACK_CDS: POWER_INFUSION, VOID_ERUPTION, VOID_TORRENT, PSYFIEND, SILENCE
 
 ## EMERGENCY_SAVE
 IF player.hp_percent <= 20 AND READY(DISPERSION) THEN
@@ -684,12 +690,22 @@ ELSE IF player.hp_percent <= 25 AND READY(VAMPIRIC_EMBRACE) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF NOT player.aura(SHADOWFORM) AND NOT player.aura(VOID_ERUPTION) AND READY(SHADOWFORM) THEN
+IF target.casting_interruptible AND READY(SILENCE) THEN
+    RETURN CAST(SILENCE)
+ELSE IF PVP AND target.casting_interruptible AND READY(PSYCHIC_HORROR) THEN
+    RETURN CAST(PSYCHIC_HORROR)
+ELSE IF NOT player.aura(SHADOWFORM) AND NOT player.aura(VOID_ERUPTION) AND READY(SHADOWFORM) THEN
     RETURN CAST(SHADOWFORM)
 ELSE IF target.aura(VAMPIRIC_TOUCH).rem <= 1 AND READY(TENTACLE_SLAM) THEN
     RETURN CAST(TENTACLE_SLAM)
 ELSE IF target.aura(VAMPIRIC_TOUCH).rem <= 1 AND NOT READY(TENTACLE_SLAM) THEN
     RETURN CAST(VAMPIRIC_TOUCH)
+ELSE IF BOSS AND READY(VOID_ERUPTION) THEN
+    RETURN CAST(VOID_ERUPTION)
+ELSE IF BOSS AND READY(POWER_INFUSION) THEN
+    RETURN CAST(POWER_INFUSION)
+ELSE IF BOSS AND READY(PSYFIEND) THEN
+    RETURN CAST(PSYFIEND)
 ELSE IF PROC(VOID_BOLT) AND READY(VOID_BOLT) THEN
     RETURN CAST(VOID_BOLT)
 ELSE IF PROC(DEVOURING_PLAGUE) AND USABLE(DEVOURING_PLAGUE) THEN
@@ -724,7 +740,10 @@ RegisterPreset("MAGE_04_FROST_PVE", "MAGE", "2. Маг: Лёд (Фрост — �
 
 ## SPELL_BOOK
 AURA FREEZING = ID:1221389,228358,205708 | AURA_UNIT:target | AURA_DUR:15 | NAME:"Обледенение","Замерзание","Freezing","Зимняя стужа","Winter's Chill"
-SPELL RAY_OF_FROST = ID:205021 | NAME:"Морозный луч","Луч холода","Ray of Frost" | CD:60 | CHARGES:1 | STACKS:+3 | LOCK_CHANNEL:true | ICON:1698700
+SPELL COUNTERSPELL = ID:2139 | NAME:"Антимагия","Counterspell" | CD:24 | INTERRUPT:true | ICON:135856
+SPELL FROST_NOVA = ID:122,113724 | NAME:"Кольцо льда","Кольцо мороза","Frost Nova","Ring of Frost" | CD:30 | PVP:true | ICON:135848
+SPELL ICY_VEINS = ID:12472 | AURA_ID:12472 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | BOSS:true | NAME:"Стылая кровь","Icy Veins" | CD:120 | ICON:135838
+SPELL RAY_OF_FROST = ID:205021 | BOSS:true | NAME:"Морозный луч","Луч холода","Ray of Frost" | CD:60 | CHARGES:1 | STACKS:+3 | LOCK_CHANNEL:true | ICON:1698700
 SPELL COMET_STORM = ID:153595,455396 | NAME:"Кометная буря","Comet Storm" | CD:30 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:RAY_OF_FROST | ICON:1033912
 SPELL GLACIAL_SPIKE = ID:199786,257537 | NAME:"Ледниковый шип","Черная стрела","Glacial Spike","Ebonbolt" | CD:0 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:FROSTBOLT | ICON:1394891
 SPELL FLURRY = ID:44614 | NAME:"Шквал","Flurry" | CD:30 | CHARGES:2 | STACKS:+2 | ICON:135859
@@ -742,7 +761,7 @@ PROTECT_CHANNEL: RAY_OF_FROST
 
 ## TRACKERS
 TRACK_SAVES: ICE_BLOCK, ICE_BARRIER, ALTER_TIME, COLD_SNAP
-TRACK_CDS: RAY_OF_FROST, FROZEN_ORB, FLURRY, COMET_STORM
+TRACK_CDS: ICY_VEINS, RAY_OF_FROST, FROZEN_ORB, FLURRY, COMET_STORM, COUNTERSPELL
 
 ## EMERGENCY_SAVE
 IF player.hp_percent <= 25 AND READY(ICE_BLOCK) THEN
@@ -752,7 +771,13 @@ ELSE IF player.hp_percent <= 25 AND READY(ICE_BARRIER) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF PROC(COMET_STORM) AND READY(COMET_STORM) THEN
+IF target.casting_interruptible AND READY(COUNTERSPELL) THEN
+    RETURN CAST(COUNTERSPELL)
+ELSE IF BOSS AND READY(ICY_VEINS) THEN
+    RETURN CAST(ICY_VEINS)
+ELSE IF PVP AND READY(FROST_NOVA) THEN
+    RETURN CAST(FROST_NOVA)
+ELSE IF PROC(COMET_STORM) AND READY(COMET_STORM) THEN
     RETURN CAST(COMET_STORM)
 ELSE IF PROC(GLACIAL_SPIKE) AND READY(GLACIAL_SPIKE) THEN
     RETURN CAST(GLACIAL_SPIKE)
@@ -762,11 +787,11 @@ ELSE IF enemies >= 3 AND READY(FROZEN_ORB) THEN
     RETURN CAST(FROZEN_ORB)
 ELSE IF (enemies >= 3 OR PROC(BLIZZARD)) AND READY(BLIZZARD) THEN
     RETURN CAST(BLIZZARD)
-ELSE IF CHARGES(RAY_OF_FROST) >= 2 AND READY(RAY_OF_FROST) THEN
+ELSE IF BOSS AND CHARGES(RAY_OF_FROST) >= 2 AND READY(RAY_OF_FROST) THEN
     RETURN CAST(RAY_OF_FROST)
 ELSE IF READY(FROZEN_ORB) THEN
     RETURN CAST(FROZEN_ORB)
-ELSE IF READY(RAY_OF_FROST) THEN
+ELSE IF BOSS AND READY(RAY_OF_FROST) THEN
     RETURN CAST(RAY_OF_FROST)
 ELSE IF READY(FLURRY) THEN
     RETURN CAST(FLURRY)
@@ -789,9 +814,11 @@ RegisterPreset("ROGUE_01_ASSA_PVE", "ROGUE", "3. Разбойник: Ликви�
 # MODE: PVE
 
 ## SPELL_BOOK
-SPELL DEATHMARK = ID:360194 | AURA_ID:360194 | AURA_UNIT:target | AURA_DUR:16 | BURST:16 | NAME:"Знак смерти","Метка смерти","Deathmark" | CD:120 | ICON:4667421
-SPELL KINGSBANE = ID:385627 | AURA_ID:385627 | AURA_UNIT:target | AURA_DUR:14 | BURST:14 | NAME:"Погибель королей","Kingsbane" | CD:60 | GAIN:20 | ICON:1373906
-SPELL SHIV = ID:5938,319504 | NAME:"Отравляющий укол","Shiv" | CD:30 | CHARGES:1 | GAIN:20 | ICON:135428
+SPELL KICK = ID:1766 | NAME:"Пинок","Kick" | CD:15 | INTERRUPT:true | ICON:132219
+SPELL KIDNEY_SHOT = ID:408,1833 | NAME:"Удар по почкам","Подлый трюк","Kidney Shot","Cheap Shot" | CD:20 | PVP:true | ICON:132298
+SPELL DEATHMARK = ID:360194 | AURA_ID:360194 | AURA_UNIT:target | AURA_DUR:16 | BURST:16 | BOSS:true | NAME:"Знак смерти","Метка смерти","Deathmark" | CD:120 | ICON:4667421
+SPELL KINGSBANE = ID:385627 | AURA_ID:385627 | AURA_UNIT:target | AURA_DUR:14 | BURST:14 | BOSS:true | NAME:"Погибель королей","Kingsbane" | CD:60 | GAIN:20 | ICON:1373906
+SPELL SHIV = ID:5938,319504 | BOSS:true | NAME:"Отравляющий укол","Shiv" | CD:30 | CHARGES:1 | GAIN:20 | ICON:135428
 SPELL GARROTE = ID:703 | AURA_ID:703 | AURA_DUR:18 | NAME:"Гаррота","Garrote" | CD:13 | GAIN:20 | ICON:132297
 SPELL RUPTURE = ID:1943 | AURA_ID:1943 | AURA_DUR:24 | NAME:"Рваная рана","Rupture" | CD:0 | COST:80 | SPENDER:true | ICON:132302
 SPELL CRIMSON_TEMPEST = ID:1247227,121411 | AURA_ID:121411 | AURA_DUR:12 | NAME:"Кровавый вихрь","Crimson Tempest" | CD:14 | COST:80 | SPENDER:true | ICON:461860
@@ -807,7 +834,7 @@ SPELL FEINT = ID:1966 | NAME:"Уловка","Feint" | CD:15 | CHARGES:2 | ICON:1
 
 ## TRACKERS
 TRACK_SAVES: CRIMSON_VIAL, EVASION, CLOAK_OF_SHADOWS, FEINT
-TRACK_CDS: DEATHMARK, KINGSBANE, SHIV, VANISH
+TRACK_CDS: DEATHMARK, KINGSBANE, SHIV, VANISH, KICK
 
 ## EMERGENCY_SAVE
 IF player.hp_percent <= 35 AND READY(CRIMSON_VIAL) THEN
@@ -819,13 +846,19 @@ ELSE IF player.hp_percent <= 20 AND READY(CLOAK_OF_SHADOWS) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF target.aura(GARROTE).rem <= 1 AND READY(GARROTE) THEN
+IF target.casting_interruptible AND READY(KICK) THEN
+    RETURN CAST(KICK)
+ELSE IF PVP AND player.combo_points >= 4 AND READY(KIDNEY_SHOT) THEN
+    RETURN CAST(KIDNEY_SHOT)
+ELSE IF target.aura(GARROTE).rem <= 1 AND READY(GARROTE) THEN
     RETURN CAST(GARROTE)
 ELSE IF target.aura(RUPTURE).rem <= 1 AND READY(RUPTURE) THEN
     RETURN CAST(RUPTURE)
-ELSE IF target.aura(DEATHMARK).rem > 0 AND READY(KINGSBANE) THEN
+ELSE IF BOSS AND READY(DEATHMARK) THEN
+    RETURN CAST(DEATHMARK)
+ELSE IF BOSS AND READY(KINGSBANE) THEN
     RETURN CAST(KINGSBANE)
-ELSE IF player.in_burst AND READY(SHIV) THEN
+ELSE IF BOSS AND player.in_burst AND READY(SHIV) THEN
     RETURN CAST(SHIV)
 ELSE IF enemies >= 2 AND READY(CRIMSON_TEMPEST) THEN
     RETURN CAST(CRIMSON_TEMPEST)
@@ -850,12 +883,14 @@ RegisterPreset("WARRIOR_02_ARGS_BOSS", "WARRIOR", "4. Воин: Оружие (А
 # MODE: PVE
 
 ## SPELL_BOOK
+SPELL PUMMEL = ID:6552 | NAME:"Зуботычина","Pummel" | CD:15 | INTERRUPT:true | ICON:132938
+SPELL STORM_BOLT = ID:107570,1715 | NAME:"Удар громовержца","Подрезать сухожилия","Storm Bolt","Hamstring" | CD:30 | PVP:true | ICON:613535
 SPELL COLOSSUS_SMASH = ID:167105,262161,436358 | AURA_ID:208086 | AURA_DUR:10 | BURST:10 | NAME:"Удар колосса","Миротворец","Сокрушение","Colossus Smash","Warbreaker","Demolish" | CD:45 | CHARGES:1 | ICON:132355
-SPELL BLADESTORM = ID:227847,389774,228920 | NAME:"Вихрь клинков","Опустошитель","Bladestorm","Ravager" | CD:90 | CHARGES:1 | ICON:236303
+SPELL BLADESTORM = ID:227847,389774,228920 | BOSS:true | NAME:"Вихрь клинков","Опустошитель","Bladestorm","Ravager" | CD:90 | CHARGES:1 | ICON:236303
 SPELL EXECUTE = ID:163201,5308,281000 | NAME:"Казнь","Execute" | CD:0 | CHARGES:1 | EXECUTE:true | ICON:135358
 SPELL SWEEPING_STRIKES = ID:260708 | AURA_ID:260708 | AURA_UNIT:player | AURA_DUR:15 | NAME:"Размашистые удары","Sweeping Strikes" | CD:30 | CHARGES:1 | ICON:132366
 SPELL REND = ID:772,384318,376079 | AURA_ID:772,388539 | AURA_DUR:15 | NAME:"Кровопускание","Громогласный рык","Копье чемпиона","Rend","Thunderous Roar","Champion's Spear" | CD:0 | CHARGES:1 | ICON:132155
-SPELL AVATAR = ID:107574 | AURA_ID:107574 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | NAME:"Аватара","Avatar" | CD:90 | CHARGES:1 | ICON:613534
+SPELL AVATAR = ID:107574 | AURA_ID:107574 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | BOSS:true | NAME:"Аватара","Avatar" | CD:90 | CHARGES:1 | ICON:613534
 SPELL MORTAL_STRIKE = ID:12294 | NAME:"Смертельный удар","Mortal Strike" | CD:6 | CHARGES:1 | ICON:132355
 SPELL OVERPOWER = ID:7384 | NAME:"Превосходство","Overpower" | CD:12 | CHARGES:2 | ICON:132223
 SPELL CLEAVE = ID:845 | NAME:"Рассекающий удар","Cleave" | CD:4.5 | CHARGES:1 | ICON:132338
@@ -867,7 +902,7 @@ SPELL IMPENDING_VICTORY = ID:202168 | NAME:"Верная победа","Impendin
 
 ## TRACKERS
 TRACK_SAVES: DIE_BY_THE_SWORD, RALLYING_CRY, SPELL_REFLECTION, IMPENDING_VICTORY
-TRACK_CDS: AVATAR, COLOSSUS_SMASH, BLADESTORM, SWEEPING_STRIKES
+TRACK_CDS: AVATAR, COLOSSUS_SMASH, BLADESTORM, SWEEPING_STRIKES, PUMMEL
 
 ## EMERGENCY_SAVE
 IF player.hp_percent <= 25 AND READY(DIE_BY_THE_SWORD) THEN
@@ -877,8 +912,14 @@ ELSE IF player.hp_percent <= 35 AND READY(IMPENDING_VICTORY) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF enemies >= 2 AND READY(SWEEPING_STRIKES) THEN
+IF target.casting_interruptible AND READY(PUMMEL) THEN
+    RETURN CAST(PUMMEL)
+ELSE IF PVP AND READY(STORM_BOLT) THEN
+    RETURN CAST(STORM_BOLT)
+ELSE IF enemies >= 2 AND READY(SWEEPING_STRIKES) THEN
     RETURN CAST(SWEEPING_STRIKES)
+ELSE IF BOSS AND READY(AVATAR) THEN
+    RETURN CAST(AVATAR)
 ELSE IF PROC(EXECUTE) AND READY(EXECUTE) THEN
     RETURN CAST(EXECUTE)
 ELSE IF USABLE(EXECUTE) AND READY(EXECUTE) THEN
@@ -891,7 +932,7 @@ ELSE IF enemies >= 3 AND READY(CLEAVE) THEN
     RETURN CAST(CLEAVE)
 ELSE IF READY(MORTAL_STRIKE) THEN
     RETURN CAST(MORTAL_STRIKE)
-ELSE IF (enemies >= 3 OR player.in_burst) AND READY(BLADESTORM) THEN
+ELSE IF BOSS AND READY(BLADESTORM) THEN
     RETURN CAST(BLADESTORM)
 ELSE IF READY(OVERPOWER) THEN
     RETURN CAST(OVERPOWER)
@@ -903,7 +944,7 @@ END IF
 ]])
 
 -- ====================================================================================
--- #5: DRUID — Feral (Трипобраз: Midnight 12.0+ ST + AoE + Авто-подхват бурста)
+-- #5: DRUID — Feral (Котастрофа: Midnight 12.0+ ST + AoE + Авто-подхват бурста)
 -- ====================================================================================
 RegisterPreset("DRUID_01_FERAL_PVE", "DRUID", "5. Друид: Сила зверя (Кот — СТ / АоЕ)", "PVE", [[
 # PROFILE: 5. Друид: Сила зверя (Кот — СТ / АоЕ)
@@ -912,9 +953,11 @@ RegisterPreset("DRUID_01_FERAL_PVE", "DRUID", "5. Друид: Сила звер�
 # MODE: PVE
 
 ## SPELL_BOOK
+SPELL SKULL_BASH = ID:106839 | NAME:"Лобовая атака","Skull Bash" | CD:15 | INTERRUPT:true | ICON:236946
+SPELL MIGHTY_BASH = ID:5211,22570 | NAME:"Мощное оглушение","Калечение","Mighty Bash","Maim" | CD:60 | PVP:true | ICON:132114
 SPELL TIGERS_FURY = ID:5217 | AURA_ID:5217 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | NAME:"Тигриное неистовство","Tiger's Fury" | CD:30 | ICON:132242
-SPELL BERSERK = ID:106951,102543,343223 | AURA_ID:106951,102543 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | NAME:"Берсерк","Воплощение: аватара Ашаманы","Berserk","Incarnation: Avatar of Ashamane" | CD:120 | ICON:236149
-SPELL CONVOKE_THE_SPIRITS = ID:391528 | NAME:"Созыв духов","Convoke the Spirits" | CD:120 | LOCK_CHANNEL:true | ICON:3636839
+SPELL BERSERK = ID:106951,102543,343223 | AURA_ID:106951,102543 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | BOSS:true | NAME:"Берсерк","Воплощение: аватара Ашаманы","Berserk","Incarnation: Avatar of Ashamane" | CD:120 | ICON:236149
+SPELL CONVOKE_THE_SPIRITS = ID:391528 | BOSS:true | NAME:"Созыв духов","Convoke the Spirits" | CD:120 | LOCK_CHANNEL:true | ICON:3636839
 SPELL FERAL_FRENZY = ID:274837,1243807 | NAME:"Дикое бешенство","Безумное бешенство","Feral Frenzy","Frantic Frenzy" | CD:45 | GAIN:100 | ICON:2065580
 SPELL RAKE = ID:1822 | AURA_ID:155722 | AURA_DUR:15 | NAME:"Глубокая рана","Rake" | CD:0 | GAIN:20 | ICON:132122
 SPELL PRIMAL_WRATH = ID:285381 | AURA_ID:1079 | AURA_DUR:12 | NAME:"Первобытный гнев","Primal Wrath" | CD:0 | COST:80 | SPENDER:true | ICON:2065583
@@ -932,7 +975,7 @@ PROTECT_CHANNEL: CONVOKE_THE_SPIRITS
 
 ## TRACKERS
 TRACK_SAVES: SURVIVAL_INSTINCTS, BARKSKIN, REGROWTH, FRENZIED_REGENERATION
-TRACK_CDS: BERSERK, CONVOKE_THE_SPIRITS, TIGERS_FURY, FERAL_FRENZY
+TRACK_CDS: BERSERK, CONVOKE_THE_SPIRITS, TIGERS_FURY, FERAL_FRENZY, SKULL_BASH
 
 ## EMERGENCY_SAVE
 IF player.hp_percent <= 25 AND READY(SURVIVAL_INSTINCTS) THEN
@@ -946,12 +989,18 @@ ELSE IF player.hp_percent <= 40 AND READY(BARKSKIN) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF player.stealthed AND READY(RAKE) THEN
+IF target.casting_interruptible AND READY(SKULL_BASH) THEN
+    RETURN CAST(SKULL_BASH)
+ELSE IF PVP AND READY(MIGHTY_BASH) THEN
+    RETURN CAST(MIGHTY_BASH)
+ELSE IF player.stealthed AND READY(RAKE) THEN
     RETURN CAST(RAKE)
 ELSE IF PROC(FEROCIOUS_BITE) AND READY(FEROCIOUS_BITE) THEN
     RETURN CAST(FEROCIOUS_BITE)
 ELSE IF player.energy <= 40 AND READY(TIGERS_FURY) THEN
     RETURN CAST(TIGERS_FURY)
+ELSE IF BOSS AND READY(BERSERK) THEN
+    RETURN CAST(BERSERK)
 ELSE IF enemies >= 2 AND target.aura(RIP).rem <= 1 AND USABLE(PRIMAL_WRATH) THEN
     RETURN CAST(PRIMAL_WRATH)
 ELSE IF target.aura(RIP).rem <= 1 AND USABLE(RIP) THEN
@@ -962,7 +1011,7 @@ ELSE IF target.aura(RAKE).rem <= 1 AND READY(RAKE) THEN
     RETURN CAST(RAKE)
 ELSE IF player.combo_points <= 2 AND READY(FERAL_FRENZY) THEN
     RETURN CAST(FERAL_FRENZY)
-ELSE IF player.aura(BERSERK).rem > 0 AND player.combo_points <= 2 AND READY(CONVOKE_THE_SPIRITS) THEN
+ELSE IF BOSS AND player.combo_points <= 2 AND READY(CONVOKE_THE_SPIRITS) THEN
     RETURN CAST(CONVOKE_THE_SPIRITS)
 ELSE IF enemies >= 2 AND READY(SWIPE) THEN
     RETURN CAST(SWIPE)
@@ -972,7 +1021,7 @@ END IF
 ]])
 
 -- ====================================================================================
--- #6: DRUID — Balance (Трипобраз: Keeper of the Grove — Midnight 12.0+ ST / AoE / Delves)
+-- #6: DRUID — Balance (Котастрофа: Keeper of the Grove & Elune's Chosen — Midnight 12.0+)
 -- ====================================================================================
 RegisterPreset("DRUID_02_BALANCE_PVE", "DRUID", "6. Друид: Баланс (Сова — СТ / АоЕ)", "PVE", [[
 # PROFILE: 6. Друид: Баланс (Сова — СТ / АоЕ)
@@ -982,12 +1031,14 @@ RegisterPreset("DRUID_02_BALANCE_PVE", "DRUID", "6. Друид: Баланс (С
 
 ## SPELL_BOOK
 SPELL MOONKIN_FORM = ID:24858,197625 | AURA_ID:24858,197625 | AURA_UNIT:player | AURA_DUR:3600 | NAME:"Облик лунного совуха","Moonkin Form" | CD:0 | ICON:136036
-SPELL CELESTIAL_ALIGNMENT = ID:194223,102560,383410,390414 | AURA_ID:194223,102560,383410,390414 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | NAME:"Парад планет","Воплощение: избранный Элуны","Celestial Alignment","Incarnation: Chosen of Elune" | CD:120 | CHARGES:2 | ICON:136060
+SPELL SOLAR_BEAM = ID:78675 | NAME:"Столп солнечного света","Solar Beam" | CD:60 | INTERRUPT:true | ICON:252188
+SPELL MIGHTY_BASH = ID:5211,132469,33786 | NAME:"Мощное оглушение","Тайфун","Смерч","Mighty Bash","Typhoon","Cyclone" | CD:30 | PVP:true | ICON:132114
+SPELL CELESTIAL_ALIGNMENT = ID:194223,102560,383410,390414 | AURA_ID:194223,102560,383410,390414 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | BOSS:true | NAME:"Парад планет","Воплощение: избранный Элуны","Celestial Alignment","Incarnation: Chosen of Elune" | CD:120 | CHARGES:2 | ICON:136060
 SPELL SOLAR_ECLIPSE = ID:1233346,1233272,48517,48518 | AURA_ID:48517,48518,1233346,1233272 | AURA_UNIT:player | AURA_DUR:15 | NAME:"Солнечное затмение","Лунное затмение","Затмение","Solar Eclipse","Lunar Eclipse","Eclipse" | CD:32 | CHARGES:2 | ICON:236216
-SPELL FORCE_OF_NATURE = ID:205636 | AURA_ID:428735,205636 | AURA_UNIT:player | AURA_DUR:10 | BURST:10 | NAME:"Сила природы","Force of Nature" | CD:60 | GAIN:20 | ICON:132129
-SPELL FURY_OF_ELUNE = ID:202770 | AURA_ID:202770 | AURA_UNIT:player | AURA_DUR:8 | BURST:8 | NAME:"Ярость Элуны","Fury of Elune" | CD:60 | GAIN:40 | ICON:132123
+SPELL FORCE_OF_NATURE = ID:205636 | AURA_ID:428735,205636 | AURA_UNIT:player | AURA_DUR:10 | BURST:10 | BOSS:true | NAME:"Сила природы","Force of Nature" | CD:60 | GAIN:20 | ICON:132129
+SPELL FURY_OF_ELUNE = ID:202770 | AURA_ID:202770 | AURA_UNIT:player | AURA_DUR:8 | BURST:8 | BOSS:true | NAME:"Ярость Элуны","Fury of Elune" | CD:60 | GAIN:40 | ICON:132123
 SPELL NEW_MOON = ID:274281,274282,274283 | NAME:"Новолуние","Полумесяц","Полнолуние","New Moon","Half Moon","Full Moon" | CD:20 | CHARGES:3 | GAIN:10 | ICON:1392545
-SPELL CONVOKE_THE_SPIRITS = ID:391528 | NAME:"Созыв духов","Convoke the Spirits" | CD:120 | LOCK_CHANNEL:true | ICON:3636839
+SPELL CONVOKE_THE_SPIRITS = ID:391528 | BOSS:true | NAME:"Созыв духов","Convoke the Spirits" | CD:120 | LOCK_CHANNEL:true | ICON:3636839
 SPELL MOONFIRE = ID:8921 | AURA_ID:164812,8921 | AURA_DUR:22 | NAME:"Лунный огонь","Moonfire" | CD:0 | GAIN:6 | ICON:136096
 SPELL SUNFIRE = ID:93402 | AURA_ID:164815,93402 | AURA_DUR:18 | NAME:"Солнечный огонь","Sunfire" | CD:0 | GAIN:6 | ICON:236216
 SPELL STARFALL = ID:191034 | AURA_ID:191034 | AURA_UNIT:player | AURA_DUR:8 | NAME:"Звездопад","Starfall" | CD:0 | COST:50 | SPENDER:true | ICON:236168
@@ -997,7 +1048,6 @@ SPELL WRATH = ID:190984,5176 | NAME:"Гнев","Wrath" | CD:0 | GAIN:8 | FILLER_
 SPELL BARKSKIN = ID:22812 | NAME:"Дубовая кожа","Barkskin" | CD:60 | ICON:136097
 SPELL REGROWTH = ID:8936 | NAME:"Восстановление","Regrowth" | CD:0 | ICON:136085
 SPELL BEAR_FORM = ID:5487 | AURA_ID:5487 | AURA_UNIT:player | AURA_DUR:3600 | NAME:"Облик медведя","Bear Form" | CD:0 | ICON:132276
-SPELL SOLAR_BEAM = ID:78675 | NAME:"Столп солнечного света","Solar Beam" | CD:60 | ICON:252188
 
 ## CHANNEL_POLICY
 PROTECT_CHANNEL: CONVOKE_THE_SPIRITS
@@ -1014,7 +1064,11 @@ ELSE IF player.hp_percent <= 30 AND READY(REGROWTH) THEN
 END IF
 
 ## ROTATION_QUEUE
-IF NOT player.aura(MOONKIN_FORM) AND READY(MOONKIN_FORM) THEN
+IF target.casting_interruptible AND READY(SOLAR_BEAM) THEN
+    RETURN CAST(SOLAR_BEAM)
+ELSE IF PVP AND READY(MIGHTY_BASH) THEN
+    RETURN CAST(MIGHTY_BASH)
+ELSE IF NOT player.aura(MOONKIN_FORM) AND READY(MOONKIN_FORM) THEN
     RETURN CAST(MOONKIN_FORM)
 ELSE IF target.aura(SUNFIRE).rem <= 3 AND READY(SUNFIRE) THEN
     RETURN CAST(SUNFIRE)
@@ -1024,13 +1078,15 @@ ELSE IF PROC(STARFALL) AND enemies >= 2 AND READY(STARFALL) THEN
     RETURN CAST(STARFALL)
 ELSE IF PROC(STARSURGE) AND READY(STARSURGE) THEN
     RETURN CAST(STARSURGE)
-ELSE IF READY(FORCE_OF_NATURE) THEN
+ELSE IF BOSS AND READY(CELESTIAL_ALIGNMENT) THEN
+    RETURN CAST(CELESTIAL_ALIGNMENT)
+ELSE IF BOSS AND READY(FORCE_OF_NATURE) THEN
     RETURN CAST(FORCE_OF_NATURE)
-ELSE IF READY(FURY_OF_ELUNE) THEN
+ELSE IF BOSS AND READY(FURY_OF_ELUNE) THEN
     RETURN CAST(FURY_OF_ELUNE)
 ELSE IF NOT player.aura(SOLAR_ECLIPSE) AND NOT player.aura(CELESTIAL_ALIGNMENT) AND READY(SOLAR_ECLIPSE) THEN
     RETURN CAST(SOLAR_ECLIPSE)
-ELSE IF player.in_burst AND player.astral_power <= 50 AND READY(CONVOKE_THE_SPIRITS) THEN
+ELSE IF BOSS AND player.astral_power <= 50 AND READY(CONVOKE_THE_SPIRITS) THEN
     RETURN CAST(CONVOKE_THE_SPIRITS)
 ELSE IF enemies >= 2 AND USABLE(STARFALL) THEN
     RETURN CAST(STARFALL)

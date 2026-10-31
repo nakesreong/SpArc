@@ -225,10 +225,27 @@ function SpArc:ApplyVisualLayout()
   local qScale = tonumber(v.queueScale) or 1.00
   local pBorder = math.max(0, math.min(6, tonumber(v.primaryBorderSize) or 1))
   local arcAlpha = math.max(0.20, math.min(1.00, (tonumber(v.arcAlpha) or 100) / 100.0))
+  local orderMode = v.arcOrderMode or "LTR"
+  local centerPos = math.floor((count + 1) / 2)
 
   for i = 1, MAX_ARC_SLOTS do
     local slotLevel = 60 - (i * 5)
-    local frac = (count > 1) and ((i - 1) / (count - 1)) or 0.5
+    local posIdx = i
+    if i <= count then
+      if orderMode == "RTL" then
+        posIdx = (count + 1) - i
+      elseif orderMode == "CENTER" then
+        if i == 1 then
+          posIdx = centerPos
+        else
+          local k = i - 1
+          local off = (k % 2 == 1) and (-math.ceil(k / 2)) or (k / 2)
+          posIdx = centerPos + off
+          if posIdx < 1 then posIdx = count end
+        end
+      end
+    end
+    local frac = (count > 1) and ((posIdx - 1) / (count - 1)) or 0.5
     local u = (frac - 0.5) * 2
     local theta = u * halfRad
     local x = ((1.0 - blend) * u + blend * math.sin(theta)) * radius

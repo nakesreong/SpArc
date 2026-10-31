@@ -796,7 +796,27 @@ local function OpenControlCenter(initialTab)
       ui.m3Title:SetTextColor(1, 0.85, 0.25, 1)
 
       local cArcEnable = CreateElvCheck(p3, "MOD_ENABLE", "enableArcHUD", 0, -24, true, false)
-      cArcEnable:SetWidth(220)
+      cArcEnable:SetWidth(115)
+
+      ui.m3OrderLbl = p3:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+      ApplyCyrFont(ui.m3OrderLbl, 11)
+      ui.m3OrderLbl:SetPoint("LEFT", cArcEnable, "RIGHT", 6, 0)
+      ui.m3OrderLbl:SetTextColor(0.85, 0.85, 0.92, 1)
+
+      local function CreateArcOrderBtn(modeKey, width, prevAnchor, offsetX)
+        local b = CreateElvButton(p3, width, 22, "")
+        b:SetPoint("LEFT", prevAnchor, "RIGHT", offsetX, 0)
+        b.orderMode = modeKey
+        b:SetScript("OnClick", function()
+          db.visual.arcOrderMode = modeKey
+          SpArc:ApplyVisualLayout()
+          controlFrame:RefreshUI()
+        end)
+        return b
+      end
+      ui.m3OrderLTRBtn    = CreateArcOrderBtn("LTR",    146, ui.m3OrderLbl, 6)
+      ui.m3OrderRTLBtn    = CreateArcOrderBtn("RTL",    150, ui.m3OrderLTRBtn, 5)
+      ui.m3OrderCenterBtn = CreateArcOrderBtn("CENTER", 146, ui.m3OrderRTLBtn, 5)
 
       local m3GeoBox = RegisterGroupBox(p3, "M3_GRP_GEO", 0, -56, 640, 152)
       CreateElvSlider(m3GeoBox, "SL_ARC_RADIUS", "arcRadius", 50, 260, 5, 18, -14, 280)
@@ -1355,6 +1375,16 @@ local function OpenControlCenter(initialTab)
       end
 
       ui.m3Title:SetText(SpArc:L("M3_TITLE"))
+      if ui.m3OrderLbl then
+        local curOrd = (db.visual and db.visual.arcOrderMode) or "LTR"
+        ui.m3OrderLbl:SetText(SpArc:L("M3_ORDER_LBL"))
+        ui.m3OrderLTRBtn:SetText(SpArc:L("M3_ORDER_LTR"))
+        ui.m3OrderLTRBtn:SetSelected(curOrd == "LTR")
+        ui.m3OrderRTLBtn:SetText(SpArc:L("M3_ORDER_RTL"))
+        ui.m3OrderRTLBtn:SetSelected(curOrd == "RTL")
+        ui.m3OrderCenterBtn:SetText(SpArc:L("M3_ORDER_CENTER"))
+        ui.m3OrderCenterBtn:SetSelected(curOrd == "CENTER")
+      end
       ui.m4Title:SetText(SpArc:L("M4_TITLE"))
       ui.m5Title:SetText(SpArc:L("M5_TITLE"))
       ui.m6Title:SetText(SpArc:L("M6_TITLE"))

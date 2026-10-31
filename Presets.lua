@@ -57,6 +57,10 @@ local STRINGS = {
     TOP_FIX_CURSOR = "Reset Cursor",
 
     M3_TITLE = "Rotation Arc (Semicircle / Flat Line / Bowl Queue)",
+    M3_ORDER_LBL = "Order:",
+    M3_ORDER_LTR = "0-1-2-3-4 (Left)",
+    M3_ORDER_RTL = "4-3-2-1-0 (Mirror)",
+    M3_ORDER_CENTER = "3-1-0-2-4 (Center)",
     CK_BOSS_ROT = "Enable Bursts on Boss & Rare targets (BOSS condition in .MD)",
     CK_PVP_ROT = "Enable PvP skills on Player targets (PVP condition in .MD)",
     M3_GRP_GEO = "Arc Geometry & Position (-180° Bowl ⌣  |  0° Line —  |  +180° Dome ⌒)",
@@ -284,6 +288,10 @@ local STRINGS = {
     TOP_FIX_CURSOR = "Сброс курсора",
 
     M3_TITLE = "Дуга ротации (Полукруг / Прямая линия / Чаша очереди заклинаний)",
+    M3_ORDER_LBL = "Порядок:",
+    M3_ORDER_LTR = "0-1-2-3-4 (Слева)",
+    M3_ORDER_RTL = "4-3-2-1-0 (Зеркало)",
+    M3_ORDER_CENTER = "3-1-0-2-4 (Центр)",
     CK_BOSS_ROT = "Босс / Рарник — разрешить бурсты (ветки BOSS в .MD)",
     CK_PVP_ROT = "ПвП — разрешить ПвП-контроль на игроках (ветки PVP в .MD)",
     M3_GRP_GEO = "Геометрия и изгиб дуги (-180° чаша ⌣  |  0° прямая линия —  |  +180° радуга ⌒)",

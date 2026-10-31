@@ -144,6 +144,7 @@ SpArc.DEFAULT_VISUAL = {
   arcRadius = 135,
   arcSpreadDeg = 120,
   arcOffsetY = 0,
+  arcOrderMode = "LTR",
   primaryScale = 1.50,
   primaryBorderSize = 1,
   arcAlpha = 100,

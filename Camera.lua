@@ -66,6 +66,8 @@ local pendingBindingSync = false
 local loadingScreenActive = false
 local barberShopActive = false
 local hardwareCursorFlushed = false
+local softInteractActive = false
+local lastTargetClickAt = 0
 
 SpArc.COMBAT_CAM_SLOT_KEYBINDS = {
   [1] = "M1",
@@ -521,8 +523,8 @@ local function EnsureBaseCameraCVars()
   SyncCursorCenteredYPos(false)
   -- Keep SoftTarget Interact, Enemy & Friend active so E / interact key both targets and interacts smoothly
   pcall(C_CVar.SetCVar, "SoftTargetInteract", "3")
-  pcall(C_CVar.SetCVar, "SoftTargetInteractArc", "1")
-  pcall(C_CVar.SetCVar, "SoftTargetInteractRange", "15")
+  pcall(C_CVar.SetCVar, "SoftTargetInteractArc", "2")
+  pcall(C_CVar.SetCVar, "SoftTargetInteractRange", "20")
   pcall(C_CVar.SetCVar, "SoftTargetEnemy", "1")
   pcall(C_CVar.SetCVar, "SoftTargetFriend", "0")
   pcall(C_CVar.SetCVar, "interactKeyWarningTutorial", "1")
@@ -706,7 +708,7 @@ UpdateCrosshairVisual = function()
     else
       SetCrosshairColor(0.20, 0.95, 0.40, 0.95)
     end
-  elseif UnitExists and SafeBool(UnitExists, "softinteract") then
+  elseif softInteractActive or (UnitExists and SafeBool(UnitExists, "softinteract")) then
     SetCrosshairColor(1.0, 0.82, 0.20, 0.95)
   elseif UnitExists and SafeBool(UnitExists, "target") and UnitCanAttack and SafeBool(UnitCanAttack, "player", "target") and not SafeBool(UnitIsDeadOrGhost, "target") then
     SetCrosshairColor(1.0, 0.25, 0.25, 0.90)
@@ -1012,7 +1014,8 @@ end
 ---------------------------------------------------------------------------------------
 local bindOwner = CreateFrame("Frame", "SpArcCameraBindOwner", UIParent)
 
-local UNSHIFT_SAFE_LINE = "/cancelform [nocombat,noharm,nostealth,noform:1,noform:2,noform:3,noform:4,noform:27,noform:29]"
+-- Note: On Balance Druid, form:4 IS Moonkin Form! Never include noform:4 here, or Moonkin Form will never unshift!
+local UNSHIFT_SAFE_LINE = "/cancelform [nocombat,nostealth,noform:1,noform:2,noform:3,noform:27,noform:29]"
 local BASE_INTERACT_MACRO = "/target [@mouseover,nodead,exists]"
 local UNSHIFT_INTERACT_MACRO = BASE_INTERACT_MACRO .. "\n" .. UNSHIFT_SAFE_LINE
 
@@ -1036,6 +1039,11 @@ local interactBtn = CreateFrame("Button", "SpArcCamInteractButton", UIParent, "S
 interactBtn:RegisterForClicks("AnyDown")
 interactBtn:SetAttribute("type", "macro")
 interactBtn:SetAttribute("macrotext", UNSHIFT_INTERACT_MACRO)
+interactBtn:HookScript("PostClick", function()
+  if _G.GetTime then
+    lastTargetClickAt = _G.GetTime()
+  end
+end)
 
 local lastAutoUnshiftAttr = nil
 
@@ -1104,14 +1112,31 @@ end
 local lastInteractMode = nil
 local lastInteractKey = nil
 
-local function ComputeDesiredInteractMode()
-  -- 1. If any soft-interact object/corpse/chest/NPC is in range, ALWAYS use native INTERACTTARGET so looting/chests never fail!
+local function HasActiveSoftInteract()
+  if softInteractActive then
+    return true
+  end
   if UnitExists and SafeBool(UnitExists, "softinteract") then
+    return true
+  end
+  return false
+end
+
+local function ComputeDesiredInteractMode()
+  -- 1. If any soft-interact object/corpse/chest/curio/NPC is in range (including GameObjects via PLAYER_SOFT_INTERACT_CHANGED),
+  --    ALWAYS use native INTERACTTARGET so looting, chests, doors, and delve curios never fail!
+  if HasActiveSoftInteract() then
     return "INTERACT"
   end
 
-  -- 2. When pointing directly at a LIVE unit under crosshair (not a corpse!) that is not already our target, target it on E
-  if UnitExists and SafeBool(UnitExists, "mouseover") then
+  -- 2. Safety cooldown after clicking SpArcCamInteractButton so E never stays stuck in TARGET mode on non-soft-target objects
+  if _G.GetTime and lastTargetClickAt > 0 and (_G.GetTime() - lastTargetClickAt) < 2.5 then
+    return "INTERACT"
+  end
+
+  -- 3. When pointing directly at a LIVE PLAYER under crosshair that is not already our target, target them on E.
+  --    (Never trigger on non-player units so companions like Brann or unselectable object helper units never hijack E!)
+  if UnitExists and SafeBool(UnitExists, "mouseover") and UnitIsPlayer and SafeBool(UnitIsPlayer, "mouseover") then
     local isDead = UnitIsDead and SafeBool(UnitIsDead, "mouseover")
     if not isDead then
       local alreadyTarget = UnitExists and SafeBool(UnitExists, "target") and UnitIsUnit and SafeBool(UnitIsUnit, "target", "mouseover")
@@ -1121,7 +1146,7 @@ local function ComputeDesiredInteractMode()
     end
   end
 
-  -- 3. When out of combat in Moonkin Form / Shadowform with no lootable object nearby, arm E to unshift back to normal model
+  -- 4. When out of combat in Moonkin Form / Shadowform with no interactable object nearby, arm E to unshift back to normal model
   if IsInCosmeticCombatForm() then
     return "TARGET"
   end
@@ -1321,7 +1346,17 @@ if _G.hooksecurefunc and _G.ReloadUI then
   end)
 end
 
-camDriver:SetScript("OnEvent", function(_, event)
+camDriver:SetScript("OnEvent", function(_, event, arg1, arg2)
+  if event == "PLAYER_SOFT_INTERACT_CHANGED" then
+    if arg2 == nil or arg2 == false then
+      softInteractActive = false
+    elseif SpArc.IsSecret(arg2) then
+      softInteractActive = true
+    else
+      softInteractActive = (arg2 ~= "")
+    end
+  end
+
   if event == "LOADING_SCREEN_ENABLED" or event == "PLAYER_LOGOUT" then
     loadingScreenActive = true
     ForceCleanCursorCVars()
@@ -1371,7 +1406,6 @@ camDriver:SetScript("OnEvent", function(_, event)
       end)
     end
   elseif event == "PLAYER_REGEN_ENABLED" then
-    pendingPostCombatUnshift = true
     if SpArc.state then
       SpArc.state.lastManualFormCastAt = 0
     end

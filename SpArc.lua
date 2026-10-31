@@ -468,9 +468,13 @@ local function OpenControlCenter(initialTab)
       valBox:SetPoint("TOP", slider, "BOTTOM", 0, -2)
       SetBackdropFlat(valBox, 0.04, 0.04, 0.06, 1.0, 0.24, 0.24, 0.32, 1.0)
 
-      local valTxt = valBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+      local valTxt = CreateFrame("EditBox", nil, valBox)
+      valTxt:SetPoint("TOPLEFT", 2, -1)
+      valTxt:SetPoint("BOTTOMRIGHT", -2, 1)
+      valTxt:SetFontObject("GameFontNormalSmall")
       ApplyCyrFont(valTxt, 11)
-      valTxt:SetPoint("CENTER", valBox, "CENTER", 0, 0)
+      valTxt:SetJustifyH("CENTER")
+      valTxt:SetAutoFocus(false)
       valTxt:SetTextColor(0.95, 0.95, 1.0, 1)
       holder.valTxt = valTxt
 
@@ -487,9 +491,35 @@ local function OpenControlCenter(initialTab)
         fillBar:SetWidth(math.max(1, (sWidth - 2) * pct))
       end
 
+      local function CommitEditBoxValue(selfEdit)
+        local typed = tonumber(selfEdit:GetText() or "")
+        if typed ~= nil then
+          local clamped = math.max(minV, math.min(maxV, typed))
+          local rounded = math.floor((clamped / stepV) + 0.5) * stepV
+          slider:SetValue(rounded)
+          selfEdit:SetText(FormatVal(rounded))
+        else
+          local cur = tonumber(db.visual[dbKey])
+          if cur == nil then cur = DEFAULT_VISUAL[dbKey] or 0 end
+          selfEdit:SetText(FormatVal(cur))
+        end
+      end
+      valTxt:SetScript("OnEscapePressed", function(selfEdit)
+        selfEdit:ClearFocus()
+        local cur = tonumber(db.visual[dbKey])
+        if cur == nil then cur = DEFAULT_VISUAL[dbKey] or 0 end
+        selfEdit:SetText(FormatVal(cur))
+      end)
+      valTxt:SetScript("OnEnterPressed", function(selfEdit)
+        selfEdit:ClearFocus()
+        CommitEditBoxValue(selfEdit)
+      end)
+
       slider:SetScript("OnValueChanged", function(_, val)
         local rounded = math.floor((val / stepV) + 0.5) * stepV
-        valTxt:SetText(FormatVal(rounded))
+        if not valTxt:HasFocus() then
+          valTxt:SetText(FormatVal(rounded))
+        end
         UpdateFill(rounded)
         if isRefreshingUI then return end
         if db.visual[dbKey] == rounded then return end
@@ -818,10 +848,17 @@ local function OpenControlCenter(initialTab)
       ui.m3OrderRTLBtn    = CreateArcOrderBtn("RTL",    150, ui.m3OrderLTRBtn, 5)
       ui.m3OrderCenterBtn = CreateArcOrderBtn("CENTER", 146, ui.m3OrderRTLBtn, 5)
 
+      local okScrH, rawScrH = pcall(UIParent.GetHeight, UIParent)
+      local screenH = (okScrH and not IsSecret(rawScrH) and type(rawScrH) == "number" and rawScrH > 400) and rawScrH or 1080
+      local minArcY = -math.floor((screenH * 0.78) / 10) * 10
+      local maxArcY = math.floor((screenH * 0.55) / 10) * 10
+      local minHalfY = -math.floor((screenH * 0.52) / 10) * 10
+      local maxHalfY = math.floor((screenH * 0.45) / 10) * 10
+
       local m3GeoBox = RegisterGroupBox(p3, "M3_GRP_GEO", 0, -56, 640, 152)
-      CreateElvSlider(m3GeoBox, "SL_ARC_RADIUS", "arcRadius", 50, 260, 5, 18, -14, 280)
+      CreateElvSlider(m3GeoBox, "SL_ARC_RADIUS", "arcRadius", 50, 320, 5, 18, -14, 280)
       CreateElvSlider(m3GeoBox, "SL_ARC_SPREAD", "arcSpreadDeg", -180, 180, 5, 336, -14, 280)
-      CreateElvSlider(m3GeoBox, "SL_ARC_OFFSET_Y", "arcOffsetY", -340, 220, 2, 18, -76, 280)
+      CreateElvSlider(m3GeoBox, "SL_ARC_OFFSET_Y", "arcOffsetY", minArcY, maxArcY, 2, 18, -76, 280)
 
       local m3IconsBox = RegisterGroupBox(p3, "M3_GRP_ICONS", 0, -220, 640, 212)
       CreateElvSlider(m3IconsBox, "SL_PRIMARY_SCALE", "primaryScale", 1.0, 2.0, 0.05, 18, -14, 280)
@@ -846,7 +883,7 @@ local function OpenControlCenter(initialTab)
       cCDsMaster:SetWidth(310)
 
       local m4PosBox = RegisterGroupBox(p4, "M4_GRP_POS", 0, -58, 640, 130)
-      CreateElvSlider(m4PosBox, "SL_WINGS_Y", "wingsOffsetY", -200, 60, 5, 18, -16, 280)
+      CreateElvSlider(m4PosBox, "SL_WINGS_Y", "wingsOffsetY", minHalfY, maxHalfY, 5, 18, -16, 280)
       CreateElvCheck(m4PosBox, "CK_ALWAYS_CDS", "alwaysShowCDs", 18, -76, false, false)
 
       local m4EmergBox = RegisterGroupBox(p4, "M4_GRP_EMERG", 0, -204, 640, 130)
@@ -863,7 +900,7 @@ local function OpenControlCenter(initialTab)
 
       local m5SizeBox = RegisterGroupBox(p5, "M5_GRP_SIZE", 0, -56, 640, 96)
       CreateElvSlider(m5SizeBox, "SL_CB_WIDTH", "castbarWidth", 180, 420, 4, 18, -14, 280)
-      CreateElvSlider(m5SizeBox, "SL_CB_OFFSET_Y", "castbarOffsetY", -240, -40, 5, 336, -14, 280)
+      CreateElvSlider(m5SizeBox, "SL_CB_OFFSET_Y", "castbarOffsetY", minHalfY, maxHalfY, 5, 336, -14, 280)
 
       local m5ClipBox = RegisterGroupBox(p5, "M5_GRP_CLIP", 0, -162, 640, 64)
       CreateElvCheck(m5ClipBox, "CK_INTERRUPT", "showInterruptAlert", 18, -10, false, false)
@@ -873,8 +910,8 @@ local function OpenControlCenter(initialTab)
       CreateElvCheck(m5ResBox, "CK_RES_ALWAYS", "alwaysShowResourceBar", 18, -36, false, false)
       CreateElvSlider(m5ResBox, "SL_RES_WIDTH", "resourceBarWidth", 140, 420, 4, 18, -68, 280)
       CreateElvSlider(m5ResBox, "SL_RES_HEIGHT", "resourceBarHeight", 10, 32, 1, 336, -68, 280)
-      CreateElvSlider(m5ResBox, "SL_RES_OFFSET_X", "resourceBarOffsetX", -300, 300, 2, 18, -130, 280)
-      CreateElvSlider(m5ResBox, "SL_RES_OFFSET_Y", "resourceBarOffsetY", -320, 100, 2, 336, -130, 280)
+      CreateElvSlider(m5ResBox, "SL_RES_OFFSET_X", "resourceBarOffsetX", -400, 400, 2, 18, -130, 280)
+      CreateElvSlider(m5ResBox, "SL_RES_OFFSET_Y", "resourceBarOffsetY", minHalfY, maxHalfY, 2, 336, -130, 280)
       CreateElvSlider(m5ResBox, "SL_RES_SCALE", "resourceBarScale", 0.60, 2.00, 0.05, 18, -192, 280)
     end
 

@@ -1329,7 +1329,18 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
   newIDEdit:SetFontObject("ChatFontNormal")
   ApplyCyrFont(newIDEdit, 12)
   newIDEdit:SetAutoFocus(false)
-  newIDEdit:SetText("164812, 164815")
+  local defSampleIDs = "164812, 164815"
+  if UnitClass then
+    local okC, _, pCls = pcall(UnitClass, "player")
+    if okC and pCls == "PRIEST" then
+      defSampleIDs = "34914, 589"
+    elseif okC and pCls == "ROGUE" then
+      defSampleIDs = "703, 1943"
+    elseif okC and pCls == "WARRIOR" then
+      defSampleIDs = "772"
+    end
+  end
+  newIDEdit:SetText(defSampleIDs)
   newIDEdit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   ui.m10NewIDEdit = newIDEdit
   ui.m10NewColor = { r = 0.20, g = 0.88, b = 0.45 }
@@ -1384,9 +1395,9 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
   local resetRulesBtn = CreateElvButton(rulesBox, 132, 26, "")
   resetRulesBtn:SetPoint("LEFT", addRuleBtn, "RIGHT", 6, 0)
   resetRulesBtn:SetScript("OnClick", function()
-    local db = SpArc:EnsureDB()
-    db.npAuraRules = nil
-    SpArc:EnsureDB(true)
+    if SpArc.ResetCurrentProfileAuraRules then
+      SpArc:ResetCurrentProfileAuraRules()
+    end
     previewColorMode = 0
     SpArc:RefreshAllNameplates()
     controlFrame:RefreshUI()
@@ -1533,7 +1544,9 @@ function SpArc:RefreshNameplatesPage(ui)
     demo.castBar.iconBox:SetSize(cbH, cbH)
     ApplyCyrFont(demo.nameText, fSize)
     ApplyCyrFont(demo.hpText, math.max(8, fSize - 1))
-    demo.nameText:SetText("Котастрофа")
+    local pName = (UnitName and UnitName("player"))
+    if not pName or IsSecret(pName) or pName == "" then pName = "Котастрофа" end
+    demo.nameText:SetText(pName)
     demo.hpText:SetText("84%")
     local r, g, b = COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
     local modeLabel = SpArc:L("M10_PREV_BASE")

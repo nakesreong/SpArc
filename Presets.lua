@@ -99,24 +99,29 @@ local STRINGS = {
 
     M7_TITLE = "Live SpellBook & Rotation Telemetry",
 
-    M8_TITLE = "Character Profiles (Per-Character HUD, Camera & Keybinds)",
-    M8_GRP_CUR = "Current Character & Active Profile",
-    M8_CUR_SUMMARY = "Character: |cffffd100%s|r   •   Active Profile: |cff00ff96%s|r\nProfile Keys:  onHold = |cffffd100[%s]|r   |   onPress = |cffffd100[%s]|r   |   Interact = |cffffd100[%s]|r",
+    M8_TITLE = "Character Profiles (ElvUI-Style HUD, Camera, Keybinds & DoT Aura Rules)",
+    M8_GRP_CUR = "Current Character, Active Profile & New Profile Creation",
+    M8_CUR_SUMMARY = "Character: |cffffd100%s|r   •   Active Profile: |cff00ff96%s|r   •   DoT Aura Rules: |cff00ccff%d|r\nProfile Keys:  onHold = |cffffd100[%s]|r   |   onPress = |cffffd100[%s]|r   |   Interact = |cffffd100[%s]|r",
     M8_RESET_BTN = "Reset Current Profile",
-    M8_CHAR_PROF_BTN = "Use Character Profile",
-    M8_DEF_PROF_BTN = "Use 'Default' Profile",
-    M8_GRP_LIST = "All Saved Profiles (Switch, Copy Settings, or Delete)",
+    M8_CHAR_PROF_BTN = "Character Profile",
+    M8_DEF_PROF_BTN = "'Default' Profile",
+    M8_NEW_LABEL = "New Profile:",
+    M8_NEW_BTN = "+ Create Profile",
+    M8_GRP_LIST = "Existing Profiles (Switch Active, Copy From, or Delete)",
     M8_DETAILS_HEADER = "Selected Profile: |cffffd100%s|r\n\n"
       .. "• Hold Cursor (onHold): |cff00ccff%s|r\n"
       .. "• Toggle Camera (onPress): |cff00ccff%s|r\n"
       .. "• Interact Key: |cff00ccff%s|r\n"
       .. "• Crosshair Y / Scale: |cff00ff00%d px / %.2f|r\n"
-      .. "• Arc Radius / Spread: |cff00ff00%d px / %d°|r\n\n"
-      .. "|cffaaaaaaEach character automatically uses its own profile (like ElvUI & Plater). If you bind any SpArc key in WoW or Bartender4, SpArc automatically drops the conflicting bind.|r",
+      .. "• Arc Radius / Spread: |cff00ff00%d px / %d°|r\n"
+      .. "• Tracked Nameplate DoT Rules: |cffa335ee%d rules|r\n\n"
+      .. "|cffaaaaaaEach profile is 100%% isolated (HUD, Camera, Keybinds, and Nameplate DoT Aura Rules), just like ElvUI.|r",
+    CK_M8_COPY_AURAS = "Also copy Nameplate DoT Aura Rules from selected profile",
     M8_ACTIVATE_BTN = "Switch to Selected Profile",
-    M8_COPY_BTN = "Copy Selected -> Current Profile",
+    M8_COPY_BTN = "Copy From Selected -> Current Profile",
     M8_DELETE_BTN = "Delete Selected Profile",
     MSG_PROF_SWITCHED = "|cffa335eeSpArc:|r Switched active profile to |cff00ff96%s|r.",
+    MSG_PROF_CREATED = "|cffa335eeSpArc:|r Created and activated new profile |cff00ff96%s|r.",
     MSG_PROF_COPIED = "|cffa335eeSpArc:|r Copied settings from |cffffd100%s|r into |cff00ff96%s|r.",
     MSG_PROF_RESET = "|cffa335eeSpArc:|r Profile |cff00ff96%s|r reset to defaults.",
     MSG_PROF_DELETED = "|cffa335eeSpArc:|r Deleted profile |cffff6060%s|r.",
@@ -319,24 +324,29 @@ local STRINGS = {
 
     M7_TITLE = "Телеметрия книги заклинаний и отладка ротации",
 
-    M8_TITLE = "Профили персонажей (Индивидуальные бинды, Боевая Камера и HUD)",
-    M8_GRP_CUR = "Текущий персонаж и активный профиль",
-    M8_CUR_SUMMARY = "Персонаж: |cffffd100%s|r   •   Активный профиль: |cff00ff96%s|r\nБинды профиля:  onHold = |cffffd100[%s]|r   |   onPress = |cffffd100[%s]|r   |   Interact = |cffffd100[%s]|r",
-    M8_RESET_BTN = "Сбросить текущий профиль",
-    M8_CHAR_PROF_BTN = "Профиль этого персонажа",
-    M8_DEF_PROF_BTN = "Общий профиль (Default)",
-    M8_GRP_LIST = "Список всех профилей (Переключение, Копирование как в ElvUI/Plater, Удаление)",
+    M8_TITLE = "Профили (В стиле ElvUI: Изоляция HUD, Камеры, Биндов и Аур Неймплейтов)",
+    M8_GRP_CUR = "Текущий профиль и создание нового профиля",
+    M8_CUR_SUMMARY = "Персонаж: |cffffd100%s|r   •   Активный профиль: |cff00ff96%s|r   •   Аур DoT: |cff00ccff%d|r\nБинды профиля:  onHold = |cffffd100[%s]|r   |   onPress = |cffffd100[%s]|r   |   Interact = |cffffd100[%s]|r",
+    M8_RESET_BTN = "Сбросить профиль",
+    M8_CHAR_PROF_BTN = "Профиль персонажа",
+    M8_DEF_PROF_BTN = "Общий (Default)",
+    M8_NEW_LABEL = "Новый профиль:",
+    M8_NEW_BTN = "+ Создать профиль",
+    M8_GRP_LIST = "Существующие профили (Выбор активного, «Скопировать из» как в ElvUI, Удаление)",
     M8_DETAILS_HEADER = "Выбранный профиль: |cffffd100%s|r\n\n"
       .. "• Отвязать курсор (onHold): |cff00ccff%s|r\n"
       .. "• Камера вкл/выкл (onPress): |cff00ccff%s|r\n"
       .. "• Клавиша взаимодействия (Interact): |cff00ccff%s|r\n"
       .. "• Прицел (Высота Y / Масштаб): |cff00ff00%d px / %.2f|r\n"
-      .. "• Дуга ротации (Радиус / Угол): |cff00ff00%d px / %d°|r\n\n"
-      .. "|cffaaaaaaУ каждого персонажа автоматически свой профиль (например, E на присте и C на варе). Если ты забиндишь кнопку SpArc в настройках игры или Bartender4 — бинд в SpArc автоматически снимется без конфликта.|r",
-    M8_ACTIVATE_BTN = "Переключиться на выбранный профиль",
+      .. "• Дуга ротации (Радиус / Угол): |cff00ff00%d px / %d°|r\n"
+      .. "• Цветовых правил аур неймплейтов (DoT): |cffa335ee%d шт.|r\n\n"
+      .. "|cffaaaaaaКаждый профиль полностью изолирован (как в ElvUI): геометрия дуги, боевая камера, бинды и список отслеживаемых DoT-аур неймплейтов хранятся отдельно.|r",
+    CK_M8_COPY_AURAS = "Копировать также правила аур неймплейтов (DoT) из выбранного профиля",
+    M8_ACTIVATE_BTN = "Выбрать (Сделать активным)",
     M8_COPY_BTN = "Скопировать из выбранного в текущий",
     M8_DELETE_BTN = "Удалить выбранный профиль",
     MSG_PROF_SWITCHED = "|cffa335eeSpArc:|r Активный профиль переключён на |cff00ff96%s|r.",
+    MSG_PROF_CREATED = "|cffa335eeSpArc:|r Создан и активирован новый профиль |cff00ff96%s|r.",
     MSG_PROF_COPIED = "|cffa335eeSpArc:|r Настройки скопированы из профиля |cffffd100%s|r в |cff00ff96%s|r.",
     MSG_PROF_RESET = "|cffa335eeSpArc:|r Профиль |cff00ff96%s|r сброшен к значениям по умолчанию.",
     MSG_PROF_DELETED = "|cffa335eeSpArc:|r Профиль |cffff6060%s|r удалён.",

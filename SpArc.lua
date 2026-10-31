@@ -273,22 +273,7 @@ local function OpenControlCenter(initialTab)
     end
     controlFrame.SelectTab = SelectTab
 
-    for i, nKey in ipairs(navKeys) do
-      local yPos = -12 - (i - 1) * 33
-      if i >= 3 and i <= 6 then
-        yPos = yPos - 5
-      elseif i >= 7 then
-        yPos = yPos - 12
-      end
-      local btn = CreateElvButton(sidebar, 184, 29, SpArc:L(nKey))
-      btn:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 10, yPos)
-      btn.fs:ClearAllPoints()
-      btn.fs:SetPoint("LEFT", btn, "LEFT", 12, 0)
-      btn.fs:SetJustifyH("LEFT")
-      btn.nKey = nKey
-      btn:SetScript("OnClick", function() SelectTab(i) end)
-      navButtons[i] = btn
-
+    for i = 1, #navKeys do
       local page = CreateFrame("Frame", nil, controlFrame)
       page:SetPoint("TOPLEFT", controlFrame, "TOPLEFT", 220, -64)
       page:SetPoint("BOTTOMRIGHT", controlFrame, "BOTTOMRIGHT", -16, 16)
@@ -296,12 +281,60 @@ local function OpenControlCenter(initialTab)
       pages[i] = page
     end
 
+    local function CreateSideDivider(yOffset)
+      local div = sidebar:CreateTexture(nil, "ARTWORK")
+      div:SetHeight(1)
+      div:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 12, yOffset)
+      div:SetPoint("TOPRIGHT", sidebar, "TOPRIGHT", -12, yOffset)
+      div:SetColorTexture(0.24, 0.24, 0.34, 1)
+      return div
+    end
+
+    -- Logical Sidebar Layout:
+    -- 1. Rotation Engine & AI (1, 2)
+    -- 2. Arc HUD & Bars (3, 4, 5)
+    -- 3. Standalone Modules — each separated by a divider:
+    --    • Combat Camera (6)
+    --    • Metro Nameplates (10)
+    --    • Macro Generator (9)
+    -- 4. System & Profiles anchored at the very bottom (7, 8)
+    local sidebarLayout = {
+      { idx = 1,  nKey = "NAV_1",  y = -10 },
+      { idx = 2,  nKey = "NAV_2",  y = -42,  divAfter = -76 },
+      { idx = 3,  nKey = "NAV_3",  y = -83 },
+      { idx = 4,  nKey = "NAV_4",  y = -115 },
+      { idx = 5,  nKey = "NAV_5",  y = -147, divAfter = -181 },
+      { idx = 6,  nKey = "NAV_6",  y = -188, divAfter = -222 },
+      { idx = 10, nKey = "NAV_10", y = -229, divAfter = -263 },
+      { idx = 9,  nKey = "NAV_9",  y = -270, divAfter = -304 },
+      { idx = 7,  nKey = "NAV_7",  y = -443, divBefore = -436, divAfter = -477 },
+      { idx = 8,  nKey = "NAV_8",  y = -484 },
+    }
+
+    for _, item in ipairs(sidebarLayout) do
+      if item.divBefore then
+        CreateSideDivider(item.divBefore)
+      end
+      local pageIdx = item.idx
+      local btn = CreateElvButton(sidebar, 184, 28, SpArc:L(item.nKey))
+      btn:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 10, item.y)
+      btn.fs:ClearAllPoints()
+      btn.fs:SetPoint("LEFT", btn, "LEFT", 12, 0)
+      btn.fs:SetJustifyH("LEFT")
+      btn.nKey = item.nKey
+      btn:SetScript("OnClick", function() SelectTab(pageIdx) end)
+      navButtons[pageIdx] = btn
+      if item.divAfter then
+        CreateSideDivider(item.divAfter)
+      end
+    end
+
     -- Sidebar Divider & Bottom Minimap Checkbox
     local sideDiv = sidebar:CreateTexture(nil, "ARTWORK")
     sideDiv:SetHeight(1)
-    sideDiv:SetPoint("BOTTOMLEFT", sidebar, "BOTTOMLEFT", 12, 54)
-    sideDiv:SetPoint("BOTTOMRIGHT", sidebar, "BOTTOMRIGHT", -12, 54)
-    sideDiv:SetColorTexture(0.22, 0.22, 0.30, 1)
+    sideDiv:SetPoint("BOTTOMLEFT", sidebar, "BOTTOMLEFT", 12, 51)
+    sideDiv:SetPoint("BOTTOMRIGHT", sidebar, "BOTTOMRIGHT", -12, 51)
+    sideDiv:SetColorTexture(0.24, 0.24, 0.34, 1)
 
     local function RegisterGroupBox(parent, titleKey, x, y, w, h)
       local c, b = CreateElvGroupBox(parent, titleKey, x, y, w, h)
@@ -1067,22 +1100,23 @@ local function OpenControlCenter(initialTab)
 
       local p8 = pages[8]
       ui.selectedProfileForOps = SpArc:GetActiveProfileName()
+      ui.m8CopyIncludeAuras = true
 
       ui.m8Title = p8:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       ApplyCyrFont(ui.m8Title, 15)
       ui.m8Title:SetPoint("TOPLEFT", 0, 0)
       ui.m8Title:SetTextColor(1, 0.85, 0.25, 1)
 
-      local m8CurBox = RegisterGroupBox(p8, "M8_GRP_CUR", 0, -34, 640, 102)
+      local m8CurBox = RegisterGroupBox(p8, "M8_GRP_CUR", 0, -34, 640, 126)
       ui.m8CurSummary = m8CurBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       ApplyCyrFont(ui.m8CurSummary, 12)
-      ui.m8CurSummary:SetPoint("TOPLEFT", 16, -12)
-      ui.m8CurSummary:SetPoint("TOPRIGHT", -16, -12)
+      ui.m8CurSummary:SetPoint("TOPLEFT", 16, -10)
+      ui.m8CurSummary:SetPoint("TOPRIGHT", -16, -10)
       ui.m8CurSummary:SetJustifyH("LEFT")
-      ui.m8CurSummary:SetSpacing(4)
+      ui.m8CurSummary:SetSpacing(3)
 
-      ui.m8CharProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
-      ui.m8CharProfBtn:SetPoint("BOTTOMLEFT", 16, 12)
+      ui.m8CharProfBtn = CreateElvButton(m8CurBox, 198, 25, "")
+      ui.m8CharProfBtn:SetPoint("TOPLEFT", 16, -54)
       ui.m8CharProfBtn:SetScript("OnClick", function()
         local charProf = SpArc:GetCurrentCharKey()
         SpArc:SetProfile(charProf)
@@ -1091,7 +1125,7 @@ local function OpenControlCenter(initialTab)
         controlFrame:RefreshUI()
       end)
 
-      ui.m8DefProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
+      ui.m8DefProfBtn = CreateElvButton(m8CurBox, 198, 25, "")
       ui.m8DefProfBtn:SetPoint("LEFT", ui.m8CharProfBtn, "RIGHT", 8, 0)
       ui.m8DefProfBtn:SetScript("OnClick", function()
         SpArc:SetProfile("Default")
@@ -1100,7 +1134,7 @@ local function OpenControlCenter(initialTab)
         controlFrame:RefreshUI()
       end)
 
-      ui.m8ResetProfBtn = CreateElvButton(m8CurBox, 198, 26, "")
+      ui.m8ResetProfBtn = CreateElvButton(m8CurBox, 198, 25, "")
       ui.m8ResetProfBtn:SetPoint("LEFT", ui.m8DefProfBtn, "RIGHT", 8, 0)
       ui.m8ResetProfBtn:SetScript("OnClick", function()
         local curProf = SpArc:GetActiveProfileName()
@@ -1109,11 +1143,48 @@ local function OpenControlCenter(initialTab)
         controlFrame:RefreshUI()
       end)
 
-      local m8ListBox = RegisterGroupBox(p8, "M8_GRP_LIST", 0, -152, 640, 366)
+      -- ElvUI-style "New Profile" row
+      ui.m8NewLabel = m8CurBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(ui.m8NewLabel, 12)
+      ui.m8NewLabel:SetPoint("TOPLEFT", 16, -92)
+      ui.m8NewLabel:SetTextColor(0.90, 0.90, 0.96, 1)
+
+      local newProfBg = CreateFrame("Frame", nil, m8CurBox, "BackdropTemplate")
+      newProfBg:SetSize(276, 25)
+      newProfBg:SetPoint("TOPLEFT", 136, -86)
+      SetBackdropFlat(newProfBg, 0.03, 0.03, 0.05, 1.0, 0.30, 0.30, 0.42, 1.0)
+
+      local newProfEdit = CreateFrame("EditBox", nil, newProfBg)
+      newProfEdit:SetPoint("TOPLEFT", 6, -2)
+      newProfEdit:SetPoint("BOTTOMRIGHT", -6, 2)
+      newProfEdit:SetFontObject("ChatFontNormal")
+      ApplyCyrFont(newProfEdit, 12)
+      newProfEdit:SetAutoFocus(false)
+      newProfEdit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+      ui.m8NewProfEdit = newProfEdit
+
+      local function CreateNewNamedProfileNow()
+        local rawName = SpArc.Trim(newProfEdit:GetText() or "")
+        if rawName == "" then return end
+        if SpArc.CreateNewProfile and SpArc:CreateNewProfile(rawName) then
+          newProfEdit:SetText("")
+          newProfEdit:ClearFocus()
+          ui.selectedProfileForOps = rawName
+          print(string.format(SpArc:L("MSG_PROF_CREATED"), rawName))
+          controlFrame:RefreshUI()
+        end
+      end
+      newProfEdit:SetScript("OnEnterPressed", CreateNewNamedProfileNow)
+
+      ui.m8NewProfBtn = CreateElvButton(m8CurBox, 198, 25, "")
+      ui.m8NewProfBtn:SetPoint("LEFT", newProfBg, "RIGHT", 10, 0)
+      ui.m8NewProfBtn:SetScript("OnClick", CreateNewNamedProfileNow)
+
+      local m8ListBox = RegisterGroupBox(p8, "M8_GRP_LIST", 0, -174, 640, 344)
 
       local profListFrame = CreateFrame("Frame", nil, m8ListBox, "BackdropTemplate")
       profListFrame:SetPoint("TOPLEFT", 14, -14)
-      profListFrame:SetSize(270, 338)
+      profListFrame:SetSize(270, 316)
       SetBackdropFlat(profListFrame, 0.05, 0.05, 0.07, 0.96, 0.20, 0.20, 0.27, 1.0)
 
       local profScroll = CreateFrame("ScrollFrame", "SpArcProfileListScroll", profListFrame, "UIPanelScrollFrameTemplate")
@@ -1149,15 +1220,41 @@ local function OpenControlCenter(initialTab)
       SetBackdropFlat(profDetailsBox, 0.06, 0.06, 0.09, 0.96, 0.20, 0.20, 0.27, 1.0)
 
       ui.profDetailsText = profDetailsBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-      ApplyCyrFont(ui.profDetailsText, 12)
-      ui.profDetailsText:SetPoint("TOPLEFT", 14, -14)
-      ui.profDetailsText:SetPoint("TOPRIGHT", -14, -14)
+      ApplyCyrFont(ui.profDetailsText, 11)
+      ui.profDetailsText:SetPoint("TOPLEFT", 14, -12)
+      ui.profDetailsText:SetPoint("TOPRIGHT", -14, -12)
       ui.profDetailsText:SetJustifyH("LEFT")
       ui.profDetailsText:SetJustifyV("TOP")
-      ui.profDetailsText:SetSpacing(3)
+      ui.profDetailsText:SetSpacing(2)
 
-      ui.m8ActivateBtn = CreateElvButton(profDetailsBox, 300, 28, "")
-      ui.m8ActivateBtn:SetPoint("BOTTOM", 0, 82)
+      -- Toggle whether Copy Profile also copies Nameplate DoT Aura rules
+      local copyAurasBtn = CreateFrame("Button", nil, profDetailsBox)
+      copyAurasBtn:SetSize(304, 20)
+      copyAurasBtn:SetPoint("BOTTOM", 0, 108)
+      local caBox = CreateFrame("Frame", nil, copyAurasBtn, "BackdropTemplate")
+      caBox:SetSize(16, 16)
+      caBox:SetPoint("LEFT", copyAurasBtn, "LEFT", 0, 0)
+      SetBackdropFlat(caBox, 0.03, 0.03, 0.05, 1.0, 0.32, 0.32, 0.42, 1.0)
+      local caFill = caBox:CreateTexture(nil, "ARTWORK")
+      caFill:SetPoint("TOPLEFT", 3, -3)
+      caFill:SetPoint("BOTTOMRIGHT", -3, 3)
+      caFill:SetColorTexture(0.24, 0.58, 0.96, 1.0)
+      copyAurasBtn.fill = caFill
+      local caTxt = copyAurasBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+      ApplyCyrFont(caTxt, 11)
+      caTxt:SetPoint("LEFT", caBox, "RIGHT", 6, 0)
+      caTxt:SetWidth(282)
+      caTxt:SetJustifyH("LEFT")
+      caTxt:SetWordWrap(true)
+      copyAurasBtn.txt = caTxt
+      copyAurasBtn:SetScript("OnClick", function()
+        ui.m8CopyIncludeAuras = not (ui.m8CopyIncludeAuras ~= false)
+        controlFrame:RefreshUI()
+      end)
+      ui.m8CopyAurasBtn = copyAurasBtn
+
+      ui.m8ActivateBtn = CreateElvButton(profDetailsBox, 300, 26, "")
+      ui.m8ActivateBtn:SetPoint("BOTTOM", 0, 74)
       ui.m8ActivateBtn:SetScript("OnClick", function()
         if ui.selectedProfileForOps and ui.selectedProfileForOps ~= "" then
           SpArc:SetProfile(ui.selectedProfileForOps)
@@ -1166,20 +1263,20 @@ local function OpenControlCenter(initialTab)
         end
       end)
 
-      ui.m8CopyBtn = CreateElvButton(profDetailsBox, 300, 28, "")
-      ui.m8CopyBtn:SetPoint("BOTTOM", 0, 48)
+      ui.m8CopyBtn = CreateElvButton(profDetailsBox, 300, 26, "")
+      ui.m8CopyBtn:SetPoint("BOTTOM", 0, 43)
       ui.m8CopyBtn:SetScript("OnClick", function()
         local curProf = SpArc:GetActiveProfileName()
         if ui.selectedProfileForOps and ui.selectedProfileForOps ~= "" and ui.selectedProfileForOps ~= curProf then
-          if SpArc:CopyProfileFrom(ui.selectedProfileForOps) then
+          if SpArc:CopyProfileFrom(ui.selectedProfileForOps, ui.m8CopyIncludeAuras ~= false) then
             print(string.format(SpArc:L("MSG_PROF_COPIED"), ui.selectedProfileForOps, curProf))
             controlFrame:RefreshUI()
           end
         end
       end)
 
-      ui.m8DeleteBtn = CreateElvButton(profDetailsBox, 300, 28, "")
-      ui.m8DeleteBtn:SetPoint("BOTTOM", 0, 14)
+      ui.m8DeleteBtn = CreateElvButton(profDetailsBox, 300, 26, "")
+      ui.m8DeleteBtn:SetPoint("BOTTOM", 0, 12)
       ui.m8DeleteBtn:SetScript("OnClick", function()
         local curProf = SpArc:GetActiveProfileName()
         if ui.selectedProfileForOps and ui.selectedProfileForOps ~= "Default" and ui.selectedProfileForOps ~= curProf then
@@ -1420,10 +1517,12 @@ local function OpenControlCenter(initialTab)
       end
 
       local curVis = db.visual or {}
+      local curAuraCount = (db.npAuraRules and #db.npAuraRules) or 0
       ui.m8CurSummary:SetText(string.format(
         SpArc:L("M8_CUR_SUMMARY"),
         curChar,
         activeProfName,
+        curAuraCount,
         fmtBind(curVis.camHoldKey, false),
         fmtBind(curVis.camToggleKey, false),
         fmtBind(curVis.camInteractKey, true)
@@ -1433,6 +1532,8 @@ local function OpenControlCenter(initialTab)
       ui.m8DefProfBtn:SetText(SpArc:L("M8_DEF_PROF_BTN"))
       ui.m8DefProfBtn:SetSelected(activeProfName == "Default")
       ui.m8ResetProfBtn:SetText(SpArc:L("M8_RESET_BTN"))
+      if ui.m8NewLabel then ui.m8NewLabel:SetText(SpArc:L("M8_NEW_LABEL")) end
+      if ui.m8NewProfBtn then ui.m8NewProfBtn:SetText(SpArc:L("M8_NEW_BTN")) end
 
       for idx = 1, #ui.profRowButtons do
         local prBtn = ui.profRowButtons[idx]
@@ -1450,10 +1551,11 @@ local function OpenControlCenter(initialTab)
           prBtn:Hide()
         end
       end
-      ui.profListContent:SetHeight(math.max(320, #profList * 28 + 10))
+      ui.profListContent:SetHeight(math.max(300, #profList * 28 + 10))
 
       local selProfObj = db.profiles and db.profiles[ui.selectedProfileForOps]
       local selVis = (selProfObj and selProfObj.visual) or curVis
+      local selAuraCount = (selProfObj and selProfObj.npAuraRules and #selProfObj.npAuraRules) or curAuraCount
       ui.profDetailsText:SetText(string.format(
         SpArc:L("M8_DETAILS_HEADER"),
         ui.selectedProfileForOps or activeProfName,
@@ -1463,8 +1565,15 @@ local function OpenControlCenter(initialTab)
         tonumber(selVis.camCrosshairOffsetY) or 20,
         tonumber(selVis.camCrosshairScale) or 1.0,
         tonumber(selVis.arcRadius) or 108,
-        tonumber(selVis.arcSpreadDeg) or 116
+        tonumber(selVis.arcSpreadDeg) or 116,
+        selAuraCount
       ))
+      if ui.m8CopyAurasBtn then
+        local incAuras = (ui.m8CopyIncludeAuras ~= false)
+        ui.m8CopyAurasBtn.fill:SetShown(incAuras)
+        ui.m8CopyAurasBtn.txt:SetText(SpArc:L("CK_M8_COPY_AURAS"))
+        ui.m8CopyAurasBtn.txt:SetTextColor(incAuras and 0.94 or 0.62, incAuras and 0.94 or 0.62, incAuras and 0.98 or 0.70, 1)
+      end
       ui.m8ActivateBtn:SetText(SpArc:L("M8_ACTIVATE_BTN"))
       ui.m8CopyBtn:SetText(SpArc:L("M8_COPY_BTN"))
       ui.m8DeleteBtn:SetText(SpArc:L("M8_DELETE_BTN"))

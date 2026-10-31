@@ -203,6 +203,32 @@ SpArc.DEFAULT_NP_AURA_RULES = {
   { enabled = true, ids = "164815",         r = 1.00, g = 0.58, b = 0.12 },
 }
 
+SpArc.CLASS_DEFAULT_NP_AURA_RULES = {
+  PRIEST = {
+    { enabled = true, ids = "34914, 589", r = 0.62, g = 0.22, b = 1.00 }, -- Прикосновение вампира + Слово Тьмы: Боль
+    { enabled = true, ids = "34914",      r = 0.16, g = 0.52, b = 1.00 }, -- Прикосновение вампира
+    { enabled = true, ids = "589",        r = 1.00, g = 0.58, b = 0.12 }, -- Слово Тьмы: Боль
+    { enabled = true, ids = "335467",     r = 0.20, g = 0.88, b = 0.45 }, -- Всепожирающая чума
+  },
+  DRUID = {
+    { enabled = true, ids = "164812, 164815", r = 0.62, g = 0.22, b = 1.00 }, -- Лунный огонь + Солнечный огонь
+    { enabled = true, ids = "164812",         r = 0.16, g = 0.52, b = 1.00 }, -- Лунный огонь
+    { enabled = true, ids = "164815",         r = 1.00, g = 0.58, b = 0.12 }, -- Солнечный огонь
+  },
+  ROGUE = {
+    { enabled = true, ids = "703, 1943", r = 0.62, g = 0.22, b = 1.00 }, -- Гаррота + Рваная рана
+    { enabled = true, ids = "703",       r = 0.16, g = 0.52, b = 1.00 }, -- Гаррота
+    { enabled = true, ids = "1943",      r = 1.00, g = 0.58, b = 0.12 }, -- Рваная рана
+  },
+  WARRIOR = {
+    { enabled = true, ids = "772",       r = 1.00, g = 0.58, b = 0.12 }, -- Кровопускание
+  },
+  MAGE = {
+    { enabled = true, ids = "228358",    r = 0.16, g = 0.52, b = 1.00 }, -- Зимняя стужа
+    { enabled = true, ids = "12654",     r = 1.00, g = 0.58, b = 0.12 }, -- Воспламенение
+  },
+}
+
 SpArc.state = {
   lastCastAt = {},
   lastAnyCastAt = 0,
@@ -344,6 +370,55 @@ function SpArc:GetGameInteractKey()
   return "E"
 end
 
+local function InferProfileClass(profName, profObj)
+  if type(profObj) == "table" and type(profObj.activePresetID) == "string" then
+    local clsFromPreset = profObj.activePresetID:match("^([A-Z]+)_")
+    if clsFromPreset and SpArc.CLASS_DEFAULT_NP_AURA_RULES[clsFromPreset] then
+      return clsFromPreset
+    end
+  end
+  if type(profName) == "string" then
+    if profName:find("Ньарлатхотеп", 1, true) or profName:find("Ньярлатхотеп", 1, true) then
+      return "PRIEST"
+    elseif profName:find("Котастрофа", 1, true) or profName:find("Трипобраз", 1, true) then
+      return "DRUID"
+    elseif profName:find("Улак", 1, true) then
+      return "ROGUE"
+    elseif profName:find("Моржовый", 1, true) or profName:find("Стархаммер", 1, true) then
+      return "WARRIOR"
+    elseif profName:find("Калиратри", 1, true) or profName:find("Морвара", 1, true) then
+      return "MAGE"
+    end
+  end
+  if _G.UnitClass then
+    local okC, _, cls = pcall(_G.UnitClass, "player")
+    if okC and not SpArc.IsSecret(cls) and type(cls) == "string" and cls ~= "" then
+      return cls
+    end
+  end
+  return "PRIEST"
+end
+
+local function CloneAuraRulesTable(srcRules, fallbackClassTag)
+  local list = srcRules
+  if type(list) ~= "table" then
+    list = (fallbackClassTag and SpArc.CLASS_DEFAULT_NP_AURA_RULES[fallbackClassTag]) or SpArc.DEFAULT_NP_AURA_RULES or {}
+  end
+  local out = {}
+  for _, r in ipairs(list) do
+    if type(r) == "table" then
+      out[#out + 1] = {
+        enabled = (r.enabled ~= false),
+        ids = tostring(r.ids or ""),
+        r = tonumber(r.r) or 0.2,
+        g = tonumber(r.g) or 0.6,
+        b = tonumber(r.b) or 1.0,
+      }
+    end
+  end
+  return out
+end
+
 local function CloneVisualTable(src, keepExplicitInteract)
   local dst = {}
   for k, v in pairs(SpArc.DEFAULT_VISUAL) do
@@ -364,7 +439,7 @@ local function CloneVisualTable(src, keepExplicitInteract)
   return dst
 end
 
-local function EnsureProfileObject(db, profName, templateVisual, keepExplicitInteract)
+local function EnsureProfileObject(db, profName, templateVisual, keepExplicitInteract, templateAuraRules)
   db.profiles = db.profiles or {}
   if not db.profiles[profName] then
     db.profiles[profName] = {
@@ -379,6 +454,10 @@ local function EnsureProfileObject(db, profName, templateVisual, keepExplicitInt
     end
   end
   prof.visual.camBindSnapshot = prof.visual.camBindSnapshot or {}
+  if type(prof.npAuraRules) ~= "table" then
+    local clsTag = InferProfileClass(profName, prof)
+    prof.npAuraRules = CloneAuraRulesTable(templateAuraRules, clsTag)
+  end
   return prof
 end
 
@@ -538,18 +617,26 @@ function SpArc:EnsureDB(forceReinit)
     db.autoPresets = activeProf.autoPresets
   end
 
-  if type(db.npAuraRules) ~= "table" then
-    db.npAuraRules = {}
-    for _, r in ipairs(SpArc.DEFAULT_NP_AURA_RULES or {}) do
-      db.npAuraRules[#db.npAuraRules + 1] = {
-        enabled = (r.enabled ~= false),
-        ids = tostring(r.ids or ""),
-        r = tonumber(r.r) or 0.2,
-        g = tonumber(r.g) or 0.6,
-        b = tonumber(r.b) or 1.0,
-      }
+  -- Isolate npAuraRules per profile and migrate any legacy shared db.npAuraRules
+  if not db._npAuraRulesIsolatedV2 then
+    local legacyGlobalRules = (type(db.npAuraRules) == "table" and #db.npAuraRules > 0) and db.npAuraRules or nil
+    for pName, pObj in pairs(db.profiles or {}) do
+      if type(pObj) == "table" then
+        local pCls = InferProfileClass(pName, pObj)
+        if pCls == "DRUID" and legacyGlobalRules then
+          pObj.npAuraRules = CloneAuraRulesTable(legacyGlobalRules, "DRUID")
+        else
+          pObj.npAuraRules = CloneAuraRulesTable(nil, pCls)
+        end
+      end
     end
+    db._npAuraRulesIsolatedV2 = true
   end
+
+  if type(activeProf.npAuraRules) ~= "table" then
+    activeProf.npAuraRules = CloneAuraRulesTable(nil, InferProfileClass(activeProfName, activeProf))
+  end
+  db.npAuraRules = activeProf.npAuraRules
 
   db.telemetryLog = db.telemetryLog or {}
   db.lastSpellAudit = db.lastSpellAudit or {}
@@ -603,6 +690,18 @@ function SpArc:GetProfileList()
   return list
 end
 
+local function ApplyAllActiveProfileSubsystems()
+  if SpArc.RefreshAllNameplates then
+    SpArc:RefreshAllNameplates()
+  elseif SpArc.CompileNameplateAuraRules then
+    SpArc:CompileNameplateAuraRules()
+  end
+  if SpArc.ApplyVisualLayout then SpArc:ApplyVisualLayout() end
+  if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
+  if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
+  if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
+end
+
 function SpArc:SetProfile(profileName)
   if not profileName or profileName == "" then return end
   local db = SpArc:EnsureDB()
@@ -613,13 +712,24 @@ function SpArc:SetProfile(profileName)
   end
   db.activeProfile = profileName
   db.visual = prof.visual
-  if SpArc.ApplyVisualLayout then SpArc:ApplyVisualLayout() end
-  if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
-  if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
-  if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
+  db.npAuraRules = prof.npAuraRules
+  ApplyAllActiveProfileSubsystems()
 end
 
-function SpArc:CopyProfileFrom(srcProfileName)
+function SpArc:CreateNewProfile(newProfileName)
+  newProfileName = SpArc.Trim(newProfileName or "")
+  if newProfileName == "" or #newProfileName > 50 then return false end
+  local db = SpArc:EnsureDB()
+  local clsTag = InferProfileClass(SpArc:GetCurrentCharKey(), nil)
+  db.profiles[newProfileName] = {
+    visual = CloneVisualTable(nil),
+    npAuraRules = CloneAuraRulesTable(nil, clsTag),
+  }
+  SpArc:SetProfile(newProfileName)
+  return true
+end
+
+function SpArc:CopyProfileFrom(srcProfileName, copyAuraRules)
   local db = SpArc:EnsureDB()
   local srcProf = db.profiles and db.profiles[srcProfileName]
   if not srcProf or not srcProf.visual then return false end
@@ -632,25 +742,44 @@ function SpArc:CopyProfileFrom(srcProfileName)
   end
   curProf.visual.camBindSnapshot = {}
   curProf.visual.camInteractKeyUserSet = false
+  if copyAuraRules ~= false and type(srcProf.npAuraRules) == "table" then
+    curProf.npAuraRules = CloneAuraRulesTable(srcProf.npAuraRules, InferProfileClass(curProfName, curProf))
+  end
   db.visual = curProf.visual
-  if SpArc.ApplyVisualLayout then SpArc:ApplyVisualLayout() end
-  if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
-  if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
-  if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
+  db.npAuraRules = curProf.npAuraRules
+  ApplyAllActiveProfileSubsystems()
   return true
 end
 
 function SpArc:ResetCurrentProfile()
   local db = SpArc:EnsureDB()
   local curProfName = SpArc:GetActiveProfileName()
+  local curProf = db.profiles[curProfName]
+  local clsTag = InferProfileClass(curProfName, curProf)
   db.profiles[curProfName] = {
     visual = CloneVisualTable(nil),
+    npAuraRules = CloneAuraRulesTable(nil, clsTag),
+    mode = curProf and curProf.mode,
+    activePresetID = curProf and curProf.activePresetID,
+    autoPresets = curProf and curProf.autoPresets,
   }
   db.visual = db.profiles[curProfName].visual
-  if SpArc.ApplyVisualLayout then SpArc:ApplyVisualLayout() end
-  if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
-  if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
-  if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
+  db.npAuraRules = db.profiles[curProfName].npAuraRules
+  ApplyAllActiveProfileSubsystems()
+end
+
+function SpArc:ResetCurrentProfileAuraRules()
+  local db = SpArc:EnsureDB()
+  local curProfName = SpArc:GetActiveProfileName()
+  local curProf = EnsureProfileObject(db, curProfName, nil)
+  local clsTag = InferProfileClass(curProfName, curProf)
+  curProf.npAuraRules = CloneAuraRulesTable(nil, clsTag)
+  db.npAuraRules = curProf.npAuraRules
+  if SpArc.RefreshAllNameplates then
+    SpArc:RefreshAllNameplates()
+  elseif SpArc.CompileNameplateAuraRules then
+    SpArc:CompileNameplateAuraRules()
+  end
 end
 
 function SpArc:DeleteProfile(profileName)

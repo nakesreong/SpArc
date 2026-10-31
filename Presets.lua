@@ -56,11 +56,11 @@ local STRINGS = {
     TOP_TEST_HUD = "Test HUD: %s",
     TOP_FIX_CURSOR = "Reset Cursor",
 
-    M3_TITLE = "Rotation Arc (Semicircle Queue)",
-    CK_BOSS_ROT = "Boss / Rare (auto-enable Bursts on Boss & Rare)",
-    CK_PVP_ROT = "PvP (auto-enable PvP skills on Players)",
-    M3_GRP_GEO = "Arc Geometry & Position",
-    M3_GRP_ICONS = "Queue Icons & Scaling",
+    M3_TITLE = "Rotation Arc (Semicircle / Flat Line / Bowl Queue)",
+    CK_BOSS_ROT = "Enable Bursts on Boss & Rare targets (BOSS condition in .MD)",
+    CK_PVP_ROT = "Enable PvP skills on Player targets (PVP condition in .MD)",
+    M3_GRP_GEO = "Arc Geometry & Position (-180° Bowl ⌣  |  0° Line —  |  +180° Dome ⌒)",
+    M3_GRP_ICONS = "Queue Icons, Border Thickness & Opacity",
     M3_GRP_FEEDBACK = "Press Animation & Feedback",
     CK_PRESS_FEEDBACK = "Animate icon press feedback (-20% -> +20% bounce) on exact spell cast",
 
@@ -159,10 +159,11 @@ local STRINGS = {
     M10_PREV_BASE = "Preview: Base Hostile (Red)",
     M10_PREV_RULE = "Preview Rule #%d (%s)",
     M10_CYCLE_PREV_BTN = "Cycle Preview Color",
-    M10_GRP_AURAS = "Dynamic Aura / DoT Color Rules (Enter Aura ID or 'ID1, ID2' for AND combo)",
-    M10_AURA_HINT = "Enter Wowhead Aura/Spell ID(s). Multiple IDs separated by comma (e.g. |cffffd100164812, 164815|r) require ALL listed auras (AND) and take priority over single-aura rules.",
+    M10_GRP_AURAS = "Dynamic Aura / DoT Color Rules (Auto-synced from .MD Pseudocode)",
+    CK_NP_AUTO_MD = "Pull tracked DoTs automatically from active .MD rotation preset",
+    M10_AURA_HINT = "DoT IDs are pulled automatically from your active .MD preset (or add custom Wowhead IDs; comma = AND combo, e.g. |cffffd100164812, 164815|r).",
     M10_ADD_RULE_BTN = "+ Add Aura Rule",
-    M10_RESET_RULES_BTN = "Reset Defaults",
+    M10_RESET_RULES_BTN = "Sync from .MD",
     M10_AND_JOIN = "AND",
     M10_INVALID_IDS = "Enter valid Aura ID(s)",
     MSG_M10_ENTER_ID = "|cffa335eeSpArc Nameplates:|r Please enter at least one numeric Aura/Spell ID (e.g. 164812).",
@@ -184,9 +185,8 @@ local STRINGS = {
       .. "• FSM Rotation Rules: |cff00ff00%d|r\n"
       .. "• Left Wing Saves (TRACK_SAVES): |cff00ff00%s|r\n"
       .. "• Right Wing CDs (TRACK_CDS): |cff00ff00%s|r\n"
-      .. "• Interruptible Filler: |cffff40a0%s|r\n"
-      .. "• Protected Channel: |cff40d0ff%s|r\n\n"
-      .. "|cffaaaaaaAll rotation logic, side wings, and emergency alerts are compiled live from editable .MD pseudocode with zero hardcoded class logic.|r",
+      .. "• Nameplate DoTs (.MD): |cffa335ee%s|r\n"
+      .. "• Interruptible / Protected: |cffff40a0%s|r / |cff40d0ff%s|r",
     NONE_STR = "none",
 
     ACTIVATE_BTN = "Set as Active Preset",
@@ -204,12 +204,14 @@ local STRINGS = {
     MSG_MD_SAVED = "|cffa335eeSpArc:|r .MD pseudocode saved and compiled for |cffffd100%s|r!",
 
     V_HEADER = "Configure Semicircle Rotation Arc, Side Cooldown Wings, Castbar & Minimap Button:",
-    SL_ARC_RADIUS = "Semicircle Arc Radius (px)",
-    SL_ARC_SPREAD = "Semicircle Arc Spread Angle (°)",
+    SL_ARC_RADIUS = "Arc Radius / Width (px)",
+    SL_ARC_SPREAD = "Curvature (°): -180 Bowl ⌣ | 0 Line — | +180 Dome ⌒",
     SL_PRIMARY_SCALE = "Primary Slot #1 Scale",
     SL_QUEUE_SCALE = "Queue Slots (#2..#6) Scale",
     SL_QUEUE_LEN = "Number of Arc Icons (3..6)",
     SL_ARC_OFFSET_Y = "Arc Vertical Offset Y (px)",
+    SL_PRIMARY_BORDER = "Primary Slot #1 Border Thickness (px)",
+    SL_ARC_ALPHA = "Rotation Arc Opacity (%)",
     SL_CB_WIDTH = "Castbar Width (px)",
     SL_CB_OFFSET_Y = "Castbar Vertical Offset Y (px)",
     SL_EMERG_HP = "Emergency Save HP Threshold (%)",
@@ -281,11 +283,11 @@ local STRINGS = {
     TOP_TEST_HUD = "Тест HUD: %s",
     TOP_FIX_CURSOR = "Сброс курсора",
 
-    M3_TITLE = "Дуга ротации (Полукруг очереди заклинаний)",
-    CK_BOSS_ROT = "Босс / Рарник (авто-бурсты на боссах и рарниках)",
-    CK_PVP_ROT = "ПвП (авто-ПвП скиллы на игроках)",
-    M3_GRP_GEO = "Геометрия и положение дуги",
-    M3_GRP_ICONS = "Масштаб и количество иконок",
+    M3_TITLE = "Дуга ротации (Полукруг / Прямая линия / Чаша очереди заклинаний)",
+    CK_BOSS_ROT = "Босс / Рарник — разрешить бурсты (ветки BOSS в .MD)",
+    CK_PVP_ROT = "ПвП — разрешить ПвП-контроль на игроках (ветки PVP в .MD)",
+    M3_GRP_GEO = "Геометрия и изгиб дуги (-180° чаша ⌣  |  0° прямая линия —  |  +180° радуга ⌒)",
+    M3_GRP_ICONS = "Масштаб, обводка главной иконки и прозрачность",
     M3_GRP_FEEDBACK = "Отклик нажатия кнопок",
     CK_PRESS_FEEDBACK = "Имитировать нажатие иконки (-20% -> +20% размера) при прожиме спелла",
 
@@ -384,10 +386,11 @@ local STRINGS = {
     M10_PREV_BASE = "Превью: Враг без дотов (Красный)",
     M10_PREV_RULE = "Превью правила #%d (%s)",
     M10_CYCLE_PREV_BTN = "Сменить цвет превью",
-    M10_GRP_AURAS = "Цвета по аурам и дотам (ID с Wowhead; через запятую = условие «И»)",
-    M10_AURA_HINT = "Впиши ID ауры/дебаффа (или несколько через запятую для условия «Эта И Эта», напр. |cffffd100164812, 164815|r) и выбери цвет. Комбо-правила проверяются раньше одиночных.",
+    M10_GRP_AURAS = "Цвета по аурам и дотам (Авто-подтягивание из .MD псевдокода ротации)",
+    CK_NP_AUTO_MD = "Тянуть ID дотов автоматически из активного .MD пресета ротации",
+    M10_AURA_HINT = "ID дотов автоматически подтягиваются из активного .MD пресета (можно менять цвета или добавлять свои ID через запятую для условия «И», напр. |cffffd100164812, 164815|r).",
     M10_ADD_RULE_BTN = "+ Добавить ауру",
-    M10_RESET_RULES_BTN = "По умолч.",
+    M10_RESET_RULES_BTN = "Из .MD пресета",
     M10_AND_JOIN = "И",
     M10_INVALID_IDS = "Укажи числовой ID ауры",
     MSG_M10_ENTER_ID = "|cffa335eeSpArc Неймплейты:|r Введи хотя бы один числовой ID ауры/спелла с Wowhead (например, 164812).",
@@ -409,9 +412,8 @@ local STRINGS = {
       .. "• Правил ротации в автомате: |cff00ff00%d|r\n"
       .. "• Крыло сейвов слева (TRACK_SAVES): |cff00ff00%s|r\n"
       .. "• Крыло бурстов справа (TRACK_CDS): |cff00ff00%s|r\n"
-      .. "• Прерываемый филлер: |cffff40a0%s|r\n"
-      .. "• Защищённый канал: |cff40d0ff%s|r\n\n"
-      .. "|cffaaaaaaВся логика ротации, боковых крыльев КД и экстренного сейва компилируется напрямую из текстового .MD псевдокода без хардкода!|r",
+      .. "• Доты неймплейтов (из .MD): |cffa335ee%s|r\n"
+      .. "• Филлер / Защита канала: |cffff40a0%s|r / |cff40d0ff%s|r",
     NONE_STR = "нет",
 
     ACTIVATE_BTN = "Сделать активным пресетом",
@@ -429,12 +431,14 @@ local STRINGS = {
     MSG_MD_SAVED = "|cffa335eeSpArc:|r Псевдокод .MD сохранён и скомпилирован для |cffffd100%s|r!",
 
     V_HEADER = "Настройки полукруга ротации, боковых крыльев сейвов/КД, кастбара и миникарты:",
-    SL_ARC_RADIUS = "Радиус полукруга ротации (px)",
-    SL_ARC_SPREAD = "Угол раскрытия полукруга (°)",
+    SL_ARC_RADIUS = "Радиус / ширина дуги ротации (px)",
+    SL_ARC_SPREAD = "Изгиб дуги (°): -180 чаша ⌣ | 0 линия — | +180 дуга ⌒",
     SL_PRIMARY_SCALE = "Масштаб главной иконки #1",
     SL_QUEUE_SCALE = "Масштаб очереди (#2..#6)",
     SL_QUEUE_LEN = "Кол-во иконок в дуге (3..6)",
     SL_ARC_OFFSET_Y = "Смещение дуги по Y (px)",
+    SL_PRIMARY_BORDER = "Толщина обводки главной иконки #1 (px)",
+    SL_ARC_ALPHA = "Прозрачность дуги ротации (%)",
     SL_CB_WIDTH = "Ширина кастбара (px)",
     SL_CB_OFFSET_Y = "Смещение кастбара по Y (px)",
     SL_EMERG_HP = "Порог ХП экстренного сейва (%)",
@@ -542,6 +546,7 @@ PROTECT_CHANNEL: <KEY1, KEY2 or NONE>
 SECTION D — ## TRACKERS:
 TRACK_SAVES: <DEFENSIVE_1>, <DEFENSIVE_2>, <DEFENSIVE_3>, <DEFENSIVE_4>
 TRACK_CDS: <OFFENSIVE_CD_1>, <OFFENSIVE_CD_2>, <OFFENSIVE_CD_3>, <OFFENSIVE_CD_4>
+TRACK_DOTS: <TARGET_DOT_1>, <TARGET_DOT_2> (Note: Nameplates also auto-detect any `target.aura(KEY)` in ROTATION_QUEUE!)
 
 SECTION E — ## EMERGENCY_SAVE:
 IF player.hp_percent <= 25 AND READY(<DEFENSIVE_KEY>) THEN
@@ -611,9 +616,10 @@ AURA <КЛЮЧ_КАПСОМ> = ID:<id1,id2> | AURA_UNIT:<target|player> | AURA_D
 INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: <КЛЮЧ1, КЛЮЧ2 или NONE>
 PROTECT_CHANNEL: <КЛЮЧ1, КЛЮЧ2 или NONE>
 
-СЕКЦИЯ Г — ## TRACKERS (БОКОВЫЕ КРЫЛЬЯ ХУДА):
+СЕКЦИЯ Г — ## TRACKERS (БОКОВЫЕ КРЫЛЬЯ ХУДА И ДОТЫ НЕЙМПЛЕЙТОВ):
 TRACK_SAVES: <СЕЙВ_1>, <СЕЙВ_2>, <СЕЙВ_3>, <СЕЙВ_4>
 TRACK_CDS: <БУРСТ_1>, <БУРСТ_2>, <БУРСТ_3>, <БУРСТ_4>
+TRACK_DOTS: <ДОТ_1>, <ДОТ_2> (Неймплейты также автоматически подтягивают все `target.aura(KEY)` из ROTATION_QUEUE!)
 
 СЕКЦИЯ Д — ## EMERGENCY_SAVE (ЭКСТРЕННЫЙ СЕЙВ В ЦЕНТРЕ ЭКРАНА):
 IF player.hp_percent <= 25 AND READY(<КЛЮЧ_СЕЙВА>) THEN
@@ -672,7 +678,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 31
+SpArc.PROFILE_SCHEMA_VERSION = 32
 
 ---------------------------------------------------------------------------------------
 --         6 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID)           --
@@ -706,6 +712,7 @@ SPELL SILENCE = ID:15487 | NAME:"Безмолвие","Silence" | CD:45 | INTERRU
 SPELL PSYCHIC_HORROR = ID:64044,8122 | NAME:"Глубинный ужас","Ментальный крик","Psychic Horror","Psychic Scream" | CD:45 | PVP:true | ICON:237568
 SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | GAIN:15 | ICON:136201
 SPELL VAMPIRIC_TOUCH = ID:34914 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Прикосновение вампира","Vampiric Touch" | CD:0 | CHARGES:1 | GAIN:6 | ICON:135978
+AURA SHADOW_WORD_PAIN = ID:589 | AURA_UNIT:target | AURA_DUR:16 | NAME:"Слово Тьмы: Боль","Shadow Word: Pain" | ICON:136207
 SPELL VOID_ERUPTION = ID:228260,391109,194249 | AURA_ID:194249,391109 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | BOSS:true | NAME:"Вхождение в Бездну","Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | ICON:537079
 SPELL POWER_INFUSION = ID:10060 | AURA_ID:10060 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | BOSS:true | NAME:"Придание сил","Power Infusion" | CD:120 | ICON:135939
 SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела Бездны","Void Volley","Void Bolt" | CD:6 | GAIN:10 | OVERRIDE_OF:VOID_ERUPTION | PROC_ONLY:true | ICON:1386548
@@ -729,6 +736,7 @@ PROTECT_CHANNEL: VOID_TORRENT
 ## TRACKERS
 TRACK_SAVES: DISPERSION, DESPERATE_PRAYER, VAMPIRIC_EMBRACE, FADE
 TRACK_CDS: POWER_INFUSION, VOID_ERUPTION, VOID_TORRENT, PSYFIEND, SILENCE
+TRACK_DOTS: VAMPIRIC_TOUCH, SHADOW_WORD_PAIN, DEVOURING_PLAGUE
 
 ## EMERGENCY_SAVE
 IF player.hp_percent <= 20 AND READY(DISPERSION) THEN
@@ -812,6 +820,7 @@ PROTECT_CHANNEL: RAY_OF_FROST
 ## TRACKERS
 TRACK_SAVES: ICE_BLOCK, ICE_BARRIER, ALTER_TIME, COLD_SNAP
 TRACK_CDS: ICY_VEINS, RAY_OF_FROST, FROZEN_ORB, FLURRY, COMET_STORM, COUNTERSPELL
+TRACK_DOTS: FREEZING
 
 ## EMERGENCY_SAVE
 IF player.hp_percent <= 25 AND READY(ICE_BLOCK) THEN
@@ -885,6 +894,7 @@ SPELL FEINT = ID:1966 | NAME:"Уловка","Feint" | CD:15 | CHARGES:2 | ICON:1
 ## TRACKERS
 TRACK_SAVES: CRIMSON_VIAL, EVASION, CLOAK_OF_SHADOWS, FEINT
 TRACK_CDS: DEATHMARK, KINGSBANE, SHIV, VANISH, KICK
+TRACK_DOTS: GARROTE, RUPTURE, CRIMSON_TEMPEST
 
 ## EMERGENCY_SAVE
 IF player.hp_percent <= 35 AND READY(CRIMSON_VIAL) THEN
@@ -953,6 +963,7 @@ SPELL IMPENDING_VICTORY = ID:202168 | NAME:"Верная победа","Impendin
 ## TRACKERS
 TRACK_SAVES: DIE_BY_THE_SWORD, RALLYING_CRY, SPELL_REFLECTION, IMPENDING_VICTORY
 TRACK_CDS: AVATAR, COLOSSUS_SMASH, BLADESTORM, SWEEPING_STRIKES, PUMMEL
+TRACK_DOTS: REND, COLOSSUS_SMASH
 
 ## EMERGENCY_SAVE
 IF player.hp_percent <= 25 AND READY(DIE_BY_THE_SWORD) THEN
@@ -1026,6 +1037,7 @@ PROTECT_CHANNEL: CONVOKE_THE_SPIRITS
 ## TRACKERS
 TRACK_SAVES: SURVIVAL_INSTINCTS, BARKSKIN, REGROWTH, FRENZIED_REGENERATION
 TRACK_CDS: BERSERK, CONVOKE_THE_SPIRITS, TIGERS_FURY, FERAL_FRENZY, SKULL_BASH
+TRACK_DOTS: RAKE, RIP
 
 ## EMERGENCY_SAVE
 IF player.hp_percent <= 25 AND READY(SURVIVAL_INSTINCTS) THEN
@@ -1105,6 +1117,7 @@ PROTECT_CHANNEL: CONVOKE_THE_SPIRITS
 ## TRACKERS
 TRACK_SAVES: BARKSKIN, REGROWTH, BEAR_FORM, SOLAR_BEAM
 TRACK_CDS: CELESTIAL_ALIGNMENT, FORCE_OF_NATURE, FURY_OF_ELUNE, CONVOKE_THE_SPIRITS, SOLAR_ECLIPSE, NEW_MOON
+TRACK_DOTS: MOONFIRE, SUNFIRE
 
 ## EMERGENCY_SAVE
 IF player.hp_percent <= 40 AND READY(BARKSKIN) THEN

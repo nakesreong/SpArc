@@ -75,6 +75,10 @@ function SpArc:SyncSpellDefsFromProfile(parsed, presetID)
   if changed then
     st.lastSyncedPresetID = presetID
     SpArc:ScanActionSlotsAndSpells(true)
+    local db = SpArc:EnsureDB()
+    if db and db.visual and db.visual.npAutoAurasFromMD ~= false and SpArc.SyncNameplateAurasFromActiveMD then
+      SpArc:SyncNameplateAurasFromActiveMD(presetID, false)
+    end
   end
 end
 

@@ -365,7 +365,9 @@ local function OpenControlCenter(initialTab)
       local txt = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       ApplyCyrFont(txt, isMasterEnable and 13 or 12)
       txt:SetPoint("LEFT", box, "RIGHT", 8, 0)
+      txt:SetPoint("RIGHT", btn, "RIGHT", -2, 0)
       txt:SetJustifyH("LEFT")
+      txt:SetWordWrap(false)
       btn.txt = txt
 
       btn.labelKey = labelKey
@@ -628,11 +630,18 @@ local function OpenControlCenter(initialTab)
 
       ui.detailsText = detailsBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       ApplyCyrFont(ui.detailsText, 12)
-      ui.detailsText:SetPoint("TOPLEFT", 14, -14)
-      ui.detailsText:SetPoint("TOPRIGHT", -14, -14)
+      ui.detailsText:SetPoint("TOPLEFT", 14, -12)
+      ui.detailsText:SetPoint("TOPRIGHT", -14, -12)
       ui.detailsText:SetJustifyH("LEFT")
       ui.detailsText:SetJustifyV("TOP")
       ui.detailsText:SetSpacing(3)
+
+      local cBossRot = CreateElvCheck(detailsBox, "CK_BOSS_ROT", "enableBossRotation", 14, -278, false, false)
+      cBossRot:SetWidth(272)
+      cBossRot.txt:SetFont(cBossRot.txt:GetFont(), 11, "OUTLINE")
+      local cPvPRot = CreateElvCheck(detailsBox, "CK_PVP_ROT", "enablePvPRotation", 14, -304, false, false)
+      cPvPRot:SetWidth(272)
+      cPvPRot.txt:SetFont(cPvPRot.txt:GetFont(), 11, "OUTLINE")
 
       ui.activateBtn = CreateElvButton(detailsBox, 270, 26, "")
       ui.activateBtn:SetPoint("BOTTOM", 0, 110)
@@ -738,6 +747,9 @@ local function OpenControlCenter(initialTab)
             db.autoPresets.PVP  = selectedPresetForEdit
           end
           if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
+          if db.visual and db.visual.npAutoAurasFromMD ~= false and SpArc.SyncNameplateAurasFromActiveMD then
+            SpArc:SyncNameplateAurasFromActiveMD(selectedPresetForEdit, false)
+          end
           SpArc:SelectActiveParsedProfile()
           SpArc:ScanActionSlotsAndSpells(true)
           controlFrame:RefreshUI()
@@ -755,6 +767,9 @@ local function OpenControlCenter(initialTab)
           db.presets[selectedPresetForEdit].title = bp.title
           db.presets[selectedPresetForEdit].userModified = false
           SpArc:RebuildParsedProfiles()
+          if db.visual and db.visual.npAutoAurasFromMD ~= false and SpArc.SyncNameplateAurasFromActiveMD then
+            SpArc:SyncNameplateAurasFromActiveMD(selectedPresetForEdit, false)
+          end
           SpArc:SelectActiveParsedProfile()
           controlFrame:RefreshUI()
         end
@@ -781,25 +796,23 @@ local function OpenControlCenter(initialTab)
       ui.m3Title:SetTextColor(1, 0.85, 0.25, 1)
 
       local cArcEnable = CreateElvCheck(p3, "MOD_ENABLE", "enableArcHUD", 0, -24, true, false)
-      cArcEnable:SetWidth(120)
-      local cBossRot = CreateElvCheck(p3, "CK_BOSS_ROT", "enableBossRotation", 130, -24, true, false)
-      cBossRot:SetWidth(230)
-      local cPvPRot = CreateElvCheck(p3, "CK_PVP_ROT", "enablePvPRotation", 370, -24, true, false)
-      cPvPRot:SetWidth(270)
+      cArcEnable:SetWidth(220)
 
-      local m3GeoBox = RegisterGroupBox(p3, "M3_GRP_GEO", 0, -56, 640, 162)
+      local m3GeoBox = RegisterGroupBox(p3, "M3_GRP_GEO", 0, -56, 640, 152)
       CreateElvSlider(m3GeoBox, "SL_ARC_RADIUS", "arcRadius", 50, 260, 5, 18, -14, 280)
-      CreateElvSlider(m3GeoBox, "SL_ARC_SPREAD", "arcSpreadDeg", 60, 180, 5, 336, -14, 280)
-      CreateElvSlider(m3GeoBox, "SL_ARC_OFFSET_Y", "arcOffsetY", -120, 180, 5, 18, -76, 280)
+      CreateElvSlider(m3GeoBox, "SL_ARC_SPREAD", "arcSpreadDeg", -180, 180, 5, 336, -14, 280)
+      CreateElvSlider(m3GeoBox, "SL_ARC_OFFSET_Y", "arcOffsetY", -340, 220, 2, 18, -76, 280)
 
-      local m3IconsBox = RegisterGroupBox(p3, "M3_GRP_ICONS", 0, -230, 640, 162)
+      local m3IconsBox = RegisterGroupBox(p3, "M3_GRP_ICONS", 0, -220, 640, 212)
       CreateElvSlider(m3IconsBox, "SL_PRIMARY_SCALE", "primaryScale", 1.0, 2.0, 0.05, 18, -14, 280)
       CreateElvSlider(m3IconsBox, "SL_QUEUE_SCALE", "queueScale", 0.6, 1.4, 0.05, 336, -14, 280)
       CreateElvSlider(m3IconsBox, "SL_QUEUE_LEN", "queueLength", 3, 6, 1, 18, -76, 280)
+      CreateElvSlider(m3IconsBox, "SL_PRIMARY_BORDER", "primaryBorderSize", 0, 6, 1, 336, -76, 280)
+      CreateElvSlider(m3IconsBox, "SL_ARC_ALPHA", "arcAlpha", 20, 100, 5, 18, -138, 280)
 
-      local m3FbBox = RegisterGroupBox(p3, "M3_GRP_FEEDBACK", 0, -404, 640, 96)
-      CreateElvCheck(m3FbBox, "CK_PRESS_FEEDBACK", "enablePressFeedback", 14, -12, false, false)
-      CreateElvCheck(m3FbBox, "CK_TEST_MODE", "testMode", 14, -40, false, true)
+      local m3FbBox = RegisterGroupBox(p3, "M3_GRP_FEEDBACK", 0, -444, 640, 82)
+      CreateElvCheck(m3FbBox, "CK_PRESS_FEEDBACK", "enablePressFeedback", 14, -10, false, false)
+      CreateElvCheck(m3FbBox, "CK_TEST_MODE", "testMode", 14, -36, false, true)
 
       local p4 = pages[4]
       ui.m4Title = p4:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1433,6 +1446,10 @@ local function OpenControlCenter(initialTab)
         for k, _ in pairs(selParsed.interruptibleChannels or {}) do intList[#intList + 1] = k end
         local protList = {}
         for k, _ in pairs(selParsed.protectedChannels or {}) do protList[#protList + 1] = k end
+        local dotLabels = {}
+        for _, d in ipairs(selParsed.trackedDots or {}) do
+          dotLabels[#dotLabels + 1] = string.format("%s (%d)", d.key or "?", d.primaryID or 0)
+        end
         local noneStr = SpArc:L("NONE_STR")
         ui.detailsText:SetText(string.format(
           SpArc:L("DETAILS_BODY"),
@@ -1441,6 +1458,7 @@ local function OpenControlCenter(initialTab)
           #(selParsed.rules or {}),
           (#(selParsed.saves or {}) > 0 and table.concat(selParsed.saves, ", ") or noneStr),
           (#(selParsed.cds or {}) > 0 and table.concat(selParsed.cds, ", ") or noneStr),
+          (#dotLabels > 0 and table.concat(dotLabels, ", ") or noneStr),
           (#intList > 0 and table.concat(intList, ", ") or noneStr),
           (#protList > 0 and table.concat(protList, ", ") or noneStr)
         ))

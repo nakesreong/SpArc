@@ -199,11 +199,15 @@ function SpArc:ParseMarkdownFSM(mdText)
     emergency = {},
     saves = {},
     cds = {},
+    dots = {},
+    trackedDots = {},
+    mdAuraRules = {},
   }
   if type(mdText) ~= "string" or mdText == "" then
     return parsed
   end
 
+  local spellBookOrder = {}
   local pendingCond = nil
   for rawLine in mdText:gmatch("[^\r\n]+") do
     local line = Trim(rawLine)
@@ -252,6 +256,7 @@ function SpArc:ParseMarkdownFSM(mdText)
       if not line:match("^#") then
         local spKey, spDef, spKind = ParseSpellDefLine(line)
         if spKey and spDef then
+          spellBookOrder[#spellBookOrder + 1] = spKey
           if spKind == "AURA" then
             parsed.auras[spKey] = spDef
             if spDef.auraUnit ~= "player" then
@@ -308,6 +313,14 @@ function SpArc:ParseMarkdownFSM(mdText)
             end
           end
 
+          local dotsList = line:match("^TRACK_DOTS:%s*(.+)$")
+            or line:match("^TRACK_AURAS:%s*(.+)$")
+          if dotsList then
+            for token in dotsList:gmatch("([A-Z0-9_]+)") do
+              parsed.dots[#parsed.dots + 1] = token
+            end
+          end
+
           local strippedLine = line:gsub("^%d+%.%s*", "")
           local inlineCond, inlineSpell = strippedLine:match("^IF%s+(.+)%s+THEN%s+RETURN%s+CAST%(%s*([A-Z0-9_]+)%s*%)$")
           if not inlineCond then
@@ -358,6 +371,86 @@ function SpArc:ParseMarkdownFSM(mdText)
         end
       end
     end
+  end
+
+  -- Automatically extract tracked enemy nameplate DoT / debuff auras directly from the .MD pseudocode:
+  -- 1) Explicit TRACK_DOTS / TRACK_AURAS list (if present)
+  -- 2) Every `target.aura(KEY_OR_ID)` checked in ## ROTATION_QUEUE rules
+  -- 3) Any target DoT/debuff in ## SPELL_BOOK (`AURA_UNIT:target` or `AURA_DUR` with non-player unit and non-burst)
+  local seenPrimaryID = {}
+  local function AddTrackedTargetAura(tok, fromExplicitOrRule)
+    if not tok or tok == "" then return end
+    local def = parsed.auras[tok] or parsed.spells[tok]
+    if def then
+      if def.auraUnit == "player" then return end
+      if not fromExplicitOrRule and def.burstDuration and def.auraUnit ~= "target" then return end
+      local pID = (def.auraIDs and def.auraIDs[1]) or (def.ids and def.ids[1])
+      if pID and pID > 0 and not seenPrimaryID[pID] then
+        seenPrimaryID[pID] = true
+        parsed.trackedDots[#parsed.trackedDots + 1] = {
+          key = tok,
+          primaryID = pID,
+          ids = def.auraIDs or def.ids or { pID },
+        }
+      end
+      return
+    end
+    local numID = tonumber(tok)
+    if numID and numID > 0 and not seenPrimaryID[numID] then
+      seenPrimaryID[numID] = true
+      parsed.trackedDots[#parsed.trackedDots + 1] = {
+        key = tostring(numID),
+        primaryID = numID,
+        ids = { numID },
+      }
+    end
+  end
+
+  for _, tok in ipairs(parsed.dots) do
+    AddTrackedTargetAura(tok, true)
+  end
+  for _, r in ipairs(parsed.rules) do
+    local cStr = r and r.cond
+    if type(cStr) == "string" then
+      for auraTok in cStr:gmatch("target%.aura%(%s*([A-Za-z0-9_]+)%s*%)") do
+        AddTrackedTargetAura(auraTok:upper(), true)
+      end
+      for debTok in cStr:gmatch("target%.debuff%.([A-Za-z0-9_]+)") do
+        AddTrackedTargetAura(debTok:upper(), true)
+      end
+    end
+  end
+  for _, spKey in ipairs(spellBookOrder) do
+    local def = parsed.auras[spKey] or parsed.spells[spKey]
+    if def and def.auraUnit ~= "player" and not def.isInterrupt and not def.isPvPSkill then
+      if def.isAuraOnly or (def.auraDuration and def.auraDuration > 0 and (def.auraUnit == "target" or not def.burstDuration)) then
+        AddTrackedTargetAura(spKey, false)
+      end
+    end
+  end
+
+  local SINGLE_DOT_PALETTE = {
+    { r = 0.16, g = 0.52, b = 1.00 }, -- #2985FF Blue (1st DoT)
+    { r = 1.00, g = 0.58, b = 0.12 }, -- #FF941F Orange (2nd DoT)
+    { r = 0.20, g = 0.88, b = 0.45 }, -- #33E073 Green (3rd DoT)
+    { r = 0.18, g = 0.85, b = 0.95 }, -- #2ED9F2 Cyan (4th DoT)
+  }
+  if #parsed.trackedDots >= 2 then
+    parsed.mdAuraRules[#parsed.mdAuraRules + 1] = {
+      enabled = true,
+      ids = tostring(parsed.trackedDots[1].primaryID) .. ", " .. tostring(parsed.trackedDots[2].primaryID),
+      r = 0.62, g = 0.22, b = 1.00, -- #9E38FF Purple (Combo: 1st AND 2nd DoT)
+      fromMD = true,
+    }
+  end
+  for i, d in ipairs(parsed.trackedDots) do
+    local col = SINGLE_DOT_PALETTE[((i - 1) % #SINGLE_DOT_PALETTE) + 1]
+    parsed.mdAuraRules[#parsed.mdAuraRules + 1] = {
+      enabled = true,
+      ids = tostring(d.primaryID),
+      r = col.r, g = col.g, b = col.b,
+      fromMD = true,
+    }
   end
 
   return parsed

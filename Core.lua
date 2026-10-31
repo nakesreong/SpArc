@@ -145,6 +145,8 @@ SpArc.DEFAULT_VISUAL = {
   arcSpreadDeg = 120,
   arcOffsetY = 0,
   primaryScale = 1.50,
+  primaryBorderSize = 1,
+  arcAlpha = 100,
   queueScale = 1.00,
   queueLength = 5,
   castbarWidth = 276,
@@ -193,41 +195,11 @@ SpArc.DEFAULT_VISUAL = {
   npShowQuestNPCs = true,
   npShowFriendlyPlayers = true,
   npShowHostileClassIcon = true,
+  npAutoAurasFromMD = true,
   lang = "AUTO",
 }
 
-SpArc.DEFAULT_NP_AURA_RULES = {
-  -- Example starter rules (Balance Druid Moonfire + Sunfire combo & single DoTs; fully editable in UI)
-  { enabled = true, ids = "164812, 164815", r = 0.62, g = 0.22, b = 1.00 },
-  { enabled = true, ids = "164812",         r = 0.16, g = 0.52, b = 1.00 },
-  { enabled = true, ids = "164815",         r = 1.00, g = 0.58, b = 0.12 },
-}
-
-SpArc.CLASS_DEFAULT_NP_AURA_RULES = {
-  PRIEST = {
-    { enabled = true, ids = "34914, 589", r = 0.62, g = 0.22, b = 1.00 }, -- Прикосновение вампира + Слово Тьмы: Боль
-    { enabled = true, ids = "34914",      r = 0.16, g = 0.52, b = 1.00 }, -- Прикосновение вампира
-    { enabled = true, ids = "589",        r = 1.00, g = 0.58, b = 0.12 }, -- Слово Тьмы: Боль
-    { enabled = true, ids = "335467",     r = 0.20, g = 0.88, b = 0.45 }, -- Всепожирающая чума
-  },
-  DRUID = {
-    { enabled = true, ids = "164812, 164815", r = 0.62, g = 0.22, b = 1.00 }, -- Лунный огонь + Солнечный огонь
-    { enabled = true, ids = "164812",         r = 0.16, g = 0.52, b = 1.00 }, -- Лунный огонь
-    { enabled = true, ids = "164815",         r = 1.00, g = 0.58, b = 0.12 }, -- Солнечный огонь
-  },
-  ROGUE = {
-    { enabled = true, ids = "703, 1943", r = 0.62, g = 0.22, b = 1.00 }, -- Гаррота + Рваная рана
-    { enabled = true, ids = "703",       r = 0.16, g = 0.52, b = 1.00 }, -- Гаррота
-    { enabled = true, ids = "1943",      r = 1.00, g = 0.58, b = 0.12 }, -- Рваная рана
-  },
-  WARRIOR = {
-    { enabled = true, ids = "772",       r = 1.00, g = 0.58, b = 0.12 }, -- Кровопускание
-  },
-  MAGE = {
-    { enabled = true, ids = "228358",    r = 0.16, g = 0.52, b = 1.00 }, -- Зимняя стужа
-    { enabled = true, ids = "12654",     r = 1.00, g = 0.58, b = 0.12 }, -- Воспламенение
-  },
-}
+SpArc.DEFAULT_NP_AURA_RULES = {}
 
 SpArc.state = {
   lastCastAt = {},
@@ -370,39 +342,47 @@ function SpArc:GetGameInteractKey()
   return "E"
 end
 
-local function InferProfileClass(profName, profObj)
-  if type(profObj) == "table" and type(profObj.activePresetID) == "string" then
-    local clsFromPreset = profObj.activePresetID:match("^([A-Z]+)_")
-    if clsFromPreset and SpArc.CLASS_DEFAULT_NP_AURA_RULES[clsFromPreset] then
-      return clsFromPreset
-    end
+local function InferProfileDefaultPresetID(profName, profObj)
+  if type(profObj) == "table" and type(profObj.activePresetID) == "string" and profObj.activePresetID ~= "" then
+    return profObj.activePresetID
   end
   if type(profName) == "string" then
     if profName:find("Ньарлатхотеп", 1, true) or profName:find("Ньярлатхотеп", 1, true) then
-      return "PRIEST"
+      return "PRIEST_01_SHADOW_PVE"
     elseif profName:find("Котастрофа", 1, true) or profName:find("Трипобраз", 1, true) then
-      return "DRUID"
+      return "DRUID_02_BALANCE_PVE"
     elseif profName:find("Улак", 1, true) then
-      return "ROGUE"
+      return "ROGUE_01_ASSA_PVE"
     elseif profName:find("Моржовый", 1, true) or profName:find("Стархаммер", 1, true) then
-      return "WARRIOR"
+      return "WARRIOR_02_ARGS_BOSS"
     elseif profName:find("Калиратри", 1, true) or profName:find("Морвара", 1, true) then
-      return "MAGE"
+      return "MAGE_04_FROST_PVE"
     end
   end
-  if _G.UnitClass then
-    local okC, _, cls = pcall(_G.UnitClass, "player")
-    if okC and not SpArc.IsSecret(cls) and type(cls) == "string" and cls ~= "" then
-      return cls
-    end
-  end
-  return "PRIEST"
+  return "PRIEST_01_SHADOW_PVE"
 end
 
-local function CloneAuraRulesTable(srcRules, fallbackClassTag)
+function SpArc:GetMDAuraRulesForPreset(presetID, db)
+  db = db or cachedDB or _G.SpArcDB
+  if not presetID or presetID == "" then
+    presetID = (db and db.activePresetID) or "PRIEST_01_SHADOW_PVE"
+  end
+  local parsed = SpArc.ParsedPresets and SpArc.ParsedPresets[presetID]
+  if not parsed and SpArc.ParseMarkdownFSM then
+    local md = (db and db.presets and db.presets[presetID] and db.presets[presetID].md)
+      or (SpArc.BuiltInPresets and SpArc.BuiltInPresets[presetID] and SpArc.BuiltInPresets[presetID].md)
+      or (SpArc.BuiltInPresets and SpArc.BuiltInPresets["PRIEST_01_SHADOW_PVE"] and SpArc.BuiltInPresets["PRIEST_01_SHADOW_PVE"].md)
+    if type(md) == "string" and md ~= "" then
+      parsed = SpArc:ParseMarkdownFSM(md)
+    end
+  end
+  return (parsed and parsed.mdAuraRules) or {}
+end
+
+local function CloneAuraRulesTable(srcRules, fallbackPresetID, db)
   local list = srcRules
-  if type(list) ~= "table" then
-    list = (fallbackClassTag and SpArc.CLASS_DEFAULT_NP_AURA_RULES[fallbackClassTag]) or SpArc.DEFAULT_NP_AURA_RULES or {}
+  if type(list) ~= "table" or #list == 0 then
+    list = SpArc:GetMDAuraRulesForPreset(fallbackPresetID, db)
   end
   local out = {}
   for _, r in ipairs(list) do
@@ -413,6 +393,8 @@ local function CloneAuraRulesTable(srcRules, fallbackClassTag)
         r = tonumber(r.r) or 0.2,
         g = tonumber(r.g) or 0.6,
         b = tonumber(r.b) or 1.0,
+        fromMD = (r.fromMD ~= false),
+        isCustomUserRule = r.isCustomUserRule or false,
       }
     end
   end
@@ -455,8 +437,8 @@ local function EnsureProfileObject(db, profName, templateVisual, keepExplicitInt
   end
   prof.visual.camBindSnapshot = prof.visual.camBindSnapshot or {}
   if type(prof.npAuraRules) ~= "table" then
-    local clsTag = InferProfileClass(profName, prof)
-    prof.npAuraRules = CloneAuraRulesTable(templateAuraRules, clsTag)
+    local defPresetID = InferProfileDefaultPresetID(profName, prof)
+    prof.npAuraRules = CloneAuraRulesTable(templateAuraRules, defPresetID, db)
   end
   return prof
 end
@@ -617,24 +599,19 @@ function SpArc:EnsureDB(forceReinit)
     db.autoPresets = activeProf.autoPresets
   end
 
-  -- Isolate npAuraRules per profile and migrate any legacy shared db.npAuraRules
-  if not db._npAuraRulesIsolatedV2 then
-    local legacyGlobalRules = (type(db.npAuraRules) == "table" and #db.npAuraRules > 0) and db.npAuraRules or nil
+  -- Isolate npAuraRules per profile and auto-populate from each profile's active .MD preset
+  if not db._npAuraRulesFromMDV3 then
     for pName, pObj in pairs(db.profiles or {}) do
       if type(pObj) == "table" then
-        local pCls = InferProfileClass(pName, pObj)
-        if pCls == "DRUID" and legacyGlobalRules then
-          pObj.npAuraRules = CloneAuraRulesTable(legacyGlobalRules, "DRUID")
-        else
-          pObj.npAuraRules = CloneAuraRulesTable(nil, pCls)
-        end
+        local defPresetID = InferProfileDefaultPresetID(pName, pObj)
+        pObj.npAuraRules = CloneAuraRulesTable(nil, defPresetID, db)
       end
     end
-    db._npAuraRulesIsolatedV2 = true
+    db._npAuraRulesFromMDV3 = true
   end
 
-  if type(activeProf.npAuraRules) ~= "table" then
-    activeProf.npAuraRules = CloneAuraRulesTable(nil, InferProfileClass(activeProfName, activeProf))
+  if type(activeProf.npAuraRules) ~= "table" or #activeProf.npAuraRules == 0 then
+    activeProf.npAuraRules = CloneAuraRulesTable(nil, InferProfileDefaultPresetID(activeProfName, activeProf), db)
   end
   db.npAuraRules = activeProf.npAuraRules
 
@@ -720,10 +697,10 @@ function SpArc:CreateNewProfile(newProfileName)
   newProfileName = SpArc.Trim(newProfileName or "")
   if newProfileName == "" or #newProfileName > 50 then return false end
   local db = SpArc:EnsureDB()
-  local clsTag = InferProfileClass(SpArc:GetCurrentCharKey(), nil)
+  local defPresetID = db.activePresetID or InferProfileDefaultPresetID(SpArc:GetCurrentCharKey(), nil)
   db.profiles[newProfileName] = {
     visual = CloneVisualTable(nil),
-    npAuraRules = CloneAuraRulesTable(nil, clsTag),
+    npAuraRules = CloneAuraRulesTable(nil, defPresetID, db),
   }
   SpArc:SetProfile(newProfileName)
   return true
@@ -743,7 +720,7 @@ function SpArc:CopyProfileFrom(srcProfileName, copyAuraRules)
   curProf.visual.camBindSnapshot = {}
   curProf.visual.camInteractKeyUserSet = false
   if copyAuraRules ~= false and type(srcProf.npAuraRules) == "table" then
-    curProf.npAuraRules = CloneAuraRulesTable(srcProf.npAuraRules, InferProfileClass(curProfName, curProf))
+    curProf.npAuraRules = CloneAuraRulesTable(srcProf.npAuraRules, InferProfileDefaultPresetID(curProfName, curProf), db)
   end
   db.visual = curProf.visual
   db.npAuraRules = curProf.npAuraRules
@@ -755,10 +732,10 @@ function SpArc:ResetCurrentProfile()
   local db = SpArc:EnsureDB()
   local curProfName = SpArc:GetActiveProfileName()
   local curProf = db.profiles[curProfName]
-  local clsTag = InferProfileClass(curProfName, curProf)
+  local defPresetID = InferProfileDefaultPresetID(curProfName, curProf)
   db.profiles[curProfName] = {
     visual = CloneVisualTable(nil),
-    npAuraRules = CloneAuraRulesTable(nil, clsTag),
+    npAuraRules = CloneAuraRulesTable(nil, defPresetID, db),
     mode = curProf and curProf.mode,
     activePresetID = curProf and curProf.activePresetID,
     autoPresets = curProf and curProf.autoPresets,
@@ -768,18 +745,75 @@ function SpArc:ResetCurrentProfile()
   ApplyAllActiveProfileSubsystems()
 end
 
-function SpArc:ResetCurrentProfileAuraRules()
+function SpArc:SyncNameplateAurasFromActiveMD(presetID, forceResetColors)
   local db = SpArc:EnsureDB()
   local curProfName = SpArc:GetActiveProfileName()
   local curProf = EnsureProfileObject(db, curProfName, nil)
-  local clsTag = InferProfileClass(curProfName, curProf)
-  curProf.npAuraRules = CloneAuraRulesTable(nil, clsTag)
-  db.npAuraRules = curProf.npAuraRules
+  local targetPresetID = presetID or db.activePresetID or InferProfileDefaultPresetID(curProfName, curProf)
+  local mdRules = SpArc:GetMDAuraRulesForPreset(targetPresetID, db)
+  if type(mdRules) ~= "table" or #mdRules == 0 then
+    return
+  end
+  local oldRules = curProf.npAuraRules or {}
+  local colorByIDs = {}
+  local customRules = {}
+  for _, r in ipairs(oldRules) do
+    if type(r) == "table" and type(r.ids) == "string" and r.ids ~= "" then
+      if not forceResetColors then
+        colorByIDs[r.ids] = {
+          enabled = (r.enabled ~= false),
+          r = tonumber(r.r) or 0.2,
+          g = tonumber(r.g) or 0.6,
+          b = tonumber(r.b) or 1.0,
+        }
+      end
+      if r.isCustomUserRule and not forceResetColors then
+        customRules[#customRules + 1] = {
+          enabled = (r.enabled ~= false),
+          ids = r.ids,
+          r = tonumber(r.r) or 0.2,
+          g = tonumber(r.g) or 0.6,
+          b = tonumber(r.b) or 1.0,
+          fromMD = false,
+          isCustomUserRule = true,
+        }
+      end
+    end
+  end
+  local newList = {}
+  local seenIDs = {}
+  for _, mr in ipairs(mdRules) do
+    local idStr = tostring(mr.ids or "")
+    if idStr ~= "" then
+      seenIDs[idStr] = true
+      local saved = colorByIDs[idStr]
+      newList[#newList + 1] = {
+        enabled = (saved and saved.enabled ~= nil) and saved.enabled or true,
+        ids = idStr,
+        r = (saved and saved.r) or tonumber(mr.r) or 0.2,
+        g = (saved and saved.g) or tonumber(mr.g) or 0.6,
+        b = (saved and saved.b) or tonumber(mr.b) or 1.0,
+        fromMD = true,
+        isCustomUserRule = false,
+      }
+    end
+  end
+  for _, cr in ipairs(customRules) do
+    if not seenIDs[cr.ids] then
+      newList[#newList + 1] = cr
+    end
+  end
+  curProf.npAuraRules = newList
+  db.npAuraRules = newList
   if SpArc.RefreshAllNameplates then
     SpArc:RefreshAllNameplates()
   elseif SpArc.CompileNameplateAuraRules then
     SpArc:CompileNameplateAuraRules()
   end
+end
+
+function SpArc:ResetCurrentProfileAuraRules()
+  SpArc:SyncNameplateAurasFromActiveMD(nil, true)
 end
 
 function SpArc:DeleteProfile(profileName)

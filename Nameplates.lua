@@ -1309,18 +1309,18 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
     SpArc:RefreshNameplatesPage(ui)
   end)
   ui.m10CyclePrevBtn = cycleBtn
-  -- Group 2: Dynamic Aura / DoT Color Rules ("Добавить ауру" + условия И)
+  -- Group 2: Dynamic Aura / DoT Color Rules (Auto-synced from .MD + Custom rules)
   local rulesBox = RegisterGroupBox(page, "M10_GRP_AURAS", 0, -218, 640, 306)
-  local hintTxt = rulesBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  ApplyCyrFont(hintTxt, 11)
-  hintTxt:SetPoint("TOPLEFT", rulesBox, "TOPLEFT", 14, -10)
-  hintTxt:SetPoint("TOPRIGHT", rulesBox, "TOPRIGHT", -14, -10)
-  hintTxt:SetJustifyH("LEFT")
-  hintTxt:SetTextColor(0.82, 0.86, 0.94, 1)
-  ui.m10HintTxt = hintTxt
+  CreateElvCheck(rulesBox, "CK_NP_AUTO_MD", "npAutoAurasFromMD", 14, -8, false, false, function(checked)
+    if checked and SpArc.SyncNameplateAurasFromActiveMD then
+      SpArc:SyncNameplateAurasFromActiveMD(nil, false)
+    end
+    SpArc:RefreshAllNameplates()
+    if SpArc.RefreshNameplatesPage then SpArc:RefreshNameplatesPage(ui) end
+  end)
   -- Add New Rule Bar
   local newIDBg = CreateFrame("Frame", nil, rulesBox, "BackdropTemplate")
-  newIDBg:SetPoint("TOPLEFT", rulesBox, "TOPLEFT", 14, -32)
+  newIDBg:SetPoint("TOPLEFT", rulesBox, "TOPLEFT", 14, -34)
   newIDBg:SetSize(185, 26)
   SetBackdropFlat(newIDBg, 0.03, 0.03, 0.05, 1.0, 0.30, 0.30, 0.42, 1.0)
   local newIDEdit = CreateFrame("EditBox", nil, newIDBg)
@@ -1330,15 +1330,9 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
   ApplyCyrFont(newIDEdit, 12)
   newIDEdit:SetAutoFocus(false)
   local defSampleIDs = "164812, 164815"
-  if UnitClass then
-    local okC, _, pCls = pcall(UnitClass, "player")
-    if okC and pCls == "PRIEST" then
-      defSampleIDs = "34914, 589"
-    elseif okC and pCls == "ROGUE" then
-      defSampleIDs = "703, 1943"
-    elseif okC and pCls == "WARRIOR" then
-      defSampleIDs = "772"
-    end
+  local initMD = SpArc.GetMDAuraRulesForPreset and SpArc:GetMDAuraRulesForPreset(nil, nil)
+  if type(initMD) == "table" and initMD[1] and type(initMD[1].ids) == "string" and initMD[1].ids ~= "" then
+    defSampleIDs = initMD[1].ids
   end
   newIDEdit:SetText(defSampleIDs)
   newIDEdit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
@@ -1386,6 +1380,8 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
       r = ui.m10NewColor.r,
       g = ui.m10NewColor.g,
       b = ui.m10NewColor.b,
+      fromMD = false,
+      isCustomUserRule = true,
     })
     newIDEdit:ClearFocus()
     SpArc:RefreshAllNameplates()
@@ -1405,7 +1401,7 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
   ui.m10ResetRulesBtn = resetRulesBtn
   -- Scrollable Rules List Container
   local listFrame = CreateFrame("Frame", nil, rulesBox, "BackdropTemplate")
-  listFrame:SetPoint("TOPLEFT", rulesBox, "TOPLEFT", 14, -64)
+  listFrame:SetPoint("TOPLEFT", rulesBox, "TOPLEFT", 14, -66)
   listFrame:SetPoint("BOTTOMRIGHT", rulesBox, "BOTTOMRIGHT", -14, 10)
   SetBackdropFlat(listFrame, 0.04, 0.04, 0.06, 0.96, 0.20, 0.20, 0.27, 1.0)
   local rulesScroll = CreateFrame("ScrollFrame", "SpArcNPAuraRulesScroll", listFrame, "UIPanelScrollFrameTemplate")

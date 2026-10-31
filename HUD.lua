@@ -1,5 +1,5 @@
 ---------------------------------------------------------------------------------------
---  SpArc/HUD.lua — Semicircle Rotation Arc, Cooldown Wings, Castbar & Smart Boss Tab
+--  SpArc/HUD.lua â€” Semicircle Rotation Arc, Cooldown Wings, Castbar & Smart Boss Tab
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
 ---------------------------------------------------------------------------------------
 local _G = _G
@@ -41,14 +41,14 @@ local function CreateStyledIconBox(parent, size, isPrimary)
   f:SetSize(size, size)
 
   local glow = f:CreateTexture(nil, "BACKGROUND", nil, -2)
-  glow:SetPoint("TOPLEFT", f, "TOPLEFT", -6, 6)
-  glow:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 6, -6)
-  glow:SetColorTexture(1, 0.82, 0.18, isPrimary and 0.55 or 0)
+  glow:SetPoint("TOPLEFT", f, "TOPLEFT", -2, 2)
+  glow:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 2, -2)
+  glow:SetColorTexture(1, 0.82, 0.18, isPrimary and 0.18 or 0)
   f.glow = glow
 
   local border = f:CreateTexture(nil, "BACKGROUND", nil, -1)
-  border:SetPoint("TOPLEFT", f, "TOPLEFT", -2, 2)
-  border:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 2, -2)
+  border:SetPoint("TOPLEFT", f, "TOPLEFT", -1, 1)
+  border:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 1, -1)
   border:SetColorTexture(0.08, 0.08, 0.11, 0.95)
   f.border = border
 
@@ -212,20 +212,27 @@ function SpArc:ApplyVisualLayout()
   local db = SpArc:EnsureDB()
   local v = db.visual or DEFAULT_VISUAL
   local radius = tonumber(v.arcRadius) or 135
-  local spreadDeg = tonumber(v.arcSpreadDeg) or 120
-  local startDeg = 90 + (spreadDeg / 2)
+  local spreadDeg = tonumber(v.arcSpreadDeg)
+  if spreadDeg == nil then spreadDeg = 120 end
+  local absDeg = math.abs(spreadDeg)
+  local sign = (spreadDeg >= 0) and 1 or -1
+  local halfRad = math.rad(absDeg / 2)
+  local midCos = 0.5 * (1.0 + math.cos(halfRad))
+  local blend = math.min(1.0, absDeg / 90.0)
   local offsetY = tonumber(v.arcOffsetY) or 0
   local count = math.max(3, math.min(MAX_ARC_SLOTS, tonumber(v.queueLength) or 5))
   local pScale = tonumber(v.primaryScale) or 1.50
   local qScale = tonumber(v.queueScale) or 1.00
+  local pBorder = math.max(0, math.min(6, tonumber(v.primaryBorderSize) or 1))
+  local arcAlpha = math.max(0.20, math.min(1.00, (tonumber(v.arcAlpha) or 100) / 100.0))
 
   for i = 1, MAX_ARC_SLOTS do
     local slotLevel = 60 - (i * 5)
-    local frac = (count > 1) and ((i - 1) / (count - 1)) or 0
-    local angleDeg = startDeg - frac * spreadDeg
-    local rad = math.rad(angleDeg)
-    local x = math.cos(rad) * radius
-    local y = math.sin(rad) * radius + offsetY
+    local frac = (count > 1) and ((i - 1) / (count - 1)) or 0.5
+    local u = (frac - 0.5) * 2
+    local theta = u * halfRad
+    local x = ((1.0 - blend) * u + blend * math.sin(theta)) * radius
+    local y = (0.78 * radius + offsetY) + sign * (math.cos(theta) - midCos) * radius
     arcAnchors[i]:SetFrameLevel(slotLevel)
     arcSlots[i]:SetFrameLevel(slotLevel + 1)
     if arcSlots[i].cd then
@@ -234,6 +241,17 @@ function SpArc:ApplyVisualLayout()
     arcAnchors[i]:ClearAllPoints()
     arcAnchors[i]:SetPoint("CENTER", UIParent, "CENTER", x, y)
     arcSlots[i]:SetScale(i == 1 and pScale or qScale)
+    arcSlots[i]:SetAlpha(arcAlpha)
+    if i == 1 then
+      local bSize = pBorder
+      local gSize = (pBorder > 0) and (pBorder + 1) or 0
+      arcSlots[1].border:ClearAllPoints()
+      arcSlots[1].border:SetPoint("TOPLEFT", arcSlots[1], "TOPLEFT", -bSize, bSize)
+      arcSlots[1].border:SetPoint("BOTTOMRIGHT", arcSlots[1], "BOTTOMRIGHT", bSize, -bSize)
+      arcSlots[1].glow:ClearAllPoints()
+      arcSlots[1].glow:SetPoint("TOPLEFT", arcSlots[1], "TOPLEFT", -gSize, gSize)
+      arcSlots[1].glow:SetPoint("BOTTOMRIGHT", arcSlots[1], "BOTTOMRIGHT", gSize, -gSize)
+    end
   end
 
   local wingsY = tonumber(v.wingsOffsetY) or -75
@@ -495,11 +513,11 @@ local function GetPressScaleMult(box, now)
   local p = elapsed / PRESS_ANIM_DUR
   local mult
   if p < 0.40 then
-    -- Сжатие на -20% (1.00 -> 0.80)
+    -- Ð¡Ð¶Ð°Ñ‚Ð¸Ðµ Ð½Ð° -20% (1.00 -> 0.80)
     local k = p / 0.40
     mult = 1.0 - 0.20 * math.sin(k * (math.pi * 0.5))
   else
-    -- Отскок обратно +20% (0.80 -> 1.04 -> 1.00)
+    -- ÐžÑ‚ÑÐºÐ¾Ðº Ð¾Ð±Ñ€Ð°Ñ‚Ð½Ð¾ +20% (0.80 -> 1.04 -> 1.00)
     local k = (p - 0.40) / 0.60
     mult = 0.80 + 0.20 * math.sin(k * (math.pi * 0.5)) + 0.04 * math.sin(k * math.pi)
   end
@@ -855,27 +873,28 @@ rootFrame:SetScript("OnUpdate", function()
           box.icon:SetAlpha(1.0)
           box.keybind:SetTextColor(1, 0.96, 0.80, 1)
           if i == 1 then
+            local hasGlow = ((tonumber(v.primaryBorderSize) or 1) > 0)
             if st.lastShouldInterrupt then
               box.border:SetColorTexture(1.0, 0.18, 0.56, 1.0)
-              box.glow:SetColorTexture(1.0, 0.18, 0.56, 0.78)
+              box.glow:SetColorTexture(1.0, 0.18, 0.56, hasGlow and 0.28 or 0)
               if box.banner then
                 box.banner:SetTextColor(1.0, 0.30, 0.68, 1)
                 box.banner:SetText(SpArc:L("HUD_CLIP_BANNER"))
               end
             elseif isProtectedChannel then
               box.border:SetColorTexture(0.20, 0.85, 1.0, 1.0)
-              box.glow:SetColorTexture(0.20, 0.85, 1.0, 0.55)
+              box.glow:SetColorTexture(0.20, 0.85, 1.0, hasGlow and 0.22 or 0)
               if box.banner then
                 box.banner:SetTextColor(0.35, 0.90, 1.0, 1)
                 box.banner:SetText(SpArc:L("HUD_CHANNEL_BANNER"))
               end
             elseif item.isProc then
               box.border:SetColorTexture(0.35, 0.92, 1.0, 1.0)
-              box.glow:SetColorTexture(0.35, 0.92, 1.0, 0.65)
+              box.glow:SetColorTexture(0.35, 0.92, 1.0, hasGlow and 0.25 or 0)
               if box.banner then box.banner:SetText("") end
             else
               box.border:SetColorTexture(1.0, 0.80, 0.15, 1.0)
-              box.glow:SetColorTexture(1.0, 0.80, 0.15, 0.55)
+              box.glow:SetColorTexture(1.0, 0.80, 0.15, hasGlow and 0.18 or 0)
               if box.banner then box.banner:SetText("") end
             end
           else

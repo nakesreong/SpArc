@@ -1014,15 +1014,27 @@ end
 ---------------------------------------------------------------------------------------
 local bindOwner = CreateFrame("Frame", "SpArcCameraBindOwner", UIParent)
 
--- Note: On Balance Druid, form:4 IS Moonkin Form! Never include noform:4 here, or Moonkin Form will never unshift!
-local UNSHIFT_SAFE_LINE = "/cancelform [nocombat,nostealth,noform:1,noform:2,noform:3,noform:27,noform:29]"
+-- Note:
+-- • On Priest, Shadowform is form:1 (stance 1, formID 28), so we MUST NOT use noform:1 on Priest!
+-- • On Balance Druid, form:4 IS Moonkin Form (while form:1..3 are Bear/Cat/Travel), so we keep noform:1..3 on Druid.
+local DRUID_UNSHIFT_SAFE_LINE = "/cancelform [nocombat,nostealth,noform:1,noform:2,noform:3,noform:27,noform:29]"
+local PRIEST_UNSHIFT_SAFE_LINE = "/cancelform [nocombat]"
 local BASE_INTERACT_MACRO = "/target [@mouseover,nodead,exists]"
-local UNSHIFT_INTERACT_MACRO = BASE_INTERACT_MACRO .. "\n" .. UNSHIFT_SAFE_LINE
+
+local function GetClassUnshiftLine()
+  if _G.UnitClass then
+    local okC, _, cls = pcall(_G.UnitClass, "player")
+    if okC and not SpArc.IsSecret(cls) and cls == "PRIEST" then
+      return PRIEST_UNSHIFT_SAFE_LINE
+    end
+  end
+  return DRUID_UNSHIFT_SAFE_LINE
+end
 
 local holdBtn = CreateFrame("Button", "SpArcCamHoldButton", UIParent, "SecureActionButtonTemplate")
 holdBtn:RegisterForClicks("AnyDown", "AnyUp")
 holdBtn:SetAttribute("type", "macro")
-holdBtn:SetAttribute("macrotext", UNSHIFT_SAFE_LINE)
+holdBtn:SetAttribute("macrotext", GetClassUnshiftLine())
 holdBtn:HookScript("PostClick", function(_, _, down)
   _G.SpArc_CameraHoldKey(down and "down" or "up")
 end)
@@ -1030,7 +1042,7 @@ end)
 local toggleBtn = CreateFrame("Button", "SpArcCamToggleButton", UIParent, "SecureActionButtonTemplate")
 toggleBtn:RegisterForClicks("AnyDown")
 toggleBtn:SetAttribute("type", "macro")
-toggleBtn:SetAttribute("macrotext", UNSHIFT_SAFE_LINE)
+toggleBtn:SetAttribute("macrotext", GetClassUnshiftLine())
 toggleBtn:HookScript("PostClick", function()
   _G.SpArc_CameraToggleKey("down")
 end)
@@ -1038,7 +1050,7 @@ end)
 local interactBtn = CreateFrame("Button", "SpArcCamInteractButton", UIParent, "SecureActionButtonTemplate")
 interactBtn:RegisterForClicks("AnyDown")
 interactBtn:SetAttribute("type", "macro")
-interactBtn:SetAttribute("macrotext", UNSHIFT_INTERACT_MACRO)
+interactBtn:SetAttribute("macrotext", BASE_INTERACT_MACRO .. "\n" .. GetClassUnshiftLine())
 interactBtn:HookScript("PostClick", function()
   if _G.GetTime then
     lastTargetClickAt = _G.GetTime()
@@ -1069,17 +1081,10 @@ local function IsInCosmeticCombatForm()
     return false
   end
 
-  local st = SpArc.state
-  if st and st.lastManualFormCastAt and _G.GetTime then
-    local now = _G.GetTime()
-    if (now - st.lastManualFormCastAt) < 10.0 then
-      return false
-    end
-  end
-
   if _G.GetShapeshiftFormID then
     local okF, formID = pcall(_G.GetShapeshiftFormID)
-    if okF and not SpArc.IsSecret(formID) and (formID == 31 or formID == 35) then
+    -- 28 = Shadowform (Priest), 31 / 35 = Moonkin Form (Druid)
+    if okF and not SpArc.IsSecret(formID) and (formID == 28 or formID == 31 or formID == 35) then
       return true
     end
   end
@@ -1100,10 +1105,12 @@ end
 local function UpdateAutoUnshiftBindings(force)
   if InCombatLockdown and InCombatLockdown() then return end
   local enabled = SpArc:IsAutoUnshiftEnabled()
-  if not force and enabled == lastAutoUnshiftAttr then return end
-  lastAutoUnshiftAttr = enabled
-  local holdMacro = enabled and UNSHIFT_SAFE_LINE or ""
-  local intMacro = enabled and UNSHIFT_INTERACT_MACRO or BASE_INTERACT_MACRO
+  local unshiftLine = GetClassUnshiftLine()
+  local stateKey = tostring(enabled) .. "::" .. unshiftLine
+  if not force and stateKey == lastAutoUnshiftAttr then return end
+  lastAutoUnshiftAttr = stateKey
+  local holdMacro = enabled and unshiftLine or ""
+  local intMacro = enabled and (BASE_INTERACT_MACRO .. "\n" .. unshiftLine) or BASE_INTERACT_MACRO
   holdBtn:SetAttribute("macrotext", holdMacro)
   toggleBtn:SetAttribute("macrotext", holdMacro)
   interactBtn:SetAttribute("macrotext", intMacro)

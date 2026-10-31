@@ -129,13 +129,186 @@ function SpArc:GetMacroNamingPrefixes()
   return classPrefix, specPrefix, classLoc, specLoc, classFile, specID
 end
 
-function SpArc:FormatMacroFromTemplate(templateStr, spellName)
+-- Spells that NEVER require a unit target (Self-buffs, Shapeshift forms, Personal Defensives,
+-- Offensive Burst Buffs, PBAoEs, Frontal Cones, Movement abilities, and Ground Reticles)
+local SELF_OR_NO_TARGET_SPELL_IDS = {
+  -- Druid (Balance / Feral / Guardian / Resto / Class)
+  [24858] = true, [197625] = true, [768] = true, [5487] = true, [783] = true, [165962] = true,
+  [210053] = true, [114282] = true, [5215] = true, [1850] = true, [252216] = true, [106898] = true,
+  [77761] = true, [77764] = true, [22812] = true, [61336] = true, [22842] = true, [108238] = true,
+  [124974] = true, [319454] = true, [194223] = true, [383410] = true, [102560] = true, [390414] = true,
+  [106951] = true, [102543] = true, [50334] = true, [102558] = true, [33891] = true, [391528] = true,
+  [191034] = true, [205636] = true, [102793] = true, [132469] = true, [99] = true, [202425] = true,
+  [1233346] = true, [1233272] = true, [48517] = true, [48518] = true, [5217] = true, [106785] = true,
+  [213764] = true, [106830] = true, [77758] = true, [285381] = true, [202028] = true, [740] = true,
+  [197721] = true,
+  -- Priest
+  [232698] = true, [228260] = true, [391109] = true, [47585] = true, [19236] = true, [15286] = true,
+  [586] = true, [8122] = true, [120517] = true, [120644] = true, [110744] = true, [32375] = true,
+  [62618] = true, [121536] = true, [64843] = true, [64901] = true, [200183] = true, [47536] = true,
+  [205385] = true,
+  -- Mage
+  [12472] = true, [190319] = true, [365350] = true, [45438] = true, [414658] = true, [235450] = true,
+  [11426] = true, [235313] = true, [55342] = true, [382440] = true, [342245] = true, [108978] = true,
+  [235219] = true, [1953] = true, [212653] = true, [66] = true, [110959] = true, [122] = true,
+  [120] = true, [31661] = true, [157981] = true, [1449] = true, [190356] = true, [84714] = true,
+  [2120] = true, [153561] = true, [113724] = true, [80353] = true,
+  -- Rogue
+  [1784] = true, [115191] = true, [1856] = true, [315496] = true, [185311] = true, [5277] = true,
+  [31224] = true, [1966] = true, [2983] = true, [381623] = true, [185313] = true, [212283] = true,
+  [13750] = true, [13877] = true, [51723] = true, [121411] = true, [319175] = true, [195457] = true,
+  [114018] = true,
+  -- Warrior
+  [6673] = true, [107574] = true, [260708] = true, [118038] = true, [97462] = true, [23920] = true,
+  [18499] = true, [1719] = true, [184364] = true, [871] = true, [12975] = true, [1160] = true,
+  [6343] = true, [227847] = true, [46924] = true, [389774] = true, [1680] = true, [190411] = true,
+  [845] = true, [46968] = true, [2565] = true, [190456] = true, [6544] = true, [228920] = true,
+  [376079] = true, [384318] = true,
+  -- Paladin / DK / DH / Hunter / Warlock / Shaman / Monk / Evoker & Racials
+  [642] = true, [498] = true, [31884] = true, [26573] = true, [190784] = true, [53385] = true,
+  [48707] = true, [48792] = true, [49028] = true, [51271] = true, [43265] = true, [48265] = true,
+  [191427] = true, [198589] = true, [196718] = true, [258920] = true, [204596] = true, [207684] = true,
+  [202137] = true, [186265] = true, [186257] = true, [19574] = true, [288613] = true, [187650] = true,
+  [187698] = true, [109248] = true, [1543] = true, [5740] = true, [30283] = true, [1122] = true,
+  [104773] = true, [111400] = true, [61882] = true, [192058] = true, [2484] = true, [108271] = true,
+  [192063] = true, [115203] = true, [122278] = true, [122783] = true, [137639] = true, [116844] = true,
+  [363916] = true, [357210] = true, [358267] = true, [58984] = true, [20549] = true, [26297] = true,
+  [20572] = true, [33697] = true, [33702] = true, [265221] = true, [20589] = true, [59752] = true,
+  [7744] = true, [68992] = true,
+}
+
+local RESURRECT_SPELL_IDS = {
+  [20484] = true,  -- Rebirth (Druid)
+  [50769] = true,  -- Revive (Druid)
+  [212040] = true, -- Revitalize (Druid)
+  [2006] = true,   -- Resurrection (Priest)
+  [212036] = true, -- Mass Resurrection (Priest)
+  [7328] = true,   -- Redemption (Paladin)
+  [212056] = true, -- Absolution (Paladin)
+  [391054] = true, -- Intercession (Paladin)
+  [2008] = true,   -- Ancestral Spirit (Shaman)
+  [212048] = true, -- Ancestral Vision (Shaman)
+  [61999] = true,  -- Raise Ally (DK)
+  [115178] = true, -- Resuscitate (Monk)
+  [212051] = true, -- Reawaken (Monk)
+  [361227] = true, -- Return (Evoker)
+  [361178] = true, -- Mass Return (Evoker)
+}
+
+local ALLY_ONLY_SPELL_IDS = {
+  [73325] = true,  -- Leap of Faith (Priest)
+  [3411] = true,   -- Intervene (Warrior)
+  [370665] = true, -- Rescue (Evoker)
+}
+
+function SpArc:GetSpellTargetMode(spellID, spellName, slotIdx, bank)
+  if spellID and RESURRECT_SPELL_IDS[spellID] then
+    return "RES"
+  end
+  if spellID and ALLY_ONLY_SPELL_IDS[spellID] then
+    return "ALLY"
+  end
+  if spellID and SELF_OR_NO_TARGET_SPELL_IDS[spellID] then
+    return "SELF"
+  end
+
+  -- Check if spell is on the Shapeshift Bar
+  if spellID and _G.GetNumShapeshiftForms and _G.GetShapeshiftFormInfo then
+    local okN, nForms = pcall(_G.GetNumShapeshiftForms)
+    if okN and not IsSecret(nForms) and type(nForms) == "number" then
+      for i = 1, nForms do
+        local okF, _, _, _, fSpellID = pcall(_G.GetShapeshiftFormInfo, i)
+        if okF and not IsSecret(fSpellID) and fSpellID == spellID then
+          return "SELF"
+        end
+      end
+    end
+  end
+
+  local isHarmful = nil
+  local isHelpful = nil
+
+  if slotIdx and C_SpellBook then
+    if C_SpellBook.IsSpellBookItemHarmful then
+      local okH, hVal = pcall(C_SpellBook.IsSpellBookItemHarmful, slotIdx, bank)
+      if okH and not IsSecret(hVal) and type(hVal) == "boolean" then
+        isHarmful = hVal
+      end
+    end
+    if C_SpellBook.IsSpellBookItemHelpful then
+      local okHp, hpVal = pcall(C_SpellBook.IsSpellBookItemHelpful, slotIdx, bank)
+      if okHp and not IsSecret(hpVal) and type(hpVal) == "boolean" then
+        isHelpful = hpVal
+      end
+    end
+  end
+
+  if spellID and C_Spell then
+    if isHarmful == nil and C_Spell.IsSpellHarmful then
+      local okH, hVal = pcall(C_Spell.IsSpellHarmful, spellID)
+      if okH and not IsSecret(hVal) and type(hVal) == "boolean" then
+        isHarmful = hVal
+      end
+    end
+    if isHelpful == nil and C_Spell.IsSpellHelpful then
+      local okHp, hpVal = pcall(C_Spell.IsSpellHelpful, spellID)
+      if okHp and not IsSecret(hpVal) and type(hpVal) == "boolean" then
+        isHelpful = hpVal
+      end
+    end
+  end
+
+  if isHarmful == nil and spellName and _G.IsHarmfulSpell then
+    local okH, hVal = pcall(_G.IsHarmfulSpell, spellName)
+    if okH and not IsSecret(hVal) and type(hVal) == "boolean" then
+      isHarmful = hVal
+    end
+  end
+  if isHelpful == nil and spellName and _G.IsHelpfulSpell then
+    local okHp, hpVal = pcall(_G.IsHelpfulSpell, spellName)
+    if okHp and not IsSecret(hpVal) and type(hpVal) == "boolean" then
+      isHelpful = hpVal
+    end
+  end
+
+  local maxRange = nil
+  local minRange = nil
+  if spellID and C_Spell and C_Spell.GetSpellInfo then
+    local okI, info = pcall(C_Spell.GetSpellInfo, spellID)
+    if okI and type(info) == "table" and not IsSecret(info) then
+      if not IsSecret(info.maxRange) and type(info.maxRange) == "number" then
+        maxRange = info.maxRange
+      end
+      if not IsSecret(info.minRange) and type(info.minRange) == "number" then
+        minRange = info.minRange
+      end
+    end
+  end
+
+  -- Zero-range spells that are not harmful melee attacks are always self-cast / PBAoE / forms
+  if maxRange == 0 and (minRange == nil or minRange == 0) and not isHarmful then
+    return "SELF"
+  end
+
+  if isHarmful == false and isHelpful == false then
+    return "SELF"
+  end
+
+  if isHelpful and not isHarmful then
+    return "HELP"
+  end
+
+  return "HARM"
+end
+
+function SpArc:FormatMacroFromTemplate(templateStr, spellName, targetMode)
   local tpl = TrimStr(templateStr)
   if tpl == "" then
     tpl = SpArc.DEFAULT_MACRO_TEMPLATE
   end
   spellName = TrimStr(spellName)
   if spellName == "" then return "" end
+  targetMode = targetMode or "HARM"
 
   local out
   if tpl:find("%%s") then
@@ -154,6 +327,40 @@ function SpArc:FormatMacroFromTemplate(templateStr, spellName)
     if replaced == 0 then
       out = tpl .. "\n/cast [@target] " .. spellName
     end
+  end
+
+  -- Adapt /cast targeting condition automatically based on spell targetMode:
+  -- ? SELF: strip [@target] / [@mouseover...] so self-buffs, forms, defensives & AoEs never require a target
+  -- ? HELP: replace [@target] with [help,nodead][@player] so heals/buffs/dispels cast on @player when targeting an enemy or no one
+  -- ? RES:  replace [@target] with [help,dead]
+  -- ? ALLY: replace [@target] with [help,nodead]
+  if targetMode ~= "HARM" then
+    local adjLines = {}
+    for line in out:gmatch("[^\r\n]+") do
+      local lowerL = line:lower()
+      if lowerL:match("^%s*/cast%s+") or lowerL:match("^%s*/use%s+") then
+        local hasMO = lowerL:find("@mouseover", 1, true) ~= nil
+        if targetMode == "SELF" then
+          -- Remove all bracket conditions ([@target], [@mouseover,...]) so it casts directly without a target
+          line = line:gsub("^(%s*/[cC][aA][sS][tT]%s+)(%b[]%s*)+", "%1")
+          line = line:gsub("^(%s*/[uU][sS][eE]%s+)(%b[]%s*)+", "%1")
+        elseif targetMode == "HELP" then
+          local cond = hasMO and "[@mouseover,help,nodead][help,nodead][@player] " or "[help,nodead][@player] "
+          line = line:gsub("^(%s*/[cC][aA][sS][tT]%s+)(%b[]%s*)+", "%1" .. cond)
+          line = line:gsub("^(%s*/[uU][sS][eE]%s+)(%b[]%s*)+", "%1" .. cond)
+        elseif targetMode == "RES" then
+          local cond = hasMO and "[@mouseover,help,dead][help,dead] " or "[help,dead] "
+          line = line:gsub("^(%s*/[cC][aA][sS][tT]%s+)(%b[]%s*)+", "%1" .. cond)
+          line = line:gsub("^(%s*/[uU][sS][eE]%s+)(%b[]%s*)+", "%1" .. cond)
+        elseif targetMode == "ALLY" then
+          local cond = hasMO and "[@mouseover,help,nodead][help,nodead] " or "[help,nodead] "
+          line = line:gsub("^(%s*/[cC][aA][sS][tT]%s+)(%b[]%s*)+", "%1" .. cond)
+          line = line:gsub("^(%s*/[uU][sS][eE]%s+)(%b[]%s*)+", "%1" .. cond)
+        end
+      end
+      adjLines[#adjLines + 1] = line
+    end
+    out = table.concat(adjLines, "\n")
   end
 
   if #out > 255 then
@@ -358,6 +565,7 @@ function SpArc:ScanSpellBookForMacros(opts)
                       end
                     end
 
+                    local targetMode = SpArc:GetSpellTargetMode(spellID, spellName, slotIdx, bank)
                     entries[#entries + 1] = {
                       spellID = spellID,
                       spellName = spellName,
@@ -368,6 +576,7 @@ function SpArc:ScanSpellBookForMacros(opts)
                       existingMacro = existingMacro,
                       skipped = willSkip,
                       targetPool = targetPool,
+                      targetMode = targetMode,
                     }
                   end
                 end
@@ -458,7 +667,7 @@ function SpArc:GenerateClassMacros(opts)
         local mName, nextIdx = NextFreeMacroName(item.prefix, startIdx, usedNames)
         nextCounterByPrefix[item.prefix] = nextIdx
 
-        local mBody = SpArc:FormatMacroFromTemplate(templateStr, item.spellName)
+        local mBody = SpArc:FormatMacroFromTemplate(templateStr, item.spellName, item.targetMode)
         local okCreate, createdID = pcall(CreateMacro, mName, "INV_MISC_QUESTIONMARK", mBody, perChar)
         if okCreate and type(createdID) == "number" and createdID > 0 then
           if perChar then
@@ -529,11 +738,22 @@ function SpArc:BuildMacroGenPreviewText(opts)
         toOverflowFail = toOverflowFail + 1
         poolBadge = "|cffff4040[FULL]|r   "
       end
+      local tTag = "|cffff6060[@target]|r"
+      if item.targetMode == "SELF" then
+        tTag = "|cff00ff96[SELF]|r"
+      elseif item.targetMode == "HELP" then
+        tTag = "|cff40d0ff[@player]|r"
+      elseif item.targetMode == "RES" then
+        tTag = "|cffffd100[dead]|r"
+      elseif item.targetMode == "ALLY" then
+        tTag = "|cff40d0ff[help]|r"
+      end
       lines[#lines + 1] = string.format(
-        "%s |cffffd100%-5s|r -> |cffffffff%s|r  |cff888899(%s)|r",
+        "%s |cffffd100%-5s|r -> |cffffffff%s|r %s  |cff888899(%s)|r",
         poolBadge,
         item.macroName or "?",
         item.spellName,
+        tTag,
         item.tabName
       )
     end

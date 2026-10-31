@@ -17,6 +17,7 @@ local UnitReaction = _G.UnitReaction
 local UnitAffectingCombat = _G.UnitAffectingCombat
 local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
 local UnitName = _G.UnitName
+local UnitLevel = _G.UnitLevel
 local UnitClass = _G.UnitClass
 local UnitGUID = _G.UnitGUID
 local UnitHealth = _G.UnitHealth
@@ -37,6 +38,7 @@ local C_QuestLog = _G.C_QuestLog
 local C_TooltipInfo = _G.C_TooltipInfo
 local C_ClassColor = _G.C_ClassColor
 local C_CVar = _G.C_CVar
+local C_AddOns = _G.C_AddOns
 local RAID_CLASS_COLORS = _G.RAID_CLASS_COLORS
 local CLASS_ICON_TCOORDS = _G.CLASS_ICON_TCOORDS
 local ColorPickerFrame = _G.ColorPickerFrame
@@ -57,6 +59,7 @@ local FLAT_TEX = "Interface\\Buttons\\WHITE8x8"
 local CLASS_ICONS_TEX = "Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES"
 -- Base Metro Colors
 local COLOR_HOSTILE_RED   = { r = 0.85, g = 0.15, b = 0.15 } -- #D92626 Ruby Red
+local COLOR_DK_CHERRY     = { r = 0.48, g = 0.06, b = 0.18 } -- #7A0F2E Deep Dark Cherry for Friendly Death Knights
 local COLOR_TAPPED_GREY   = { r = 0.50, g = 0.50, b = 0.54 }
 local COLOR_CAST_GOLD     = { r = 1.00, g = 0.80, b = 0.15 } -- #FFCC26 Interruptible Gold
 local COLOR_CAST_GREY     = { r = 0.45, g = 0.47, b = 0.50 } -- #737780 Uninterruptible Grey
@@ -205,11 +208,29 @@ function SpArc:CompileNameplateAuraRules()
   return compiledAuraRules
 end
 ---------------------------------------------------------------------------------------
---  2. CAST-BASED AURA FALLBACK TRACKER (FOR WOW 12.X SECRET AURA SAFETY)
+--  2. CAST-BASED & MULTI-TARGET AURA TRACKER (SECRET-SAFE FOR WOW 12.X COMBAT)
 ---------------------------------------------------------------------------------------
-local function RecordAuraOnUnitAndGUID(unit, guid, auraID, lowName, untilTime)
+local function GetMetroForUnitToken(token)
+  if not token or not C_NamePlate or not C_NamePlate.GetNamePlateForUnit then
+    return nil, nil, nil
+  end
+  local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, token)
+  if ok and plate and not IsSecret(plate) then
+    local metro = plate.sparcMetro or activeMetroPlates[plate]
+    local npUnit = (metro and metro.unit) or plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
+    return metro, npUnit, plate
+  end
+  return nil, nil, nil
+end
+local function RecordAuraOnMetroAndUnit(metro, unit, guid, auraID, lowName, untilTime, now)
   st.nameplateAuras = st.nameplateAuras or {}
   st.nameplateUnitAuras = st.nameplateUnitAuras or {}
+  if metro then
+    metro.trackedAuras = metro.trackedAuras or {}
+    if auraID then metro.trackedAuras[auraID] = untilTime end
+    if lowName and lowName ~= "" then metro.trackedAuras[lowName] = untilTime end
+    metro.lastAuraCastAt = now or GetTime()
+  end
   if guid and not IsSecret(guid) and type(guid) == "string" then
     local gMap = st.nameplateAuras[guid]
     if not gMap then
@@ -229,7 +250,31 @@ local function RecordAuraOnUnitAndGUID(unit, guid, auraID, lowName, untilTime)
     if lowName and lowName ~= "" then uMap[lowName] = untilTime end
   end
 end
-function SpArc:RecordNameplateAuraCast(spellID, defKey, now)
+function SpArc:SnapshotNameplateCastTarget(spellID, defKey, isHardCastStart, now)
+  now = now or GetTime()
+  local moMetro, moUnit = GetMetroForUnitToken("mouseover")
+  local tgtMetro, tgtUnit = GetMetroForUnitToken("target")
+  local softMetro, softUnit = GetMetroForUnitToken("softenemy")
+  local pickedMetro, pickedUnit = nil, nil
+  if moMetro and moMetro.isEnemy then
+    pickedMetro, pickedUnit = moMetro, moUnit
+  elseif tgtMetro then
+    pickedMetro, pickedUnit = tgtMetro, tgtUnit
+  elseif softMetro and softMetro.isEnemy then
+    pickedMetro, pickedUnit = softMetro, softUnit
+  end
+  if pickedMetro or pickedUnit then
+    st.pendingCastMetro = pickedMetro
+    st.pendingCastPlateUnit = pickedUnit
+    st.pendingCastSnapshotAt = now
+    if isHardCastStart then
+      st.hardCastMetro = pickedMetro
+      st.hardCastPlateUnit = pickedUnit
+      st.hardCastSnapshotAt = now
+    end
+  end
+end
+function SpArc:RecordNameplateAuraCast(spellID, defKey, now, wasHardCast)
   now = now or GetTime()
   local def = defKey and SpArc.SPELL_DEFS and SpArc.SPELL_DEFS[defKey]
   local castID = (not IsSecret(spellID) and type(spellID) == "number" and spellID)
@@ -242,53 +287,120 @@ function SpArc:RecordNameplateAuraCast(spellID, defKey, now)
   local untilTime = now + dur
   local idsToRecord = { castID }
   local seen = { [castID] = true }
+  local function AddRecordID(id)
+    if id and type(id) == "number" and id > 0 and not seen[id] then
+      seen[id] = true
+      idsToRecord[#idsToRecord + 1] = id
+    end
+  end
   if SPELL_AURA_ALIASES[castID] then
     for _, al in ipairs(SPELL_AURA_ALIASES[castID]) do
-      if not seen[al] then seen[al] = true; idsToRecord[#idsToRecord + 1] = al end
+      AddRecordID(al)
     end
   end
   if def then
     local dList = def.auraIDs or def.debuffIDs or def.ids
     if dList then
       for _, id in ipairs(dList) do
-        if not seen[id] then seen[id] = true; idsToRecord[#idsToRecord + 1] = id end
+        AddRecordID(id)
         if SPELL_AURA_ALIASES[id] then
           for _, al in ipairs(SPELL_AURA_ALIASES[id]) do
-            if not seen[al] then seen[al] = true; idsToRecord[#idsToRecord + 1] = al end
+            AddRecordID(al)
           end
         end
       end
     end
   end
+  -- Shadow Priest Misery (238558): Vampiric Touch (34914) also applies Shadow Word: Pain (589)
+  local isVTCast = (castID == 34914 or defKey == "VAMPIRIC_TOUCH")
+  if isVTCast and _G.IsPlayerSpell and SafeBool(_G.IsPlayerSpell, 238558) then
+    AddRecordID(589)
+  end
   local nm = GetSpellNameAndIconSafe(castID)
   local lowName = (nm and SpArc.UTF8Lower and SpArc.UTF8Lower(nm)) or (nm and nm:lower()) or nil
-  -- 1. Record on current target (GUID + matching nameplate unit)
-  local tGUID = nil
-  if UnitGUID and SafeBool(UnitExists, "target") then
+  -- Resolve recipient nameplate (Hard-cast snapshot -> Mouseover -> Target -> SoftEnemy)
+  local targetMetro, targetPlateUnit = nil, nil
+  if wasHardCast and st.hardCastMetro and st.hardCastSnapshotAt and (now - st.hardCastSnapshotAt) < 5.0 then
+    targetMetro = st.hardCastMetro
+    targetPlateUnit = st.hardCastPlateUnit or targetMetro.unit
+  end
+  st.hardCastMetro = nil
+  st.hardCastPlateUnit = nil
+  if not targetMetro and st.pendingCastMetro and st.pendingCastSnapshotAt and (now - st.pendingCastSnapshotAt) < 1.2 then
+    targetMetro = st.pendingCastMetro
+    targetPlateUnit = st.pendingCastPlateUnit or targetMetro.unit
+  end
+  if not targetMetro then
+    local moMetro, moUnit = GetMetroForUnitToken("mouseover")
+    if moMetro and moMetro.isEnemy then
+      targetMetro, targetPlateUnit = moMetro, moUnit
+    end
+  end
+  if not targetMetro then
+    targetMetro, targetPlateUnit = GetMetroForUnitToken("target")
+  end
+  if not targetMetro then
+    local softMetro, softUnit = GetMetroForUnitToken("softenemy")
+    if softMetro and softMetro.isEnemy then
+      targetMetro, targetPlateUnit = softMetro, softUnit
+    end
+  end
+  if not targetPlateUnit then
+    for npUnit, metro in pairs(unitToMetro) do
+      if SafeBool(UnitIsUnit, npUnit, "target") then
+        targetMetro = metro
+        targetPlateUnit = npUnit
+        break
+      end
+    end
+  end
+  local tGUID = (targetMetro and targetMetro.unitGUID) or nil
+  if not tGUID and UnitGUID and SafeBool(UnitExists, "target") then
     local okG, g = pcall(UnitGUID, "target")
     if okG and not IsSecret(g) and type(g) == "string" then
       tGUID = g
     end
   end
-  local targetPlateUnit = nil
-  for npUnit, _ in pairs(unitToMetro) do
-    if SafeBool(UnitIsUnit, npUnit, "target") then
-      targetPlateUnit = npUnit
-      break
+  for _, aID in ipairs(idsToRecord) do
+    local aDur = DEFAULT_AURA_DURATIONS[aID] or dur
+    RecordAuraOnMetroAndUnit(targetMetro, targetPlateUnit, tGUID, aID, lowName, now + aDur, now)
+  end
+  -- Record last cast DoT info so UNIT_AURA / playerDebuffCount delta on neighboring nameplates can correlate spreads/missiles
+  local isTrackedDoT = false
+  if compiledAuraRules then
+    for _, r in ipairs(compiledAuraRules) do
+      for _, grp in ipairs(r.reqGroups) do
+        for _, aID in ipairs(idsToRecord) do
+          if grp.idSet[aID] then
+            isTrackedDoT = true
+            break
+          end
+        end
+        if isTrackedDoT then break end
+      end
+      if isTrackedDoT then break end
     end
   end
-  for _, aID in ipairs(idsToRecord) do
-    RecordAuraOnUnitAndGUID(targetPlateUnit, tGUID, aID, lowName, untilTime)
+  if isTrackedDoT or AOE_DOT_SPELLS[castID] then
+    local aoeInfo = AOE_DOT_SPELLS[castID]
+    st.lastCastDoTInfo = {
+      ids = (aoeInfo and aoeInfo.auras) or idsToRecord,
+      lowName = lowName,
+      dur = (aoeInfo and aoeInfo.dur) or dur,
+      castAt = now,
+      isVT = isVTCast,
+      isAoE = (aoeInfo ~= nil),
+    }
   end
-  -- 2. If AoE DoT (e.g. Sunfire, Shadow Crash, Thrash, Primal Wrath), also tag nearby enemy nameplates
+  -- 2. If AoE DoT (e.g. Sunfire, Shadow Crash, Thrash, Primal Wrath), also tag nearby engaged enemy nameplates
   local aoeInfo = AOE_DOT_SPELLS[castID]
   if aoeInfo then
     local aoeUntil = now + (aoeInfo.dur or dur)
     for npUnit, metro in pairs(unitToMetro) do
-      if metro and metro.isEnemy and (SafeBool(UnitAffectingCombat, npUnit) or SafeBool(UnitIsUnit, npUnit, "target") or metro.reaction == 4) then
+      if metro and metro.isEnemy and (metro == targetMetro or SafeBool(UnitAffectingCombat, npUnit) or metro.reaction == 4 or (metro._lastPlayerDebuffCount and metro._lastPlayerDebuffCount > 0)) then
         local npGUID = metro.unitGUID
         for _, aID in ipairs(aoeInfo.auras) do
-          RecordAuraOnUnitAndGUID(npUnit, npGUID, aID, lowName, aoeUntil)
+          RecordAuraOnMetroAndUnit(metro, npUnit, npGUID, aID, lowName, aoeUntil, now)
         end
       end
     end
@@ -297,25 +409,36 @@ function SpArc:RecordNameplateAuraCast(spellID, defKey, now)
     local hasTwinMoons = (_G.IsPlayerSpell and SafeBool(_G.IsPlayerSpell, 279620)) or false
     if hasTwinMoons then
       for npUnit, metro in pairs(unitToMetro) do
-        if metro and metro.isEnemy and not SafeBool(UnitIsUnit, npUnit, "target") and (SafeBool(UnitAffectingCombat, npUnit) or metro.reaction == 4) then
+        if metro and metro.isEnemy and metro ~= targetMetro and (SafeBool(UnitAffectingCombat, npUnit) or metro.reaction == 4) then
           local npGUID = metro.unitGUID
           for _, aID in ipairs(idsToRecord) do
-            RecordAuraOnUnitAndGUID(npUnit, npGUID, aID, lowName, untilTime)
+            RecordAuraOnMetroAndUnit(metro, npUnit, npGUID, aID, lowName, untilTime, now)
           end
           break
         end
       end
     end
   end
+  -- Immediately refresh nameplate colors so the user sees instant feedback
+  if SpArc:IsNameplatesEnabled() then
+    for _, metro in pairs(unitToMetro) do
+      if metro and metro.unit and metro:IsShown() then
+        UpdateMetroHealthAndColor(metro, now)
+      end
+    end
+  end
 end
-local function DoesUnitHaveAuraGroup(unit, metro, group, liveIDSet, liveNameSet, now)
-  -- 1. Check live scanned player debuffs on unit
+local function DoesUnitHaveAuraGroup(unit, metro, group, liveIDSet, liveNameSet, liveIconSet, now)
+  -- 1. Check live scanned player debuffs on unit (non-secret IDs, names, or icons)
   for id in pairs(group.idSet) do
     if liveIDSet[id] then
       return true
     end
   end
   if group.lowerName and liveNameSet[group.lowerName] then
+    return true
+  end
+  if group.icon and liveIconSet[group.icon] then
     return true
   end
   -- 2. Direct C_UnitAuras.GetUnitAuraBySpellID check
@@ -333,7 +456,18 @@ local function DoesUnitHaveAuraGroup(unit, metro, group, liveIDSet, liveNameSet,
       end
     end
   end
-  -- 3. Fallback: SpArc GUID & Unit Aura Tracker (works even when 12.x marks unit auras secret)
+  -- 3. Per-Nameplate Frame Tracker (metro.trackedAuras — immune to target switching & 12.x secret GUIDs)
+  if metro and metro.trackedAuras then
+    local mMap = metro.trackedAuras
+    for id in pairs(group.idSet) do
+      local uTime = mMap[id]
+      if uTime and uTime > now then return true end
+    end
+    if group.lowerName and mMap[group.lowerName] and mMap[group.lowerName] > now then
+      return true
+    end
+  end
+  -- 4. Fallback: SpArc GUID & Unit Aura Tracker
   local guid = metro and metro.unitGUID
   if guid and st.nameplateAuras and st.nameplateAuras[guid] then
     local gMap = st.nameplateAuras[guid]
@@ -367,26 +501,72 @@ local function DoesUnitHaveAuraGroup(unit, metro, group, liveIDSet, liveNameSet,
 end
 local reusableLiveIDSet = {}
 local reusableLiveNameSet = {}
+local reusableLiveIconSet = {}
 local function EvaluateNameplateAuraColor(unit, metro, now)
   if not compiledAuraRules or #compiledAuraRules == 0 then
     return nil, nil, nil
   end
   for k in pairs(reusableLiveIDSet) do reusableLiveIDSet[k] = nil end
   for k in pairs(reusableLiveNameSet) do reusableLiveNameSet[k] = nil end
+  for k in pairs(reusableLiveIconSet) do reusableLiveIconSet[k] = nil end
+  local playerDebuffCount = 0
+  local debuffQuerySucceeded = false
   if C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex then
     for i = 1, 16 do
       local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, unit, i, "HARMFUL|PLAYER")
+      if ok then
+        debuffQuerySucceeded = true
+      end
       if not ok or type(aura) ~= "table" then
         break
       end
+      playerDebuffCount = playerDebuffCount + 1
       local exp = aura.expirationTime
       if IsSecret(exp) or type(exp) ~= "number" or exp == 0 or exp > now then
         if not IsSecret(aura.spellId) and type(aura.spellId) == "number" then
           reusableLiveIDSet[aura.spellId] = true
+          if metro then
+            metro.trackedAuras = metro.trackedAuras or {}
+            local dur = DEFAULT_AURA_DURATIONS[aura.spellId] or 18.0
+            local uTime = (not IsSecret(exp) and type(exp) == "number" and exp > now) and exp or (now + dur)
+            metro.trackedAuras[aura.spellId] = uTime
+          end
         end
         if not IsSecret(aura.name) and type(aura.name) == "string" and aura.name ~= "" then
           local low = SpArc.UTF8Lower and SpArc.UTF8Lower(aura.name) or aura.name:lower()
           reusableLiveNameSet[low] = true
+        end
+        if not IsSecret(aura.icon) and type(aura.icon) == "number" then
+          reusableLiveIconSet[aura.icon] = true
+        end
+      end
+    end
+  end
+  -- Correlate live HARMFUL|PLAYER debuff count with per-plate tracked auras (essential when 12.x marks aura fields secret)
+  if metro and debuffQuerySucceeded then
+    local prevCount = metro._lastPlayerDebuffCount or 0
+    metro._lastPlayerDebuffCount = playerDebuffCount
+    if playerDebuffCount == 0 then
+      -- If WoW confirms 0 player debuffs on this unit (and cast grace window has passed), clear stale tracked auras
+      if metro.trackedAuras and (now - (metro.lastAuraCastAt or 0)) > 0.55 then
+        for k in pairs(metro.trackedAuras) do metro.trackedAuras[k] = nil end
+        if unit and st.nameplateUnitAuras and st.nameplateUnitAuras[unit] then
+          for k in pairs(st.nameplateUnitAuras[unit]) do st.nameplateUnitAuras[unit][k] = nil end
+        end
+      end
+    else
+      -- Unit has >= 1 active player debuff!
+      local info = st.lastCastDoTInfo
+      if info and (playerDebuffCount > prevCount or not metro.trackedAuras or next(metro.trackedAuras) == nil) and (now - (info.castAt or 0)) < 2.6 then
+        local untilTime = now + (info.dur or 18.0)
+        for _, aID in ipairs(info.ids or {}) do
+          RecordAuraOnMetroAndUnit(metro, unit, metro.unitGUID, aID, info.lowName, untilTime, now)
+        end
+      end
+      -- Shadow Priest Misery: if Vampiric Touch (34914) is active on this unit and playerDebuffCount >= 2, SW:P (589) is also active
+      if playerDebuffCount >= 2 and metro.trackedAuras and metro.trackedAuras[34914] and metro.trackedAuras[34914] > now then
+        if not metro.trackedAuras[589] or metro.trackedAuras[589] <= now then
+          RecordAuraOnMetroAndUnit(metro, unit, metro.unitGUID, 589, nil, now + (DEFAULT_AURA_DURATIONS[589] or 16.0), now)
         end
       end
     end
@@ -394,7 +574,7 @@ local function EvaluateNameplateAuraColor(unit, metro, now)
   for _, rule in ipairs(compiledAuraRules) do
     local allMatched = true
     for _, grp in ipairs(rule.reqGroups) do
-      if not DoesUnitHaveAuraGroup(unit, metro, grp, reusableLiveIDSet, reusableLiveNameSet, now) then
+      if not DoesUnitHaveAuraGroup(unit, metro, grp, reusableLiveIDSet, reusableLiveNameSet, reusableLiveIconSet, now) then
         allMatched = false
         break
       end
@@ -447,15 +627,190 @@ local function IsUnitQuestRelated(unit, guid)
   return false
 end
 ---------------------------------------------------------------------------------------
---  4. BLIZZARD & ELVUI NAMEPLATE SUPPRESSION (ZERO-TAINT)
+--  4. BLIZZARD SUPPRESSION & ELVUI / PLATER CONFLICT DIALOG (NO SILENT AUTO-DISABLE!)
 ---------------------------------------------------------------------------------------
+local conflictDialog = nil
+local conflictResolvedToSpArc = false
+
+local function GetActiveConflictingNameplateAddon()
+  local hasElvNP = false
+  local hasPlater = false
+  if _G.ElvUI then
+    local okE, E = pcall(_G.unpack, _G.ElvUI)
+    if okE and type(E) == "table" and E.private and E.private.nameplates and E.private.nameplates.enable == true then
+      hasElvNP = true
+    end
+  end
+  if _G.Plater ~= nil or (C_AddOns and C_AddOns.IsAddOnLoaded and SafeBool(C_AddOns.IsAddOnLoaded, "Plater")) then
+    hasPlater = true
+  end
+  if hasElvNP and hasPlater then
+    return "ElvUI NamePlates & Plater", true, true
+  elseif hasElvNP then
+    return "ElvUI NamePlates", true, false
+  elseif hasPlater then
+    return "Plater", false, true
+  end
+  return nil, false, false
+end
+
+local function DisableExternalNameplateAddonsByUserChoice(hasElvNP, hasPlater)
+  conflictResolvedToSpArc = true
+  if hasElvNP and _G.ElvUI then
+    local okE, E = pcall(_G.unpack, _G.ElvUI)
+    if okE and type(E) == "table" then
+      if E.private and E.private.nameplates then
+        E.private.nameplates.enable = false
+      end
+      if E.GetModule then
+        local okNP, NP = pcall(E.GetModule, E, "NamePlates", true)
+        if okNP and type(NP) == "table" then
+          if NP.PlateDriver then
+            pcall(NP.PlateDriver.UnregisterAllEvents, NP.PlateDriver)
+          end
+          if NP.PlayerFrame then pcall(NP.PlayerFrame.Hide, NP.PlayerFrame) end
+          if NP.TargetClassPower then pcall(NP.TargetClassPower.Hide, NP.TargetClassPower) end
+          if NP.PlayerNamePlateAnchor then pcall(NP.PlayerNamePlateAnchor.Hide, NP.PlayerNamePlateAnchor) end
+          elvUINPSuppressed = true
+        end
+      end
+    end
+  end
+  if hasPlater then
+    if C_AddOns and C_AddOns.DisableAddOn then
+      pcall(C_AddOns.DisableAddOn, "Plater")
+    elseif _G.DisableAddOn then
+      pcall(_G.DisableAddOn, "Plater")
+    end
+    if _G.ReloadUI then
+      pcall(_G.ReloadUI)
+    end
+  end
+end
+
+local function ShowNameplateConflictDialog(conflictName, hasElvNP, hasPlater)
+  if not conflictDialog then
+    local f = CreateFrame("Frame", "SpArcNameplateConflictDialog", UIParent, "BackdropTemplate")
+    f:SetSize(460, 178)
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, 110)
+    f:SetFrameStrata("FULLSCREEN_DIALOG")
+    f:SetFrameLevel(200)
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:SetBackdrop({
+      bgFile = FLAT_TEX,
+      edgeFile = FLAT_TEX,
+      edgeSize = 2,
+    })
+    f:SetBackdropColor(0.05, 0.05, 0.08, 0.98)
+    f:SetBackdropBorderColor(0.75, 0.30, 1.0, 1.0)
+
+    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    ApplyCyrFont(title, 15)
+    title:SetPoint("TOP", f, "TOP", 0, -14)
+    title:SetTextColor(1.0, 0.85, 0.25, 1.0)
+    f.title = title
+
+    local body = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    ApplyCyrFont(body, 12)
+    body:SetPoint("TOPLEFT", f, "TOPLEFT", 20, -44)
+    body:SetPoint("TOPRIGHT", f, "TOPRIGHT", -20, -44)
+    body:SetJustifyH("CENTER")
+    body:SetSpacing(3)
+    f.body = body
+
+    local function MakeChoiceBtn(xOffset)
+      local b = CreateFrame("Button", nil, f, "BackdropTemplate")
+      b:SetSize(200, 32)
+      b:SetPoint("BOTTOM", f, "BOTTOM", xOffset, 16)
+      b:SetBackdrop({
+        bgFile = FLAT_TEX,
+        edgeFile = FLAT_TEX,
+        edgeSize = 1,
+      })
+      b:SetBackdropColor(0.14, 0.14, 0.20, 0.98)
+      b:SetBackdropBorderColor(0.32, 0.32, 0.44, 1.0)
+      local fs = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ApplyCyrFont(fs, 12)
+      fs:SetPoint("CENTER")
+      fs:SetTextColor(0.95, 0.95, 1.0, 1.0)
+      b.fs = fs
+      b:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(0.20, 0.36, 0.58, 0.98)
+        self:SetBackdropBorderColor(0.45, 0.75, 1.0, 1.0)
+      end)
+      b:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(0.14, 0.14, 0.20, 0.98)
+        self:SetBackdropBorderColor(0.32, 0.32, 0.44, 1.0)
+      end)
+      return b
+    end
+
+    f.btnSpArc = MakeChoiceBtn(-106)
+    f.btnTheirs = MakeChoiceBtn(106)
+    conflictDialog = f
+  end
+
+  conflictDialog.title:SetText(SpArc:L("NP_CONFLICT_TITLE"))
+  conflictDialog.body:SetText(string.format(SpArc:L("NP_CONFLICT_BODY"), conflictName))
+  conflictDialog.btnSpArc.fs:SetText(SpArc:L("NP_CONFLICT_USE_SPARC"))
+  conflictDialog.btnTheirs.fs:SetText(string.format(SpArc:L("NP_CONFLICT_USE_THEIRS"), conflictName))
+
+  conflictDialog.btnSpArc:SetScript("OnClick", function()
+    conflictDialog:Hide()
+    local db = SpArc:EnsureDB()
+    if db and db.visual then
+      db.visual.enableNameplates = true
+    end
+    DisableExternalNameplateAddonsByUserChoice(hasElvNP, hasPlater)
+    print(string.format(SpArc:L("MSG_NP_CHOICE_SPARC"), conflictName))
+    SpArc:RefreshAllNameplates()
+    if SpArc.RefreshControlCenterUI then SpArc.RefreshControlCenterUI() end
+  end)
+
+  conflictDialog.btnTheirs:SetScript("OnClick", function()
+    conflictDialog:Hide()
+    conflictResolvedToSpArc = false
+    local db = SpArc:EnsureDB()
+    if db and db.visual then
+      db.visual.enableNameplates = false
+    end
+    print(string.format(SpArc:L("MSG_NP_CHOICE_THEIRS"), conflictName))
+    SpArc:RefreshAllNameplates()
+    if SpArc.RefreshControlCenterUI then SpArc.RefreshControlCenterUI() end
+  end)
+
+  conflictDialog:Show()
+end
+
+local function IsBlockedByUnresolvedConflict()
+  if not SpArc:IsNameplatesEnabled() then
+    return false
+  end
+  local conflictName, hasElvNP, hasPlater = GetActiveConflictingNameplateAddon()
+  if not conflictName then
+    if conflictDialog and conflictDialog:IsShown() then
+      conflictDialog:Hide()
+    end
+    return false
+  end
+  if conflictResolvedToSpArc then
+    return false
+  end
+  ShowNameplateConflictDialog(conflictName, hasElvNP, hasPlater)
+  return true
+end
+
 local function SuppressSubFrameEvents(sf)
   if sf and sf.UnregisterAllEvents then
     pcall(sf.UnregisterAllEvents, sf)
   end
 end
 local function SuppressBlizzardUnitFrame(plate, metro)
-  if not plate then return end
+  if not plate or IsBlockedByUnresolvedConflict() then return end
   local uFrame = plate.UnitFrame
   if uFrame then
     pcall(uFrame.Hide, uFrame)
@@ -472,7 +827,7 @@ local function SuppressBlizzardUnitFrame(plate, metro)
       SuppressSubFrameEvents(uFrame.AurasFrame)
       SuppressSubFrameEvents(uFrame.ClassificationFrame)
       pcall(_G.hooksecurefunc, uFrame, "Show", function(self)
-        if SpArc:IsNameplatesEnabled() then
+        if SpArc:IsNameplatesEnabled() and not IsBlockedByUnresolvedConflict() then
           pcall(self.Hide, self)
           pcall(self.SetAlpha, self, 0)
         end
@@ -491,8 +846,8 @@ local function SuppressBlizzardUnitFrame(plate, metro)
       end
     end
   end
-  -- Also hide ElvUI's per-plate unitFrame if ElvUI spawned one before suppression
-  if plate.unitFrame and plate.unitFrame ~= metro then
+  -- Only hide ElvUI's per-plate unitFrame if the user explicitly chose SpArc over ElvUI
+  if elvUINPSuppressed and plate.unitFrame and plate.unitFrame ~= metro then
     pcall(plate.unitFrame.UnregisterAllEvents, plate.unitFrame)
     pcall(plate.unitFrame.Hide, plate.unitFrame)
     pcall(plate.unitFrame.SetAlpha, plate.unitFrame, 0)
@@ -500,29 +855,14 @@ local function SuppressBlizzardUnitFrame(plate, metro)
 end
 function SpArc:SyncExternalNameplateAddons()
   local enabled = SpArc:IsNameplatesEnabled()
-  if _G.ElvUI then
-    local okE, E = pcall(_G.unpack, _G.ElvUI)
-    if okE and type(E) == "table" and E.GetModule then
-      local okNP, NP = pcall(E.GetModule, E, "NamePlates", true)
-      if okNP and type(NP) == "table" then
-        if enabled then
-          if NP.PlateDriver then
-            pcall(NP.PlateDriver.UnregisterAllEvents, NP.PlateDriver)
-          end
-          if NP.PlayerFrame then pcall(NP.PlayerFrame.Hide, NP.PlayerFrame) end
-          if NP.TargetClassPower then pcall(NP.TargetClassPower.Hide, NP.TargetClassPower) end
-          if NP.PlayerNamePlateAnchor then pcall(NP.PlayerNamePlateAnchor.Hide, NP.PlayerNamePlateAnchor) end
-          elvUINPSuppressed = true
-        elseif elvUINPSuppressed then
-          if NP.PlateDriver then
-            pcall(NP.PlateDriver.RegisterEvent, NP.PlateDriver, "NAME_PLATE_UNIT_ADDED")
-            pcall(NP.PlateDriver.RegisterEvent, NP.PlateDriver, "NAME_PLATE_UNIT_REMOVED")
-            pcall(NP.PlateDriver.RegisterEvent, NP.PlateDriver, "PLAYER_TARGET_CHANGED")
-          end
-          elvUINPSuppressed = false
-        end
-      end
+  if not enabled then
+    if conflictDialog and conflictDialog:IsShown() then
+      conflictDialog:Hide()
     end
+    return
+  end
+  if IsBlockedByUnresolvedConflict() then
+    return
   end
   if enabled and C_CVar and C_CVar.SetCVar and not (InCombatLockdown and InCombatLockdown()) then
     pcall(C_CVar.SetCVar, "nameplateShowEnemies", "1")
@@ -603,6 +943,13 @@ local function CreateMetroPlate(plate, isDemo)
   hpText:SetWordWrap(false)
   hpText:SetTextColor(0.96, 0.96, 1.0, 1.0)
   metro.hpText = hpText
+  local levelText = txtFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  ApplyCyrFont(levelText, 10)
+  levelText:SetPoint("LEFT", txtFrame, "LEFT", 5, 0)
+  levelText:SetJustifyH("LEFT")
+  levelText:SetWordWrap(false)
+  levelText:SetTextColor(1.00, 0.85, 0.28, 1.0)
+  metro.levelText = levelText
   local nameText = txtFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   ApplyCyrFont(nameText, 11)
   nameText:SetPoint("LEFT", txtFrame, "LEFT", 6, 0)
@@ -750,6 +1097,9 @@ local function ApplyMetroGeometryToPlate(metro)
   metro.castBar:SetHeight(cbH)
   metro.castBar.iconBox:SetSize(cbH, cbH)
   ApplyCyrFont(metro.nameText, fSize)
+  if metro.levelText then
+    ApplyCyrFont(metro.levelText, math.max(8, fSize - 1))
+  end
   ApplyCyrFont(metro.hpText, math.max(8, fSize - 1))
   local cbFont = math.max(8, math.min(12, cbH - 4))
   ApplyCyrFont(metro.castBar.spellText, cbFont)
@@ -773,7 +1123,8 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
   local isFriend = SafeBool(UnitIsFriend, "player", unit) and not isEnemy
   local okR, reaction = pcall(UnitReaction, "player", unit)
   local reactNum = (okR and not IsSecret(reaction) and type(reaction) == "number" and reaction) or (isEnemy and 2 or 5)
-  local isTarget = SafeBool(UnitIsUnit, unit, "target")
+  local tgtMetro = GetMetroForUnitToken("target")
+  local isTarget = (tgtMetro ~= nil and tgtMetro == metro) or SafeBool(UnitIsUnit, unit, "target")
   local okG, guid = pcall(UnitGUID, unit)
   local cleanGUID = (okG and not IsSecret(guid) and type(guid) == "string" and guid) or nil
   metro.unitGUID = cleanGUID
@@ -784,7 +1135,12 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
   metro.reaction = reactNum
   if isPlayer then
     local okC, _, classFile = pcall(UnitClass, unit)
-    metro.classFile = (okC and classFile) or nil
+    if okC and classFile then
+      metro.classFile = classFile
+      if not IsSecret(classFile) and type(classFile) == "string" then
+        metro.cachedClassFile = classFile
+      end
+    end
     if isEnemy or reactNum <= 4 then
       metro.plateCategory = "ENEMY_PLAYER"
       metro.isQuestNPC = false
@@ -800,6 +1156,7 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
   end
   -- NPC Logic
   metro.classFile = nil
+  metro.cachedClassFile = nil
   local isQuest = IsUnitQuestRelated(unit, cleanGUID)
   metro.isQuestNPC = isQuest
   -- Hostile NPC (reaction <= 3)
@@ -846,20 +1203,29 @@ local function UpdateMetroHealthAndColor(metro, now)
   -- 2. Color Evaluation
   local r, g, b = COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
   if metro.plateCategory == "FRIENDLY_PLAYER" then
-    local cf = metro.classFile
-    local cObj = nil
-    if cf then
-      if IsSecret(cf) and C_ClassColor and C_ClassColor.GetClassColor then
-        local okCC, cc = pcall(C_ClassColor.GetClassColor, cf)
-        if okCC then cObj = cc end
-      elseif not IsSecret(cf) and RAID_CLASS_COLORS and RAID_CLASS_COLORS[cf] then
-        cObj = RAID_CLASS_COLORS[cf]
-      end
-    end
-    if cObj and cObj.r then
-      r, g, b = cObj.r, cObj.g, cObj.b
+    local cf = (not IsSecret(metro.classFile) and metro.classFile) or metro.cachedClassFile or metro.classFile
+    if cf == "DEATHKNIGHT" then
+      r, g, b = COLOR_DK_CHERRY.r, COLOR_DK_CHERRY.g, COLOR_DK_CHERRY.b
     else
-      r, g, b = 0.25, 0.78, 0.92
+      local cObj = nil
+      if cf then
+        if IsSecret(cf) and C_ClassColor and C_ClassColor.GetClassColor then
+          local okCC, cc = pcall(C_ClassColor.GetClassColor, cf)
+          if okCC then cObj = cc end
+        elseif not IsSecret(cf) and RAID_CLASS_COLORS and RAID_CLASS_COLORS[cf] then
+          cObj = RAID_CLASS_COLORS[cf]
+        end
+      end
+      if cObj and cObj.r then
+        -- Also catch Death Knight by its default RGB (#C41E3A: 0.77, 0.12, 0.23) if classFile was secret
+        if not IsSecret(cObj.r) and type(cObj.r) == "number" and cObj.r > 0.70 and cObj.r < 0.82 and (cObj.g or 1) < 0.16 and (cObj.b or 0) > 0.18 and (cObj.b or 1) < 0.28 then
+          r, g, b = COLOR_DK_CHERRY.r, COLOR_DK_CHERRY.g, COLOR_DK_CHERRY.b
+        else
+          r, g, b = cObj.r, cObj.g, cObj.b
+        end
+      else
+        r, g, b = 0.25, 0.78, 0.92
+      end
     end
   else
     -- Hostile NPC, Hostile Player, or Quest NPC:
@@ -937,7 +1303,7 @@ local function UpdateMetroCastbar(metro, now)
 end
 local function FullUpdateMetroPlate(metro)
   if not metro or not metro.unit then return end
-  if not SpArc:IsNameplatesEnabled() then
+  if not SpArc:IsNameplatesEnabled() or IsBlockedByUnresolvedConflict() then
     metro:Hide()
     return
   end
@@ -949,6 +1315,32 @@ local function FullUpdateMetroPlate(metro)
     return
   end
   ApplyMetroGeometryToPlate(metro)
+  -- Player Level (for both Friendly & Hostile Players)
+  if metro.levelText then
+    if metro.isPlayer and UnitLevel then
+      local okL, uLvl = pcall(UnitLevel, unit)
+      if okL and not IsSecret(uLvl) and type(uLvl) == "number" then
+        metro.cachedLevel = uLvl
+      end
+      local lvlVal = metro.cachedLevel
+      if lvlVal then
+        metro.levelText:SetText(lvlVal < 0 and "??" or tostring(lvlVal))
+        metro.nameText:ClearAllPoints()
+        metro.nameText:SetPoint("LEFT", metro.levelText, "RIGHT", 4, 0)
+        metro.nameText:SetPoint("RIGHT", metro.hpText, "LEFT", -4, 0)
+      else
+        metro.levelText:SetText("")
+        metro.nameText:ClearAllPoints()
+        metro.nameText:SetPoint("LEFT", metro.txtFrame, "LEFT", 6, 0)
+        metro.nameText:SetPoint("RIGHT", metro.hpText, "LEFT", -4, 0)
+      end
+    else
+      metro.levelText:SetText("")
+      metro.nameText:ClearAllPoints()
+      metro.nameText:SetPoint("LEFT", metro.txtFrame, "LEFT", 6, 0)
+      metro.nameText:SetPoint("RIGHT", metro.hpText, "LEFT", -4, 0)
+    end
+  end
   -- Unit Name (Secret-Safe C++ pass-through)
   local okN, uName = pcall(UnitName, unit)
   if okN and uName ~= nil then
@@ -967,8 +1359,9 @@ local function FullUpdateMetroPlate(metro)
   -- Hostile Player Left Class Icon Square
   local db = SpArc:EnsureDB()
   local showClassIcon = (not db or not db.visual or db.visual.npShowHostileClassIcon ~= false)
-  if showClassIcon and metro.plateCategory == "ENEMY_PLAYER" and metro.classFile and not IsSecret(metro.classFile) and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[metro.classFile] then
-    local coords = CLASS_ICON_TCOORDS[metro.classFile]
+  local cf = (not IsSecret(metro.classFile) and metro.classFile) or metro.cachedClassFile
+  if showClassIcon and metro.plateCategory == "ENEMY_PLAYER" and cf and not IsSecret(cf) and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[cf] then
+    local coords = CLASS_ICON_TCOORDS[cf]
     metro.classBox.icon:SetTexCoord(coords[1] + 0.02, coords[2] - 0.02, coords[3] + 0.02, coords[4] - 0.02)
     metro.classBox:Show()
   else
@@ -990,7 +1383,7 @@ end
 function SpArc:RefreshAllNameplates()
   SpArc:CompileNameplateAuraRules()
   SpArc:SyncExternalNameplateAddons()
-  local enabled = SpArc:IsNameplatesEnabled()
+  local enabled = SpArc:IsNameplatesEnabled() and not IsBlockedByUnresolvedConflict()
   if C_NamePlate and C_NamePlate.GetNamePlates then
     local okP, plates = pcall(C_NamePlate.GetNamePlates)
     if okP and type(plates) == "table" then
@@ -1035,6 +1428,7 @@ npDriver:RegisterEvent("UNIT_MAXHEALTH")
 npDriver:RegisterEvent("UNIT_AURA")
 npDriver:RegisterEvent("UNIT_FACTION")
 npDriver:RegisterEvent("UNIT_NAME_UPDATE")
+npDriver:RegisterEvent("UNIT_LEVEL")
 npDriver:RegisterEvent("UNIT_FLAGS")
 npDriver:SetScript("OnEvent", function(_, event, arg1)
   if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
@@ -1063,7 +1457,7 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
     local plate = arg1
     if plate then
       local metro = CreateMetroPlate(plate)
-      if SpArc:IsNameplatesEnabled() then
+      if SpArc:IsNameplatesEnabled() and not IsBlockedByUnresolvedConflict() then
         SuppressBlizzardUnitFrame(plate, metro)
       end
     end
@@ -1076,6 +1470,8 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
     if not ok or not plate then return end
     local metro = CreateMetroPlate(plate)
     metro.unit = unit
+    metro.trackedAuras = {}
+    metro._lastPlayerDebuffCount = 0
     unitToMetro[unit] = metro
     FullUpdateMetroPlate(metro)
     return
@@ -1089,6 +1485,10 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
         metro.unit = nil
         metro.unitGUID = nil
         metro.isTarget = false
+        metro.trackedAuras = nil
+        metro._lastPlayerDebuffCount = 0
+        metro.cachedLevel = nil
+        metro.cachedClassFile = nil
       end
       unitToMetro[unit] = nil
       if st.nameplateUnitAuras then
@@ -1103,10 +1503,11 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
     end
     if event == "PLAYER_TARGET_CHANGED" then
       local now = GetTime()
+      local tgtMetro = GetMetroForUnitToken("target")
       for _, metro in pairs(unitToMetro) do
         if metro and metro.unit then
           local wasTarget = metro.isTarget
-          local isNowTarget = SafeBool(UnitIsUnit, metro.unit, "target")
+          local isNowTarget = (tgtMetro ~= nil and tgtMetro == metro) or SafeBool(UnitIsUnit, metro.unit, "target")
           if wasTarget ~= isNowTarget or not metro:IsShown() then
             FullUpdateMetroPlate(metro)
           elseif isNowTarget then
@@ -1124,7 +1525,7 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
     end
     return
   end
-  -- Unit-specific events (UNIT_HEALTH, UNIT_AURA, UNIT_FACTION, UNIT_NAME_UPDATE, UNIT_FLAGS)
+  -- Unit-specific events (UNIT_HEALTH, UNIT_AURA, UNIT_FACTION, UNIT_NAME_UPDATE, UNIT_LEVEL, UNIT_FLAGS)
   local unit = arg1
   if unit and not IsSecret(unit) and type(unit) == "string" then
     local metro = unitToMetro[unit]
@@ -1538,6 +1939,14 @@ function SpArc:RefreshNameplatesPage(ui)
     demo.classBox:SetShown(vis.npShowHostileClassIcon ~= false)
     demo.castBar:SetHeight(cbH)
     demo.castBar.iconBox:SetSize(cbH, cbH)
+    if demo.levelText then
+      ApplyCyrFont(demo.levelText, math.max(8, fSize - 1))
+      local pLvl = (UnitLevel and not IsSecret(UnitLevel("player"))) and tonumber(UnitLevel("player")) or 80
+      demo.levelText:SetText(tostring(pLvl and pLvl > 0 and pLvl or 80))
+      demo.levelText:Show()
+      demo.nameText:ClearAllPoints()
+      demo.nameText:SetPoint("LEFT", demo.levelText, "RIGHT", 4, 0)
+    end
     ApplyCyrFont(demo.nameText, fSize)
     ApplyCyrFont(demo.hpText, math.max(8, fSize - 1))
     local pName = (UnitName and UnitName("player"))

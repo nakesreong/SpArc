@@ -598,6 +598,13 @@ function SpArc:TriggerSpellPress(defKey, slot, keybind)
   if not slot and defKey and defs and defs[defKey] then
     slot = defs[defKey].slot
   end
+  if defKey then
+    st.lastPressedDefKey = defKey
+    st.lastPressedAt = now
+    if SpArc.SnapshotNameplateCastTarget then
+      SpArc:SnapshotNameplateCastTarget(nil, defKey, false, now)
+    end
+  end
 
   if (defKey == "PICK_POCKET" or (arcSlots[1] and arcSlots[1].currentDefKey == "PICK_POCKET" and keybind and arcSlots[1].currentKeybind == keybind)) and SpArc.MarkTargetPickPocketed then
     SpArc:MarkTargetPickPocketed(false)

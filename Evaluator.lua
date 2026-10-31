@@ -1101,18 +1101,22 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
   end
   if event == "UNIT_SPELLCAST_SENT" then
     if unit ~= "player" then return end
-    st.lastAnyCastAt = GetTime()
+    local nowSent = GetTime()
+    st.lastAnyCastAt = nowSent
     st.lockedTopKey = nil
     st.lockedTopCandidateKey = nil
     spellID = arg4
-    if spellID and not IsSecret(spellID) then
-      local defKey = SpArc:MatchSpellToDefKey(spellID, nil)
-      if defKey == "PICK_POCKET" and SpArc.MarkTargetPickPocketed then
-        SpArc:MarkTargetPickPocketed(false)
-      end
-      if defKey and SpArc.TriggerSpellPress then
-        SpArc:TriggerSpellPress(defKey, nil, nil)
-      end
+    local defKey = (spellID and not IsSecret(spellID) and SpArc:MatchSpellToDefKey(spellID, nil))
+      or ((st.lastPressedAt and (nowSent - st.lastPressedAt) < 0.8) and st.lastPressedDefKey)
+      or nil
+    if defKey == "PICK_POCKET" and SpArc.MarkTargetPickPocketed then
+      SpArc:MarkTargetPickPocketed(false)
+    end
+    if defKey and SpArc.TriggerSpellPress then
+      SpArc:TriggerSpellPress(defKey, nil, nil)
+    end
+    if SpArc.SnapshotNameplateCastTarget then
+      SpArc:SnapshotNameplateCastTarget(spellID, defKey, false, nowSent)
     end
     return
   end
@@ -1183,12 +1187,18 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
 
   if event == "UNIT_SPELLCAST_START" then
     local defKey = SpArc:MatchSpellToDefKey(spellID, sName)
+      or ((st.lastPressedAt and (now - st.lastPressedAt) < 0.8) and st.lastPressedDefKey)
+      or nil
     if defKey then
       st.lastHardCastStartAt = st.lastHardCastStartAt or {}
       st.lastHardCastStartAt[defKey] = now
+      st.castingDefKey = defKey
       if SpArc.TriggerSpellPress then
         SpArc:TriggerSpellPress(defKey, nil, nil)
       end
+    end
+    if SpArc.SnapshotNameplateCastTarget then
+      SpArc:SnapshotNameplateCastTarget(spellID, defKey, true, now)
     end
     local dur = (sCastMS and sCastMS > 0 and (sCastMS / 1000)) or 1.4
     st.castState.active = true
@@ -1200,9 +1210,12 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     st.castState.endTime = now + dur
   elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
     local defKey = SpArc:MatchSpellToDefKey(spellID, sName)
+      or ((st.lastPressedAt and (now - st.lastPressedAt) < 0.8) and st.lastPressedDefKey)
+      or nil
     if defKey then
       st.lastHardCastStartAt = st.lastHardCastStartAt or {}
       st.lastHardCastStartAt[defKey] = now
+      st.castingDefKey = defKey
       if SpArc.TriggerSpellPress then
         SpArc:TriggerSpellPress(defKey, nil, nil)
       end
@@ -1225,6 +1238,9 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
         SpArc:MarkTargetPickPocketed(true)
       end
     end
+    if event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
+      st.castingDefKey = nil
+    end
     st.castState.active = false
     st.castState.defKey = nil
   elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
@@ -1232,6 +1248,10 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     st.lockedTopKey = nil
     st.lockedTopCandidateKey = nil
     local defKey = SpArc:MatchSpellToDefKey(spellID, sName)
+      or st.castingDefKey
+      or ((st.lastPressedAt and (now - st.lastPressedAt) < 1.0) and st.lastPressedDefKey)
+      or nil
+    st.castingDefKey = nil
     local wasHardCast = defKey and st.lastHardCastStartAt and st.lastHardCastStartAt[defKey] and (now - st.lastHardCastStartAt[defKey]) < 4.5
     if wasHardCast then
       st.lastHardCastStartAt[defKey] = nil
@@ -1244,7 +1264,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
       SpArc:RecordSpellCastSuccess(defKey, now)
     end
     if SpArc.RecordNameplateAuraCast then
-      SpArc:RecordNameplateAuraCast(spellID, defKey, now)
+      SpArc:RecordNameplateAuraCast(spellID, defKey, now, wasHardCast)
     end
   end
 end)

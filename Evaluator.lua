@@ -152,20 +152,15 @@ function SpArc:SelectActiveParsedProfile()
   local targetMode = "PVE"
 
   if mode == "AUTO" then
-    if SafeBool(UnitIsPlayer, "target") then
+    if SpArc.IsTargetPvP and SpArc:IsTargetPvP("target") then
       targetMode = "PVP"
       presetID = (db.autoPresets and db.autoPresets.PVP) or "PRIEST_03_SHADOW_PVP"
+    elseif SpArc.IsTargetBossOrRare and SpArc:IsTargetBossOrRare("target") then
+      targetMode = "BOSS"
+      presetID = (db.autoPresets and db.autoPresets.BOSS) or "PRIEST_02_SHADOW_BOSS"
     else
-      local okC, classif = pcall(UnitClassification, "target")
-      local okL, lvl = pcall(UnitLevel, "target")
-      if (okC and not IsSecret(classif) and (classif == "worldboss" or classif == "rareelite" or classif == "elite"))
-        or (okL and not IsSecret(lvl) and lvl == -1) then
-        targetMode = "BOSS"
-        presetID = (db.autoPresets and db.autoPresets.BOSS) or "PRIEST_02_SHADOW_BOSS"
-      else
-        targetMode = "PVE"
-        presetID = (db.autoPresets and db.autoPresets.PVE) or "PRIEST_01_SHADOW_PVE"
-      end
+      targetMode = "PVE"
+      presetID = (db.autoPresets and db.autoPresets.PVE) or "PRIEST_01_SHADOW_PVE"
     end
   elseif mode == "PVE" or mode == "BOSS" or mode == "PVP" then
     targetMode = mode

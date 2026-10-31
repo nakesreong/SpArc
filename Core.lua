@@ -168,8 +168,8 @@ SpArc.DEFAULT_VISUAL = {
   showMinimapButton = true,
   minimapAngle = 205,
   enableArcHUD = true,
-  enableBossRotation = false,
-  enablePvPRotation = false,
+  enableBossRotation = true,
+  enablePvPRotation = true,
   enablePressFeedback = true,
   enableCombatCamera = true,
   enableCamClickCast = true,
@@ -243,14 +243,64 @@ SpArc.state = {
   },
 }
 
+function SpArc:IsTargetBossOrRare(unit)
+  unit = unit or "target"
+  if SpArc.testMode then return true end
+  if not (_G.UnitExists and SpArc.SafeBool(_G.UnitExists, unit)) then
+    return false
+  end
+  -- 1. Classification: worldboss, rareelite, rare (explicitly NOT "elite", because dungeon packs are all elite)
+  if _G.UnitClassification then
+    local okC, classif = pcall(_G.UnitClassification, unit)
+    if okC and not SpArc.IsSecret(classif) and (classif == "worldboss" or classif == "rareelite" or classif == "rare") then
+      return true
+    end
+  end
+  -- 2. Skull level (-1)
+  if _G.UnitLevel then
+    local okL, lvl = pcall(_G.UnitLevel, unit)
+    if okL and not SpArc.IsSecret(lvl) and lvl == -1 then
+      return true
+    end
+  end
+  -- 3. Active encounter boss frames (boss1..boss8) so dungeon/raid bosses are detected without triggering on normal elite packs
+  if _G.UnitIsUnit and _G.UnitExists then
+    for i = 1, 8 do
+      local bUnit = "boss" .. i
+      if SpArc.SafeBool(_G.UnitExists, bUnit) and SpArc.SafeBool(_G.UnitIsUnit, unit, bUnit) then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+function SpArc:IsTargetPvP(unit)
+  unit = unit or "target"
+  if SpArc.testMode then return true end
+  if not (_G.UnitExists and SpArc.SafeBool(_G.UnitExists, unit)) then
+    return false
+  end
+  if _G.UnitIsPlayer and SpArc.SafeBool(_G.UnitIsPlayer, unit) then
+    return true
+  end
+  return false
+end
+
 function SpArc:IsBossRotationEnabled()
   local db = SpArc:EnsureDB()
-  return (db and db.visual and db.visual.enableBossRotation == true) or false
+  if not (db and db.visual and db.visual.enableBossRotation ~= false) then
+    return false
+  end
+  return SpArc:IsTargetBossOrRare("target")
 end
 
 function SpArc:IsPvPRotationEnabled()
   local db = SpArc:EnsureDB()
-  return (db and db.visual and db.visual.enablePvPRotation == true) or false
+  if not (db and db.visual and db.visual.enablePvPRotation ~= false) then
+    return false
+  end
+  return SpArc:IsTargetPvP("target")
 end
 
 function SpArc:IsNameplatesEnabled()
@@ -371,6 +421,16 @@ function SpArc:EnsureDB(forceReinit)
   local activeProf = EnsureProfileObject(db, activeProfName, db.profiles["Default"] and db.profiles["Default"].visual)
   db.activeProfile = activeProfName
   db.visual = activeProf.visual
+
+  if not db._bossPvpAutoMigrated then
+    for _, pObj in pairs(db.profiles or {}) do
+      if pObj and type(pObj.visual) == "table" then
+        pObj.visual.enableBossRotation = true
+        pObj.visual.enablePvPRotation = true
+      end
+    end
+    db._bossPvpAutoMigrated = true
+  end
 
   db.presets = db.presets or {}
   db.presetOrder = db.presetOrder or {}

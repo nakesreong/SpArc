@@ -57,8 +57,8 @@ local STRINGS = {
     TOP_FIX_CURSOR = "Reset Cursor",
 
     M3_TITLE = "Rotation Arc (Semicircle Queue)",
-    CK_BOSS_ROT = "Boss (include Burst CDs in rotation)",
-    CK_PVP_ROT = "PvP (include PvP & CC skills in rotation)",
+    CK_BOSS_ROT = "Boss / Rare (auto-enable Bursts on Boss & Rare)",
+    CK_PVP_ROT = "PvP (auto-enable PvP skills on Players)",
     M3_GRP_GEO = "Arc Geometry & Position",
     M3_GRP_ICONS = "Queue Icons & Scaling",
     M3_GRP_FEEDBACK = "Press Animation & Feedback",
@@ -277,8 +277,8 @@ local STRINGS = {
     TOP_FIX_CURSOR = "Сброс курсора",
 
     M3_TITLE = "Дуга ротации (Полукруг очереди заклинаний)",
-    CK_BOSS_ROT = "Босс (включать бурсты в ротацию)",
-    CK_PVP_ROT = "ПвП (включать ПвП-скиллы и контроль в ротацию)",
+    CK_BOSS_ROT = "Босс / Рарник (авто-бурсты на боссах и рарниках)",
+    CK_PVP_ROT = "ПвП (авто-ПвП скиллы на игроках)",
     M3_GRP_GEO = "Геометрия и положение дуги",
     M3_GRP_ICONS = "Масштаб и количество иконок",
     M3_GRP_FEEDBACK = "Отклик нажатия кнопок",

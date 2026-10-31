@@ -290,6 +290,85 @@ function SpArc:ScanActionSlotsAndSpells(force)
     return nil
   end
 
+  -- Build authoritative set of active spells strictly present in the player's SpellBook (Class + Active Spec tabs + Shapeshift forms)
+  local sbByID = {}
+  local sbByName = {}
+  local sbCount = 0
+  local C_SpellBook = _G.C_SpellBook
+  local bank = (_G.Enum and _G.Enum.SpellBookSpellBank and _G.Enum.SpellBookSpellBank.Player) or 0
+  local itemTypeFuture = (_G.Enum and _G.Enum.SpellBookItemType and _G.Enum.SpellBookItemType.FutureSpell) or 2
+
+  if C_SpellBook and C_SpellBook.GetNumSpellBookSkillLines and C_SpellBook.GetSpellBookSkillLineInfo and C_SpellBook.GetSpellBookItemInfo then
+    local okNum, numLines = pcall(C_SpellBook.GetNumSpellBookSkillLines)
+    numLines = (okNum and not IsSecret(numLines) and tonumber(numLines)) or 0
+    for lineIdx = 1, numLines do
+      local okLine, lineInfo = pcall(C_SpellBook.GetSpellBookSkillLineInfo, lineIdx)
+      if okLine and type(lineInfo) == "table" and not IsSecret(lineInfo) and not lineInfo.offSpecID and not lineInfo.shouldHide then
+        local offset = tonumber(lineInfo.itemIndexOffset) or 0
+        local numItems = tonumber(lineInfo.numSpellBookItems) or 0
+        for slotIdx = offset + 1, offset + numItems do
+          local okItem, itemInfo = pcall(C_SpellBook.GetSpellBookItemInfo, slotIdx, bank)
+          if okItem and type(itemInfo) == "table" and not IsSecret(itemInfo) then
+            local isPassive = (not IsSecret(itemInfo.isPassive) and itemInfo.isPassive == true) or false
+            local isOffSpec = (not IsSecret(itemInfo.isOffSpec) and itemInfo.isOffSpec == true) or false
+            local iType = (not IsSecret(itemInfo.itemType) and itemInfo.itemType) or nil
+            if not isPassive and not isOffSpec and iType ~= itemTypeFuture then
+              local sid = (not IsSecret(itemInfo.spellID) and tonumber(itemInfo.spellID)) or nil
+              local aid = (not IsSecret(itemInfo.actionID) and tonumber(itemInfo.actionID)) or nil
+              if sid and sid > 0 and (not PVP_TALENT_SPELL_IDS[sid] or SpArc:IsPvPActiveNow()) then
+                sbByID[sid] = true
+                sbCount = sbCount + 1
+                if C_Spell and C_Spell.GetOverrideSpell then
+                  local okO, over = pcall(C_Spell.GetOverrideSpell, sid)
+                  if okO and not IsSecret(over) and type(over) == "number" and over > 0 then
+                    sbByID[over] = true
+                  end
+                end
+              end
+              if aid and aid > 0 and (not PVP_TALENT_SPELL_IDS[aid] or SpArc:IsPvPActiveNow()) then
+                sbByID[aid] = true
+              end
+              local nm = not IsSecret(itemInfo.name) and itemInfo.name or nil
+              if type(nm) == "string" and nm ~= "" then
+                sbByName[SpArc.UTF8Lower(nm)] = sid or true
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  if _G.GetNumShapeshiftForms and _G.GetShapeshiftFormInfo then
+    local okF, nForms = pcall(_G.GetNumShapeshiftForms)
+    if okF and not IsSecret(nForms) and type(nForms) == "number" then
+      for i = 1, nForms do
+        local okFI, _, _, _, fSpellID = pcall(_G.GetShapeshiftFormInfo, i)
+        if okFI and not IsSecret(fSpellID) and type(fSpellID) == "number" and fSpellID > 0 then
+          sbByID[fSpellID] = true
+          sbCount = sbCount + 1
+          if C_Spell and C_Spell.GetSpellInfo then
+            local okI, info = pcall(C_Spell.GetSpellInfo, fSpellID)
+            if okI and type(info) == "table" and not IsSecret(info.name) and type(info.name) == "string" then
+              sbByName[SpArc.UTF8Lower(info.name)] = fSpellID
+            end
+          end
+        end
+      end
+    end
+  end
+
+  local function IsInLiveSpellBook(id)
+    if not id or type(id) ~= "number" or id <= 0 then return false end
+    if PVP_TALENT_SPELL_IDS[id] and not SpArc:IsPvPActiveNow() then
+      return false
+    end
+    if sbCount > 0 then
+      return sbByID[id] == true
+    end
+    return IsSpellIDKnown(id)
+  end
+
   for k, def in pairs(SPELL_DEFS) do
     local idSet = {}
     local resolvedID, resolvedIcon
@@ -316,20 +395,35 @@ function SpArc:ScanActionSlotsAndSpells(force)
           end
         end
       end
-      if not isKnown and (IsSpellIDKnown(eid) or IsSpellIDKnown(id)) then
+      if not isKnown and (IsInLiveSpellBook(eid) or IsInLiveSpellBook(id)) then
         isKnown = true
-        resolvedID = eid
-        resolvedIcon = GetSpellIconByID(eid) or GetSpellIconByID(id)
+        resolvedID = IsInLiveSpellBook(eid) and eid or id
+        resolvedIcon = GetSpellIconByID(resolvedID) or GetSpellIconByID(id)
       end
     end
-    if C_Spell and C_Spell.GetSpellInfo then
-      for _, nm in ipairs(def.names or {}) do
+    for _, nm in ipairs(def.names or {}) do
+      local lowNm = SpArc.UTF8Lower(nm)
+      local sbMatch = sbByName[lowNm]
+      if sbMatch then
+        isKnown = true
+        if type(sbMatch) == "number" and sbMatch > 0 then
+          local owner = explicitOwnerBySpellID[sbMatch]
+          if not owner or owner == k then
+            idSet[sbMatch] = true
+            if not resolvedID then
+              resolvedID = sbMatch
+              resolvedIcon = GetSpellIconByID(sbMatch)
+            end
+          end
+        end
+      end
+      if C_Spell and C_Spell.GetSpellInfo then
         local ok, info = pcall(C_Spell.GetSpellInfo, nm)
         if ok and type(info) == "table" and not IsSecret(info.spellID) and info.spellID then
           local owner = explicitOwnerBySpellID[info.spellID]
           if not owner or owner == k then
             idSet[info.spellID] = true
-            if IsSpellIDKnown(info.spellID) then
+            if IsInLiveSpellBook(info.spellID) then
               isKnown = true
               if not resolvedID then
                 resolvedID = info.spellID
@@ -563,7 +657,7 @@ function SpArc:ScanActionSlotsAndSpells(force)
           for _, s in pairs(slots) do
             if not IsSecret(s) and type(s) == "number" and s > 0 and not assistedSlots[s] then
               foundSlot = s
-              if IsSpellIDKnown(sid) then
+              if IsInLiveSpellBook(sid) then
                 def.isKnown = true
               end
               break
@@ -585,6 +679,9 @@ function SpArc:ScanActionSlotsAndSpells(force)
     if def.overrideOf then
       local baseDef = SPELL_DEFS[def.overrideOf]
       if baseDef then
+        if baseDef.isKnown then
+          def.isKnown = true
+        end
         if baseDef.slot and not def.slot then
           def.slot = baseDef.slot
           def.keybind = baseDef.keybind

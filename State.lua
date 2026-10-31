@@ -616,7 +616,14 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   end
 
   local finalReady = (not isOnCD)
-  local isUnavailable = false
+  local isKnownInBook = (def.isKnown == true) or (def.overrideOf and SPELL_DEFS[def.overrideOf] and SPELL_DEFS[def.overrideOf].isKnown == true) or false
+  local isUnavailable = (not SpArc.testMode) and (not isKnownInBook)
+  if isUnavailable then
+    finalReady = false
+    isUsable = false
+    isProc = false
+    usableSource = "NotInSpellBook"
+  end
 
   if def.overrideOf and def.inheritedBaseSlot and slotActiveSpellID and def.idSet and def.idSet[slotActiveSpellID] then
     isProc = true

@@ -280,11 +280,26 @@ local function SetBoxCooldownSafe(box, startTime, duration, now)
   end
 end
 
+local activeWingKeys = {}
 local function UpdateCooldownRow(boxes, spellKeys, states, now, gcdStart, gcdDur)
   local defs = SpArc.SPELL_DEFS
+  local kCount = 0
+  if spellKeys and states then
+    for i = 1, #spellKeys do
+      local k = spellKeys[i]
+      local stObj = k and states[k]
+      if stObj and (not stObj.isUnavailable or SpArc.testMode) then
+        kCount = kCount + 1
+        activeWingKeys[kCount] = k
+      end
+    end
+  end
+  for i = kCount + 1, #activeWingKeys do
+    activeWingKeys[i] = nil
+  end
   for i = 1, #boxes do
     local box = boxes[i]
-    local key = spellKeys and spellKeys[i]
+    local key = activeWingKeys[i]
     local s = key and states[key]
     if s then
       box.currentDefKey = key

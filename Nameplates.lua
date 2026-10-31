@@ -351,12 +351,14 @@ local function DoesUnitHaveAuraGroup(unit, metro, group, liveIDSet, liveNameSet,
   end
   return false
 end
+local reusableLiveIDSet = {}
+local reusableLiveNameSet = {}
 local function EvaluateNameplateAuraColor(unit, metro, now)
   if not compiledAuraRules or #compiledAuraRules == 0 then
     return nil, nil, nil
   end
-  local liveIDSet = {}
-  local liveNameSet = {}
+  for k in pairs(reusableLiveIDSet) do reusableLiveIDSet[k] = nil end
+  for k in pairs(reusableLiveNameSet) do reusableLiveNameSet[k] = nil end
   if C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex then
     for i = 1, 16 do
       local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, unit, i, "HARMFUL|PLAYER")
@@ -366,11 +368,11 @@ local function EvaluateNameplateAuraColor(unit, metro, now)
       local exp = aura.expirationTime
       if IsSecret(exp) or type(exp) ~= "number" or exp == 0 or exp > now then
         if not IsSecret(aura.spellId) and type(aura.spellId) == "number" then
-          liveIDSet[aura.spellId] = true
+          reusableLiveIDSet[aura.spellId] = true
         end
         if not IsSecret(aura.name) and type(aura.name) == "string" and aura.name ~= "" then
           local low = SpArc.UTF8Lower and SpArc.UTF8Lower(aura.name) or aura.name:lower()
-          liveNameSet[low] = true
+          reusableLiveNameSet[low] = true
         end
       end
     end
@@ -378,7 +380,7 @@ local function EvaluateNameplateAuraColor(unit, metro, now)
   for _, rule in ipairs(compiledAuraRules) do
     local allMatched = true
     for _, grp in ipairs(rule.reqGroups) do
-      if not DoesUnitHaveAuraGroup(unit, metro, grp, liveIDSet, liveNameSet, now) then
+      if not DoesUnitHaveAuraGroup(unit, metro, grp, reusableLiveIDSet, reusableLiveNameSet, now) then
         allMatched = false
         break
       end
@@ -433,31 +435,29 @@ end
 ---------------------------------------------------------------------------------------
 --  4. BLIZZARD & ELVUI NAMEPLATE SUPPRESSION (ZERO-TAINT)
 ---------------------------------------------------------------------------------------
+local function SuppressSubFrameEvents(sf)
+  if sf and sf.UnregisterAllEvents then
+    pcall(sf.UnregisterAllEvents, sf)
+  end
+end
 local function SuppressBlizzardUnitFrame(plate, metro)
   if not plate then return end
   local uFrame = plate.UnitFrame
   if uFrame then
-    pcall(uFrame.UnregisterAllEvents, uFrame)
     pcall(uFrame.Hide, uFrame)
     pcall(uFrame.SetAlpha, uFrame, 0)
-    local subFrames = {
-      uFrame.healthBar,
-      uFrame.HealthBarsContainer and uFrame.HealthBarsContainer.healthBar,
-      uFrame.castBar,
-      uFrame.spellbar,
-      uFrame.CastingBarFrame,
-      uFrame.BuffFrame,
-      uFrame.AurasFrame,
-      uFrame.ClassificationFrame,
-    }
-    for _, sf in ipairs(subFrames) do
-      if sf and sf.UnregisterAllEvents then
-        pcall(sf.UnregisterAllEvents, sf)
-      end
-    end
     if not hookedBlizzFrames[uFrame] then
       hookedBlizzFrames[uFrame] = true
-      pcall( _G.hooksecurefunc, uFrame, "Show", function(self)
+      pcall(uFrame.UnregisterAllEvents, uFrame)
+      SuppressSubFrameEvents(uFrame.healthBar)
+      SuppressSubFrameEvents(uFrame.HealthBarsContainer and uFrame.HealthBarsContainer.healthBar)
+      SuppressSubFrameEvents(uFrame.castBar)
+      SuppressSubFrameEvents(uFrame.spellbar)
+      SuppressSubFrameEvents(uFrame.CastingBarFrame)
+      SuppressSubFrameEvents(uFrame.BuffFrame)
+      SuppressSubFrameEvents(uFrame.AurasFrame)
+      SuppressSubFrameEvents(uFrame.ClassificationFrame)
+      pcall(_G.hooksecurefunc, uFrame, "Show", function(self)
         if SpArc:IsNameplatesEnabled() then
           pcall(self.Hide, self)
           pcall(self.SetAlpha, self, 0)
@@ -465,7 +465,8 @@ local function SuppressBlizzardUnitFrame(plate, metro)
       end)
     end
     -- Preserve SoftTargetFrame (Interact E icon) and WidgetContainer on our Metro frame
-    if metro then
+    if metro and not metro._reparentedSoftTarget then
+      metro._reparentedSoftTarget = true
       if uFrame.SoftTargetFrame then
         pcall(uFrame.SoftTargetFrame.SetParent, uFrame.SoftTargetFrame, metro)
         pcall(uFrame.SoftTargetFrame.SetIgnoreParentAlpha, uFrame.SoftTargetFrame, true)
@@ -721,6 +722,13 @@ local function ApplyMetroGeometryToPlate(metro)
   local h = tonumber(vis.npHeight) or 30
   local cbH = tonumber(vis.npCastHeight) or 14
   local fSize = tonumber(vis.npFontSize) or 11
+  if metro._appliedW == w and metro._appliedH == h and metro._appliedCbH == cbH and metro._appliedFSize == fSize then
+    return
+  end
+  metro._appliedW = w
+  metro._appliedH = h
+  metro._appliedCbH = cbH
+  metro._appliedFSize = fSize
   metro:SetSize(w, h)
   metro.classBox:SetSize(h, h)
   local qSize = math.max(18, math.min(26, h - 4))
@@ -1021,6 +1029,14 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
     return
   end
   if event == "QUEST_LOG_UPDATE" then
+    if InCombatLockdown and InCombatLockdown() then
+      return
+    end
+    local now = GetTime()
+    if npDriver._lastQuestRefreshAt and (now - npDriver._lastQuestRefreshAt) < 1.5 then
+      return
+    end
+    npDriver._lastQuestRefreshAt = now
     questCacheByGUID = {}
     for _, metro in pairs(unitToMetro) do
       if metro and metro.unit then
@@ -1071,6 +1087,22 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
     if event == "PLAYER_REGEN_ENABLED" then
       SpArc:SyncExternalNameplateAddons()
     end
+    if event == "PLAYER_TARGET_CHANGED" then
+      local now = GetTime()
+      for _, metro in pairs(unitToMetro) do
+        if metro and metro.unit then
+          local wasTarget = metro.isTarget
+          local isNowTarget = SafeBool(UnitIsUnit, metro.unit, "target")
+          if wasTarget ~= isNowTarget or not metro:IsShown() then
+            FullUpdateMetroPlate(metro)
+          elseif isNowTarget then
+            UpdateMetroHealthAndColor(metro, now)
+            UpdateMetroCastbar(metro, now)
+          end
+        end
+      end
+      return
+    end
     for _, metro in pairs(unitToMetro) do
       if metro and metro.unit then
         FullUpdateMetroPlate(metro)
@@ -1096,16 +1128,28 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
   end
 end)
 local tickElapsed = 0
+local auraTickElapsed = 0
 npDriver:SetScript("OnUpdate", function(_, elapsed)
   tickElapsed = tickElapsed + elapsed
-  if tickElapsed < 0.04 then return end
+  auraTickElapsed = auraTickElapsed + elapsed
+  if tickElapsed < 0.05 then return end
   tickElapsed = 0
   if not SpArc:IsNameplatesEnabled() then return end
   local now = GetTime()
+  local doAuraRefresh = false
+  if auraTickElapsed >= 0.25 then
+    auraTickElapsed = 0
+    doAuraRefresh = true
+  end
   for _, metro in pairs(unitToMetro) do
     if metro and metro.unit and metro:IsShown() then
-      UpdateMetroHealthAndColor(metro, now)
-      UpdateMetroCastbar(metro, now)
+      if doAuraRefresh then
+        UpdateMetroHealthAndColor(metro, now)
+      end
+      local uEv = st.unitCastState and st.unitCastState[metro.unit]
+      if doAuraRefresh or metro.castBar:IsShown() or (uEv and uEv.active) then
+        UpdateMetroCastbar(metro, now)
+      end
     end
   end
 end)

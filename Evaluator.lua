@@ -721,6 +721,14 @@ function SpArc:BuildRotationQueue(maxSlots)
         return false
       end
     end
+    -- Never suggest a 2nd charge of a burst or boss cooldown while its burst window/buff is already active!
+    if (d.burstDuration and d.burstDuration > 0) or d.isBossSkill then
+      local u = d.auraUnit or "player"
+      local rem = (simCtx.auraRem and simCtx.auraRem[u] and simCtx.auraRem[u][spKey]) or 0
+      if simActive[spKey] or rem > 1.5 then
+        return false
+      end
+    end
     return true
   end
 
@@ -858,6 +866,11 @@ function SpArc:BuildRotationQueue(maxSlots)
           simCD[pickedKey] = 9999
           simReady[pickedKey] = false
           simUsable[pickedKey] = false
+        elseif (def.burstDuration and def.burstDuration > 0) or def.isBossSkill then
+          -- Never queue a 2nd charge of a burst immediately after the 1st charge in the same queue preview
+          simActive[pickedKey] = true
+          simCD[pickedKey] = math.max(def.burstDuration or 15, def.baseCD or 30)
+          simReady[pickedKey] = false
         elseif (def.liveMaxCharges or def.maxCharges or 1) > 1 then
           simCharges[pickedKey] = (simCharges[pickedKey] or 1) - 1
           if simCharges[pickedKey] <= 0 then

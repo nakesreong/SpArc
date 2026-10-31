@@ -1076,6 +1076,10 @@ function SpArc:IsSpellBurstActive(defKey, sObj, parsed, now)
   if lastAt and (now - lastAt) >= 0 and (now - lastAt) < burstDur then
     return true
   end
+  local chStart = st.spellChargeStart and st.spellChargeStart[defKey]
+  if chStart and chStart > 0 and (now - chStart) >= 0 and (now - chStart) < burstDur then
+    return true
+  end
   return false
 end
 

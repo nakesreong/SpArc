@@ -95,7 +95,7 @@ local STRINGS = {
     SL_CAM_CROSS_SCALE = "Crosshair Scale",
     M6_GRP_CLICK = "Mouselook Click-Casting (Bartender4 / ActionBars)",
     CK_CAM_CLICKCAST = "Bind LMB/RMB (+Shift/Ctrl/Alt) to Action Slots 1..8 while camera is locked",
-    CK_AUTO_UNSHIFT = "Unshift Moonkin / Shadowform out of combat on Interact (E) / Hold Cursor (G) for transmog",
+    CK_AUTO_UNSHIFT = "Unshift forms out of combat on Interact (E) / Hold Cursor (G) on the ground (safe while flying)",
 
     M7_TITLE = "Live SpellBook & Rotation Telemetry",
 
@@ -315,7 +315,7 @@ local STRINGS = {
     SL_CAM_CROSS_SCALE = "Масштаб прицела",
     M6_GRP_CLICK = "Боевой клик-каст мыши (Mouselook Click-Casting)",
     CK_CAM_CLICKCAST = "Перехватывать ЛКМ/ПКМ (+Shift/Ctrl/Alt) под способности 1..8 при зажатой камере",
-    CK_AUTO_UNSHIFT = "Сброс Облика совуха и Тёмного облика вне боя по кнопке Взаимодействия (E) / Курсора (G) ради трансмога",
+    CK_AUTO_UNSHIFT = "Снимать облик вне боя по кнопке Взаимодействия (E) / Курсора (G) на земле (в полёте не сбрасывает)",
 
     M7_TITLE = "Телеметрия книги заклинаний и отладка ротации",
 

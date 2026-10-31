@@ -238,7 +238,7 @@ end
 
 function SpArc:IsAutoUnshiftEnabled()
   local db = SpArc:EnsureDB()
-  return not (db and db.visual and db.visual.autoUnshiftOutOfCombat == false)
+  return (db and db.visual and db.visual.autoUnshiftOutOfCombat == true) or false
 end
 
 function SpArc:GetCamHoldKey()
@@ -1014,27 +1014,17 @@ end
 ---------------------------------------------------------------------------------------
 local bindOwner = CreateFrame("Frame", "SpArcCameraBindOwner", UIParent)
 
--- Note:
--- • On Priest, Shadowform is form:1 (stance 1, formID 28), so we MUST NOT use noform:1 on Priest!
--- • On Balance Druid, form:4 IS Moonkin Form (while form:1..3 are Bear/Cat/Travel), so we keep noform:1..3 on Druid.
-local DRUID_UNSHIFT_SAFE_LINE = "/cancelform [nocombat,nostealth,noform:1,noform:2,noform:3,noform:27,noform:29]"
-local PRIEST_UNSHIFT_SAFE_LINE = "/cancelform [nocombat]"
+-- Universal ground-safe form unshift (disabled by default via autoUnshiftOutOfCombat = false):
+-- Stops macro immediately if flying in the air so Druid Flight Form (bat/bird) is never canceled mid-air,
+-- and cancels any shapeshift form (Shadowform, Moonkin, Cat, Bear, Ground Travel) when out of combat on the ground.
+local UNSHIFT_SAFE_LINE = "/stopmacro [flying]\n/cancelform [nocombat,nostealth,noflying]"
 local BASE_INTERACT_MACRO = "/target [@mouseover,nodead,exists]"
-
-local function GetClassUnshiftLine()
-  if _G.UnitClass then
-    local okC, _, cls = pcall(_G.UnitClass, "player")
-    if okC and not SpArc.IsSecret(cls) and cls == "PRIEST" then
-      return PRIEST_UNSHIFT_SAFE_LINE
-    end
-  end
-  return DRUID_UNSHIFT_SAFE_LINE
-end
+local UNSHIFT_INTERACT_MACRO = BASE_INTERACT_MACRO .. "\n" .. UNSHIFT_SAFE_LINE
 
 local holdBtn = CreateFrame("Button", "SpArcCamHoldButton", UIParent, "SecureActionButtonTemplate")
 holdBtn:RegisterForClicks("AnyDown", "AnyUp")
 holdBtn:SetAttribute("type", "macro")
-holdBtn:SetAttribute("macrotext", GetClassUnshiftLine())
+holdBtn:SetAttribute("macrotext", "")
 holdBtn:HookScript("PostClick", function(_, _, down)
   _G.SpArc_CameraHoldKey(down and "down" or "up")
 end)
@@ -1042,7 +1032,7 @@ end)
 local toggleBtn = CreateFrame("Button", "SpArcCamToggleButton", UIParent, "SecureActionButtonTemplate")
 toggleBtn:RegisterForClicks("AnyDown")
 toggleBtn:SetAttribute("type", "macro")
-toggleBtn:SetAttribute("macrotext", GetClassUnshiftLine())
+toggleBtn:SetAttribute("macrotext", "")
 toggleBtn:HookScript("PostClick", function()
   _G.SpArc_CameraToggleKey("down")
 end)
@@ -1050,7 +1040,7 @@ end)
 local interactBtn = CreateFrame("Button", "SpArcCamInteractButton", UIParent, "SecureActionButtonTemplate")
 interactBtn:RegisterForClicks("AnyDown")
 interactBtn:SetAttribute("type", "macro")
-interactBtn:SetAttribute("macrotext", BASE_INTERACT_MACRO .. "\n" .. GetClassUnshiftLine())
+interactBtn:SetAttribute("macrotext", BASE_INTERACT_MACRO)
 interactBtn:HookScript("PostClick", function()
   if _G.GetTime then
     lastTargetClickAt = _G.GetTime()
@@ -1072,6 +1062,12 @@ local function IsInCosmeticCombatForm()
   if _G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player") then
     return false
   end
+  if _G.IsFlying and SafeBool(_G.IsFlying) then
+    return false
+  end
+  if _G.IsStealthed and SafeBool(_G.IsStealthed) then
+    return false
+  end
   if _G.IsMounted and SafeBool(_G.IsMounted) then
     return false
   end
@@ -1081,21 +1077,17 @@ local function IsInCosmeticCombatForm()
     return false
   end
 
-  if _G.GetShapeshiftFormID then
-    local okF, formID = pcall(_G.GetShapeshiftFormID)
-    -- 28 = Shadowform (Priest), 31 / 35 = Moonkin Form (Druid)
-    if okF and not SpArc.IsSecret(formID) and (formID == 28 or formID == 31 or formID == 35) then
+  if _G.GetShapeshiftForm then
+    local okS, sForm = pcall(_G.GetShapeshiftForm)
+    if okS and not SpArc.IsSecret(sForm) and type(sForm) == "number" and sForm > 0 then
       return true
     end
   end
 
-  if _G.UnitClass and _G.GetShapeshiftForm then
-    local okC, _, cls = pcall(_G.UnitClass, "player")
-    if okC and not SpArc.IsSecret(cls) and cls == "PRIEST" then
-      local okS, sForm = pcall(_G.GetShapeshiftForm)
-      if okS and not SpArc.IsSecret(sForm) and type(sForm) == "number" and sForm > 0 then
-        return true
-      end
+  if _G.GetShapeshiftFormID then
+    local okF, formID = pcall(_G.GetShapeshiftFormID)
+    if okF and not SpArc.IsSecret(formID) and type(formID) == "number" and formID > 0 then
+      return true
     end
   end
 
@@ -1105,12 +1097,10 @@ end
 local function UpdateAutoUnshiftBindings(force)
   if InCombatLockdown and InCombatLockdown() then return end
   local enabled = SpArc:IsAutoUnshiftEnabled()
-  local unshiftLine = GetClassUnshiftLine()
-  local stateKey = tostring(enabled) .. "::" .. unshiftLine
-  if not force and stateKey == lastAutoUnshiftAttr then return end
-  lastAutoUnshiftAttr = stateKey
-  local holdMacro = enabled and unshiftLine or ""
-  local intMacro = enabled and (BASE_INTERACT_MACRO .. "\n" .. unshiftLine) or BASE_INTERACT_MACRO
+  if not force and enabled == lastAutoUnshiftAttr then return end
+  lastAutoUnshiftAttr = enabled
+  local holdMacro = enabled and UNSHIFT_SAFE_LINE or ""
+  local intMacro = enabled and UNSHIFT_INTERACT_MACRO or BASE_INTERACT_MACRO
   holdBtn:SetAttribute("macrotext", holdMacro)
   toggleBtn:SetAttribute("macrotext", holdMacro)
   interactBtn:SetAttribute("macrotext", intMacro)

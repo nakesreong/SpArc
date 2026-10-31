@@ -1007,7 +1007,7 @@ local function OpenControlCenter(initialTab)
         if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
         SpArc:ScanActionSlotsAndSpells(true)
       end)
-      CreateElvCheck(m6ClickBox, "CK_AUTO_UNSHIFT", "autoUnshiftOutOfCombat", 16, -40, true, false, function()
+      CreateElvCheck(m6ClickBox, "CK_AUTO_UNSHIFT", "autoUnshiftOutOfCombat", 16, -40, false, false, function()
         if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
       end)
 

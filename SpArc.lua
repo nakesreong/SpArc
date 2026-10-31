@@ -1844,7 +1844,6 @@ local function RegisterSpArcBlizzardSettings()
   local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   ApplyCyrFont(title, 18)
   title:SetPoint("TOPLEFT", 16, -16)
-  title:SetText("|cffa335eeSpArc v" .. tostring(SpArc.VERSION) .. "|r — Semicircle FSM Rotation & Action Combat Camera")
 
   local desc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   ApplyCyrFont(desc, 13)
@@ -1852,13 +1851,11 @@ local function RegisterSpArcBlizzardSettings()
   desc:SetWidth(580)
   desc:SetJustifyH("LEFT")
   desc:SetSpacing(4)
-  desc:SetText("Авторы: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r\n\nМодульный визуализатор FSM-ротаций (.MD псевдокод), двунаправленный кастбар, крылья сейвов/бурстов, автономная Боевая Камера (Mouselook) и индивидуальные профили персонажей.")
 
-  local function CreateQuickBtn(text, x, y, tabIdx)
+  local function CreateQuickBtn(x, y, tabIdx)
     local b = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     b:SetSize(250, 32)
     b:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
-    b:SetText(text)
     b:SetScript("OnClick", function()
       if not (_G.InCombatLockdown and _G.InCombatLockdown()) and _G.HideUIPanel and _G.SettingsPanel and _G.SettingsPanel:IsShown() then
         pcall(_G.HideUIPanel, _G.SettingsPanel)
@@ -1868,10 +1865,28 @@ local function RegisterSpArcBlizzardSettings()
     return b
   end
 
-  CreateQuickBtn("Открыть центр управления SpArc (/sparc)", 16, -110, 1)
-  CreateQuickBtn("Боевая Камера и клавиши (/sparc cam)", 280, -110, 6)
-  CreateQuickBtn("Дуга ротации и HUD (/sparc hud)", 16, -152, 3)
-  CreateQuickBtn("Профили персонажей (/sparc profiles)", 280, -152, 8)
+  local qBtn1 = CreateQuickBtn(16, -110, 1)
+  local qBtn2 = CreateQuickBtn(280, -110, 6)
+  local qBtn3 = CreateQuickBtn(16, -152, 3)
+  local qBtn4 = CreateQuickBtn(280, -152, 10)
+  local qBtn5 = CreateQuickBtn(16, -194, 9)
+  local qBtn6 = CreateQuickBtn(280, -194, 8)
+
+  local function RefreshBlizzardSettingsTexts()
+    local isRU = SpArc.IsRU and SpArc:IsRU()
+    title:SetText("|cffa335eeSpArc v" .. tostring(SpArc.VERSION) .. "|r — " .. (isRU and "FSM-ротация (.MD), Неймплейты Metro и Боевая Камера" or "FSM Rotation (.MD), Metro Nameplates & Action Combat Camera"))
+    desc:SetText(isRU
+      and "Авторы: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r\n\nМодульный визуализатор FSM-ротаций (.MD псевдокод), настраиваемая дуга/чаша/линия, неймплейты Metro с авто-трекингом дотов из .MD, двунаправленный кастбар, Боевая Камера и профили ElvUI."
+      or "Authors: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r\n\nModular FSM rotation visualizer (.MD pseudocode), customizable Dome/Line/Bowl arc, Metro Nameplates with .MD DoT auto-sync, dual-direction castbar, Action Combat Camera, and ElvUI-style profiles.")
+    qBtn1:SetText(isRU and "Открыть центр управления (/sparc)" or "Open Control Center (/sparc)")
+    qBtn2:SetText(isRU and "Боевая Камера и клавиши (/sparc cam)" or "Combat Camera & Keybinds (/sparc cam)")
+    qBtn3:SetText(isRU and "Дуга ротации и HUD (/sparc hud)" or "Rotation Arc & HUD (/sparc hud)")
+    qBtn4:SetText(isRU and "Неймплейты Metro (/sparc np)" or "Metro Nameplates (/sparc np)")
+    qBtn5:SetText(isRU and "Макросогенератор (/sparc macro)" or "Macro Generator (/sparc macro)")
+    qBtn6:SetText(isRU and "Профили персонажей (/sparc prof)" or "Character Profiles (/sparc prof)")
+  end
+  RefreshBlizzardSettingsTexts()
+  panel:SetScript("OnShow", RefreshBlizzardSettingsTexts)
 
   local okCat, category = pcall(_G.Settings.RegisterCanvasLayoutCategory, panel, "SpArc")
   if okCat and category then

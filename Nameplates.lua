@@ -1541,7 +1541,9 @@ function SpArc:RefreshNameplatesPage(ui)
     ApplyCyrFont(demo.nameText, fSize)
     ApplyCyrFont(demo.hpText, math.max(8, fSize - 1))
     local pName = (UnitName and UnitName("player"))
-    if not pName or IsSecret(pName) or pName == "" then pName = "Котастрофа" end
+    if not pName or IsSecret(pName) or pName == "" then
+      pName = (SpArc.IsRU and SpArc:IsRU()) and "Котастрофа" or "Target Dummy"
+    end
     demo.nameText:SetText(pName)
     demo.hpText:SetText("84%")
     local r, g, b = COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b

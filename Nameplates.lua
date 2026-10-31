@@ -280,15 +280,29 @@ function SpArc:RecordNameplateAuraCast(spellID, defKey, now)
   for _, aID in ipairs(idsToRecord) do
     RecordAuraOnUnitAndGUID(targetPlateUnit, tGUID, aID, lowName, untilTime)
   end
-  -- 2. If AoE DoT (e.g. Sunfire, Shadow Crash, Thrash, Primal Wrath), also tag engaged enemy nameplates
+  -- 2. If AoE DoT (e.g. Sunfire, Shadow Crash, Thrash, Primal Wrath), also tag nearby enemy nameplates
   local aoeInfo = AOE_DOT_SPELLS[castID]
   if aoeInfo then
     local aoeUntil = now + (aoeInfo.dur or dur)
     for npUnit, metro in pairs(unitToMetro) do
-      if metro and metro.isEnemy and (SafeBool(UnitAffectingCombat, npUnit) or SafeBool(UnitIsUnit, npUnit, "target")) then
+      if metro and metro.isEnemy and (SafeBool(UnitAffectingCombat, npUnit) or SafeBool(UnitIsUnit, npUnit, "target") or metro.reaction == 4) then
         local npGUID = metro.unitGUID
         for _, aID in ipairs(aoeInfo.auras) do
           RecordAuraOnUnitAndGUID(npUnit, npGUID, aID, lowName, aoeUntil)
+        end
+      end
+    end
+  elseif castID == 8921 or castID == 164812 then
+    -- Twin Moons (279620): Moonfire also hits a 2nd nearby enemy
+    local hasTwinMoons = (_G.IsPlayerSpell and SafeBool(_G.IsPlayerSpell, 279620)) or false
+    if hasTwinMoons then
+      for npUnit, metro in pairs(unitToMetro) do
+        if metro and metro.isEnemy and not SafeBool(UnitIsUnit, npUnit, "target") and (SafeBool(UnitAffectingCombat, npUnit) or metro.reaction == 4) then
+          local npGUID = metro.unitGUID
+          for _, aID in ipairs(idsToRecord) do
+            RecordAuraOnUnitAndGUID(npUnit, npGUID, aID, lowName, untilTime)
+          end
+          break
         end
       end
     end

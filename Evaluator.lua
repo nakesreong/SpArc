@@ -1231,6 +1231,9 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     if defKey and not isChan then
       SpArc:RecordSpellCastSuccess(defKey, now)
     end
+    if SpArc.RecordNameplateAuraCast then
+      SpArc:RecordNameplateAuraCast(spellID, defKey, now)
+    end
   end
 end)
 

@@ -12,7 +12,6 @@
 ## X-Website: https://github.com/nakesreong/SpArc
 ## X-Github: github.com/nakesreong/SpArc
 ## X-Curse-Project-ID: 1756564
-
 Presets.lua
 Parser.lua
 Core.lua
@@ -24,4 +23,5 @@ ResourceBar.lua
 Camera.lua
 Telemetry.lua
 MacroGen.lua
+Nameplates.lua
 SpArc.lua

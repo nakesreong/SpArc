@@ -237,7 +237,7 @@ local function OpenControlCenter(initialTab)
     sidebar:SetWidth(204)
     SetBackdropFlat(sidebar, 0.04, 0.04, 0.06, 0.98, 0.18, 0.18, 0.24, 1.0)
 
-    local navKeys = { "NAV_1", "NAV_2", "NAV_3", "NAV_4", "NAV_5", "NAV_6", "NAV_7", "NAV_8", "NAV_9" }
+    local navKeys = { "NAV_1", "NAV_2", "NAV_3", "NAV_4", "NAV_5", "NAV_6", "NAV_7", "NAV_8", "NAV_9", "NAV_10" }
     local navButtons = {}
     local pages = {}
     local groupBoxes = {}
@@ -1208,6 +1208,21 @@ local function OpenControlCenter(initialTab)
     end
 
     -----------------------------------------------------------------------------------
+    -- MODULE 10: METRO TILE NAMEPLATES & DYNAMIC AURA COLOR RULES
+    -----------------------------------------------------------------------------------
+    if SpArc.BuildNameplatesPage and pages[10] then
+      SpArc:BuildNameplatesPage(pages[10], ui, {
+        ApplyCyrFont = ApplyCyrFont,
+        CreateElvButton = CreateElvButton,
+        RegisterGroupBox = RegisterGroupBox,
+        SetBackdropFlat = SetBackdropFlat,
+        CreateElvCheck = CreateElvCheck,
+        CreateElvSlider = CreateElvSlider,
+        controlFrame = controlFrame,
+      })
+    end
+
+    -----------------------------------------------------------------------------------
     -- MASTER REFRESH UI
     -----------------------------------------------------------------------------------
     function controlFrame:RefreshUI()
@@ -1457,6 +1472,11 @@ local function OpenControlCenter(initialTab)
       -- Module 9 (Macro Generator) refresh
       if SpArc.RefreshMacroGenPage then
         SpArc:RefreshMacroGenPage(ui)
+      end
+
+      -- Module 10 (Metro Nameplates) refresh
+      if SpArc.RefreshNameplatesPage then
+        SpArc:RefreshNameplatesPage(ui)
       end
 
       isRefreshingUI = false
@@ -1711,6 +1731,8 @@ _G.SlashCmdList["SPARC"] = function(msg)
     OpenControlCenter(8)
   elseif cmd == "macro" or cmd == "macros" or cmd == "mgen" or cmd == "gen" then
     OpenControlCenter(9)
+  elseif cmd == "np" or cmd == "nameplate" or cmd == "nameplates" or cmd == "plates" or cmd == "metro" then
+    OpenControlCenter(10)
   elseif cmd == "fixcursor" or cmd == "cursor" then
     if SpArc.FlushHardwareCursor then
       SpArc:FlushHardwareCursor(true)

@@ -185,7 +185,22 @@ SpArc.DEFAULT_VISUAL = {
   macroGenTemplate = "#showtooltip\n/stopmacro [flying]\n/cast [@target] spell",
   smartBossTab = true,
   autoUnshiftOutOfCombat = true,
+  enableNameplates = true,
+  npWidth = 140,
+  npHeight = 30,
+  npCastHeight = 14,
+  npFontSize = 11,
+  npShowQuestNPCs = true,
+  npShowFriendlyPlayers = true,
+  npShowHostileClassIcon = true,
   lang = "AUTO",
+}
+
+SpArc.DEFAULT_NP_AURA_RULES = {
+  -- Example starter rules (Balance Druid Moonfire + Sunfire combo & single DoTs; fully editable in UI)
+  { enabled = true, ids = "164812, 164815", r = 0.62, g = 0.22, b = 1.00 },
+  { enabled = true, ids = "164812",         r = 0.16, g = 0.52, b = 1.00 },
+  { enabled = true, ids = "164815",         r = 1.00, g = 0.58, b = 0.12 },
 }
 
 SpArc.state = {
@@ -193,6 +208,8 @@ SpArc.state = {
   lastAnyCastAt = 0,
   lastSlotScanAt = 0,
   unitAuras = { target = {}, player = {} },
+  nameplateAuras = {},
+  nameplateUnitAuras = {},
   targetDebuffStacks = 0,
   targetDebuffUntil = 0,
   lastTargetGUID = nil,
@@ -234,6 +251,11 @@ end
 function SpArc:IsPvPRotationEnabled()
   local db = SpArc:EnsureDB()
   return (db and db.visual and db.visual.enablePvPRotation == true) or false
+end
+
+function SpArc:IsNameplatesEnabled()
+  local db = SpArc:EnsureDB()
+  return (db and db.visual and db.visual.enableNameplates ~= false) or false
 end
 
 local cachedCharKey = nil
@@ -454,6 +476,19 @@ function SpArc:EnsureDB(forceReinit)
       PVP  = (db.autoPresets and db.autoPresets.PVP) or "PRIEST_03_SHADOW_PVP",
     }
     db.autoPresets = activeProf.autoPresets
+  end
+
+  if type(db.npAuraRules) ~= "table" then
+    db.npAuraRules = {}
+    for _, r in ipairs(SpArc.DEFAULT_NP_AURA_RULES or {}) do
+      db.npAuraRules[#db.npAuraRules + 1] = {
+        enabled = (r.enabled ~= false),
+        ids = tostring(r.ids or ""),
+        r = tonumber(r.r) or 0.2,
+        g = tonumber(r.g) or 0.6,
+        b = tonumber(r.b) or 1.0,
+      }
+    end
   end
 
   db.telemetryLog = db.telemetryLog or {}

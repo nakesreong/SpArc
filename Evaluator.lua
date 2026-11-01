@@ -559,6 +559,7 @@ function SpArc:BuildRotationQueue(maxSlots)
   end
 
   local parsed = SpArc:SelectActiveParsedProfile()
+  st.secretInterruptOverlay = nil
   if not parsed or not parsed.rules then
     return EMPTY_TABLE, EMPTY_TABLE, parsed, nil, false, false
   end
@@ -697,12 +698,13 @@ function SpArc:BuildRotationQueue(maxSlots)
   simCtx.canPickPocket = (SpArc.CanPickPocketTarget and SpArc:CanPickPocketTarget(now)) or false
   simCtx.bossMode = (SpArc.IsBossRotationEnabled and SpArc:IsBossRotationEnabled()) or false
   simCtx.pvpMode = (SpArc.IsPvPRotationEnabled and SpArc:IsPvPRotationEnabled()) or false
-  local tCast, tInt = false, false
+  local tCast, tInt, _, _, _, _, _, _, rawNotInt = false, false, false, nil, nil, 0, 0, nil, nil
   if SpArc.GetUnitCastInterruptState then
-    tCast, tInt = SpArc:GetUnitCastInterruptState("target", now)
+    tCast, tInt, _, _, _, _, _, _, rawNotInt = SpArc:GetUnitCastInterruptState("target", now)
   end
+  local isSecretCastInt = (tCast and rawNotInt ~= nil and IsSecret(rawNotInt)) or false
   simCtx.targetIsCasting = tCast or false
-  simCtx.targetCastingInterruptible = (tCast and tInt) or false
+  simCtx.targetCastingInterruptible = (tCast and not isSecretCastInt and tInt) or false
   simCtx.insanity = simInsanity
   simCtx.comboPoints = math.floor(simInsanity / 20)
   simCtx.energy = simEnergy
@@ -722,6 +724,9 @@ function SpArc:BuildRotationQueue(maxSlots)
     end
     if d.isInterrupt then
       if stepIdx ~= 1 or not simCtx.targetCastingInterruptible then
+        return false
+      end
+      if states[spKey] and states[spKey].isOutOfRange then
         return false
       end
     end
@@ -745,6 +750,30 @@ function SpArc:BuildRotationQueue(maxSlots)
       end
     end
     return true
+  end
+
+  if isSecretCastInt and not SpArc.testMode then
+    for spK in pairs(SPELL_DEFS) do
+      simReady[spK] = simKnown[spK] and (states[spK] and states[spK].isReady == true) and (simCD[spK] <= 0.05) or false
+    end
+    simCtx.targetCastingInterruptible = true
+    for _, rule in ipairs(parsed.rules) do
+      local sp = rule.spell
+      local d = SPELL_DEFS[sp]
+      local s = states[sp]
+      if d and d.isInterrupt and simReady[sp] and simUsable[sp] and not simNoResource[sp] and s and not s.isOutOfRange and not s.isUnavailable then
+        if IsSpellAllowedByToggles(sp, 1) and SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
+          st.secretInterruptOverlay = {
+            key = sp,
+            icon = s.icon,
+            keybind = s.keybind or "",
+            rawNotInterruptible = rawNotInt,
+          }
+          break
+        end
+      end
+    end
+    simCtx.targetCastingInterruptible = false
   end
 
   for step = 1, maxSlots do
@@ -1357,7 +1386,7 @@ unitCastFrame:SetScript("OnEvent", function(_, event, unit, _, spellID)
     end
     uEv.active = true
     uEv.isChannel = isChan
-    uEv.interruptible = true
+    uEv.interruptible = nil
     uEv.startTime = now
     uEv.endTime = now + dur
     uEv.spellID = (not IsSecret(spellID) and type(spellID) == "number" and spellID) or nil

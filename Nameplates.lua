@@ -1312,7 +1312,7 @@ UpdateMetroCastbar = function(metro, now)
   if not unit then return end
   now = now or GetTime()
   local cbCont = metro.castBar
-  local isCasting, isInterruptible, isChannel, spellName, spellIcon, remSec, durSec = SpArc:GetUnitCastInterruptState(unit, now)
+  local isCasting, isInterruptible, isChannel, spellName, spellIcon, remSec, durSec, _, rawNotInterruptible = SpArc:GetUnitCastInterruptState(unit, now)
   if not isCasting then
     if cbCont:IsShown() then
       cbCont:Hide()
@@ -1351,12 +1351,30 @@ UpdateMetroCastbar = function(metro, now)
   else
     cbCont.timeText:SetText("")
   end
-  if isInterruptible then
+  if rawNotInterruptible ~= nil and IsSecret(rawNotInterruptible) then
+    if _G.C_CurveUtil and _G.C_CurveUtil.EvaluateColorValueFromBoolean then
+      local r = _G.C_CurveUtil.EvaluateColorValueFromBoolean(rawNotInterruptible, COLOR_CAST_GREY.r, COLOR_CAST_GOLD.r)
+      local g = _G.C_CurveUtil.EvaluateColorValueFromBoolean(rawNotInterruptible, COLOR_CAST_GREY.g, COLOR_CAST_GOLD.g)
+      local b = _G.C_CurveUtil.EvaluateColorValueFromBoolean(rawNotInterruptible, COLOR_CAST_GREY.b, COLOR_CAST_GOLD.b)
+      pcall(cbCont.bar.SetStatusBarColor, cbCont.bar, r, g, b, 1.0)
+    else
+      cbCont.bar:SetStatusBarColor(COLOR_CAST_GOLD.r, COLOR_CAST_GOLD.g, COLOR_CAST_GOLD.b, 1.0)
+    end
+    cbCont.border:SetBackdropBorderColor(0.05, 0.05, 0.08, 1.0)
+    local pulse = 0.72 + 0.28 * math.abs(math.sin(now * 6.5))
+    cbCont.glow:SetBackdropBorderColor(1.00, 0.86, 0.20, pulse)
+    cbCont.glow.outerGlow:SetColorTexture(1.00, 0.82, 0.15, 0.18 + 0.18 * pulse)
+    cbCont.glow:Show()
+    if cbCont.glow.SetAlphaFromBoolean then
+      pcall(cbCont.glow.SetAlphaFromBoolean, cbCont.glow, rawNotInterruptible, 0, 1)
+    end
+  elseif isInterruptible then
     cbCont.bar:SetStatusBarColor(COLOR_CAST_GOLD.r, COLOR_CAST_GOLD.g, COLOR_CAST_GOLD.b, 1.0)
     cbCont.border:SetBackdropBorderColor(1.00, 0.85, 0.20, 1.0)
     local pulse = 0.72 + 0.28 * math.abs(math.sin(now * 6.5))
     cbCont.glow:SetBackdropBorderColor(1.00, 0.86, 0.20, pulse)
     cbCont.glow.outerGlow:SetColorTexture(1.00, 0.82, 0.15, 0.18 + 0.18 * pulse)
+    cbCont.glow:SetAlpha(1.0)
     cbCont.glow:Show()
   else
     cbCont.bar:SetStatusBarColor(COLOR_CAST_GREY.r, COLOR_CAST_GREY.g, COLOR_CAST_GREY.b, 1.0)

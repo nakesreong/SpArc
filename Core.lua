@@ -9,7 +9,7 @@ _G.SparkArc = SpArc
 _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
-SpArc.VERSION = "2.9.5"
+SpArc.VERSION = "2.9.6"
 SpArc.PROFILE_SCHEMA_VERSION = 33
 
 local C_CVar = _G.C_CVar
@@ -200,6 +200,7 @@ SpArc.DEFAULT_VISUAL = {
   npMaxDistance = 40,
   npDistanceFade = true,
   npMinAlpha = 0.30,
+  npDimOutOfCombat = true,
   enableCombatText = true,
   ctHidePlayerScrolling = true,
   ctSuppressAlerts = true,
@@ -222,6 +223,8 @@ SpArc.DEFAULT_VISUAL = {
   ctOutgoingX = 260,
   ctOutgoingY = 20,
   ctScrollStyle = "ARC",
+  ctArcCurve = 55,
+  ctCritShake = true,
   ctFontSize = 16,
   lang = "AUTO",
 }

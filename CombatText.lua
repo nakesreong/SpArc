@@ -99,16 +99,24 @@ local function StyleMSBTAnchorBox(frame, r, g, b)
   bRight:SetWidth(2)
   bRight:SetColorTexture(r, g, b, 0.95)
 
-  -- Center crosshair guide inside zone
+  -- Center crosshair & curved trajectory guide dots inside zone
   local cHoriz = frame:CreateTexture(nil, "ARTWORK")
   cHoriz:SetSize(40, 1)
   cHoriz:SetPoint("CENTER", 0, 0)
   cHoriz:SetColorTexture(r, g, b, 0.45)
 
   local cVert = frame:CreateTexture(nil, "ARTWORK")
-  cVert:SetSize(1, 140)
+  cVert:SetSize(1, 130)
   cVert:SetPoint("CENTER", 0, 0)
-  cVert:SetColorTexture(r, g, b, 0.35)
+  cVert:SetColorTexture(r, g, b, 0.22)
+
+  frame.curveDots = {}
+  for d = 1, 7 do
+    local dot = frame:CreateTexture(nil, "OVERLAY")
+    dot:SetSize(5, 5)
+    dot:SetColorTexture(r, g, b, 0.85)
+    frame.curveDots[d] = dot
+  end
 
   local lbl = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   ApplyMSBTFont(lbl, 12, "OUTLINE")
@@ -133,6 +141,25 @@ function SpArc:UpdateMSBTZonePositions()
   local incY = tonumber(vis.ctIncomingY) or -20
   local outX = tonumber(vis.ctOutgoingX) or 260
   local outY = tonumber(vis.ctOutgoingY) or 20
+  local style = vis.ctScrollStyle or "ARC"
+  local curveVal = (style == "UP") and 0 or (tonumber(vis.ctArcCurve) or 55)
+
+  local function UpdateAnchorCurveDots(anchorFrame, dir)
+    if not anchorFrame.curveDots then return end
+    for idx, dot in ipairs(anchorFrame.curveDots) do
+      local p = (idx - 1) / 6
+      local dy = (p - 0.5) * 116
+      local dx = 0
+      if style == "FOUNTAIN" then
+        dx = dir * math.sin(p * math.pi * 1.35) * 32
+      else
+        local bulge = 4 * p * (1 - p)
+        dx = dir * bulge * (curveVal * 0.72)
+      end
+      dot:ClearAllPoints()
+      dot:SetPoint("CENTER", anchorFrame, "CENTER", dx, dy)
+    end
+  end
 
   msbtIncomingAnchor:ClearAllPoints()
   msbtIncomingAnchor:SetPoint("CENTER", UIParent, "CENTER", incX, incY)
@@ -140,8 +167,9 @@ function SpArc:UpdateMSBTZonePositions()
     msbtIncomingAnchor.titleLbl:SetText(SpArc:L("M11_ZONE_INC_TITLE"))
   end
   if msbtIncomingAnchor.coordLbl then
-    msbtIncomingAnchor.coordLbl:SetText(string.format("X: %d   Y: %d", incX, incY))
+    msbtIncomingAnchor.coordLbl:SetText(string.format("X: %d   Y: %d   Curve: %+d", incX, incY, -curveVal))
   end
+  UpdateAnchorCurveDots(msbtIncomingAnchor, -1)
 
   msbtOutgoingAnchor:ClearAllPoints()
   msbtOutgoingAnchor:SetPoint("CENTER", UIParent, "CENTER", outX, outY)
@@ -149,8 +177,9 @@ function SpArc:UpdateMSBTZonePositions()
     msbtOutgoingAnchor.titleLbl:SetText(SpArc:L("M11_ZONE_OUT_TITLE"))
   end
   if msbtOutgoingAnchor.coordLbl then
-    msbtOutgoingAnchor.coordLbl:SetText(string.format("X: %d   Y: %d", outX, outY))
+    msbtOutgoingAnchor.coordLbl:SetText(string.format("X: %d   Y: %d   Curve: %+d", outX, outY, curveVal))
   end
+  UpdateAnchorCurveDots(msbtOutgoingAnchor, 1)
 end
 
 local function EnsureMSBTFrames()
@@ -223,6 +252,12 @@ local function EnsureMSBTFrames()
   end)
 
   for i = 1, MAX_MSBT_POOL do
+    local glow = msbtContainer:CreateTexture(nil, "BACKGROUND")
+    glow:SetTexture("Interface\\Cooldown\\star4")
+    glow:SetBlendMode("ADD")
+    glow:SetSize(96, 42)
+    glow:Hide()
+
     local fs = msbtContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     ApplyMSBTFont(fs, 16, "OUTLINE")
     fs:SetShadowColor(0, 0, 0, 0.90)
@@ -230,6 +265,7 @@ local function EnsureMSBTFrames()
     fs:Hide()
     msbtPool[i] = {
       fs = fs,
+      glow = glow,
       active = false,
       zone = "INCOMING",
       elapsed = 0,
@@ -285,6 +321,8 @@ local function EnsureMSBTFrames()
     local db = SpArc:EnsureDB()
     local vis = (db and db.visual) or SpArc.DEFAULT_VISUAL
     local style = vis.ctScrollStyle or "ARC"
+    local curveVal = (style == "UP") and 0 or (tonumber(vis.ctArcCurve) or 55)
+    local critShakeOn = (vis.ctCritShake ~= false)
     local overheadBaseY = tonumber(vis.ctOverheadY) or 55
     local overheadMaxAlpha = math.max(0.20, math.min(1.00, tonumber(vis.ctOverheadAlpha) or 0.60))
 
@@ -300,6 +338,7 @@ local function EnsureMSBTFrames()
       if p >= 1 then
         item.active = false
         item.fs:Hide()
+        if item.glow then item.glow:Hide() end
         table.remove(msbtActive, i)
       elseif item.zone == "OVERHEAD" then
         if not checkedTargetPlate then
@@ -324,13 +363,27 @@ local function EnsureMSBTFrames()
         if item.isCrit then
           local scale = 1.0
           if p < 0.08 then
-            scale = 1.0 + (p / 0.08) * 0.16
+            scale = 1.0 + (p / 0.08) * 0.22
           elseif p < 0.22 then
-            scale = 1.16 - ((p - 0.08) / 0.14) * 0.16
+            scale = 1.22 - ((p - 0.08) / 0.14) * 0.22
           end
           item.fs:SetScale(scale)
+          if critShakeOn and p < 0.20 then
+            local damp = 1.0 - (p / 0.20)
+            dx = dx + math.sin(item.elapsed * 120) * 3.0 * damp
+            dy = dy + math.cos(item.elapsed * 140) * 1.8 * damp
+            if item.glow then
+              item.glow:ClearAllPoints()
+              item.glow:SetPoint("CENTER", item.fs, "CENTER", 0, 0)
+              item.glow:SetVertexColor(1.0, 0.78, 0.20, 0.48 * damp * overheadMaxAlpha)
+              item.glow:Show()
+            end
+          elseif item.glow then
+            item.glow:Hide()
+          end
         else
           item.fs:SetScale(1.0)
+          if item.glow then item.glow:Hide() end
         end
 
         item.fs:ClearAllPoints()
@@ -345,16 +398,16 @@ local function EnsureMSBTFrames()
         local travelH = 148
         local dir = (item.zone == "INCOMING") and -1 or 1
 
-        if style == "UP" then
-          dx = item.jitterX
-          dy = (p - 0.5) * travelH
-        elseif style == "FOUNTAIN" then
+        if style == "FOUNTAIN" then
           dx = dir * math.sin(p * math.pi * 1.35) * 38 + item.jitterX
           dy = (p - 0.45) * travelH
         else
-          -- Classic MSBT Outward Arc: Incoming curves left (away from center), Outgoing curves right
+          -- Continuous Vertical MSBT Arc Curvature: )  -  |  -  (
+          -- curveVal > 0: Outward parentheses (   )
+          -- curveVal = 0: Straight vertical line |   |
+          -- curveVal < 0: Inward reverse curve )   (
           local arcBulge = 4 * p * (1 - p) -- peaks at 1.0 when p = 0.5
-          dx = dir * arcBulge * 46 + (item.jitterX * 0.4)
+          dx = dir * arcBulge * curveVal + (item.jitterX * 0.35)
           dy = (p - 0.5) * travelH
         end
 
@@ -366,17 +419,35 @@ local function EnsureMSBTFrames()
           alpha = math.max(0, 1.0 - ((p - 0.72) / 0.28))
         end
 
-        -- Crit pop scale animation during first 0.20s
+        -- Crit pop scale + Haptic Shake & Radial Starburst Flash during first 0.20s
         if item.isCrit then
           local scale = 1.0
           if p < 0.08 then
-            scale = 1.0 + (p / 0.08) * 0.35
+            scale = 1.0 + (p / 0.08) * 0.36
           elseif p < 0.22 then
-            scale = 1.35 - ((p - 0.08) / 0.14) * 0.35
+            scale = 1.36 - ((p - 0.08) / 0.14) * 0.36
           end
           item.fs:SetScale(scale)
+          if critShakeOn and p < 0.20 then
+            local damp = 1.0 - (p / 0.20)
+            dx = dx + math.sin(item.elapsed * 125) * 4.5 * damp
+            dy = dy + math.cos(item.elapsed * 145) * 2.6 * damp
+            if item.glow then
+              item.glow:ClearAllPoints()
+              item.glow:SetPoint("CENTER", item.fs, "CENTER", 0, 0)
+              if item.zone == "INCOMING" then
+                item.glow:SetVertexColor(0.25, 1.0, 0.55, 0.65 * damp)
+              else
+                item.glow:SetVertexColor(1.0, 0.55, 0.15, 0.72 * damp)
+              end
+              item.glow:Show()
+            end
+          elseif item.glow then
+            item.glow:Hide()
+          end
         else
           item.fs:SetScale(1.0)
+          if item.glow then item.glow:Hide() end
         end
 
         item.fs:ClearAllPoints()
@@ -948,7 +1019,9 @@ function SpArc:ApplyCleanHapticPreset()
   vis.ctOutgoingX = 260
   vis.ctOutgoingY = 20
   vis.ctScrollStyle = "ARC"
+  vis.ctArcCurve = 55
   vis.ctFontSize = 16
+  vis.ctCritShake = true
   vis.ctHidePlayerScrolling = true
   vis.ctSuppressAlerts = true
   vis.ctShowDirectDamage = true
@@ -966,6 +1039,7 @@ function SpArc:ApplyCleanHapticPreset()
   vis.npMaxDistance = 40
   vis.npDistanceFade = true
   vis.npMinAlpha = 0.30
+  vis.npDimOutOfCombat = true
   SpArc:ApplyCombatTextSettings()
 end
 
@@ -1141,41 +1215,63 @@ function SpArc:BuildCombatTextPage(page, ui, helpers)
     b:SetScript("OnClick", function()
       local db = SpArc:EnsureDB()
       db.visual.ctScrollStyle = st.key
-      SpArc:RefreshCombatTextPage(ui)
+      if st.key == "UP" then
+        db.visual.ctArcCurve = 0
+      elseif st.key == "ARC" and (tonumber(db.visual.ctArcCurve) or 0) == 0 then
+        db.visual.ctArcCurve = 55
+      end
+      SpArc:UpdateMSBTZonePositions()
+      if controlFrame and controlFrame.RefreshUI then
+        controlFrame:RefreshUI()
+      else
+        SpArc:RefreshCombatTextPage(ui)
+      end
       SpArc:TriggerMSBTTestFountain()
     end)
     ui.m11StyleBtns[#ui.m11StyleBtns + 1] = b
   end
 
-  CreateElvSlider(grpCenter, "SL_CT_INC_X", "ctIncomingX", -550, 0, 5, 16, -84, 190, function()
+  CreateElvSlider(grpCenter, "SL_CT_INC_X", "ctIncomingX", -750, 0, 5, 16, -84, 190, function()
     SpArc:UpdateMSBTZonePositions()
   end)
-  CreateElvSlider(grpCenter, "SL_CT_INC_Y", "ctIncomingY", -250, 250, 5, 224, -84, 190, function()
+  CreateElvSlider(grpCenter, "SL_CT_INC_Y", "ctIncomingY", -300, 300, 5, 224, -84, 190, function()
     SpArc:UpdateMSBTZonePositions()
   end)
   CreateElvSlider(grpCenter, "SL_CT_FONT_SIZE", "ctFontSize", 11, 28, 1, 432, -84, 190, function()
     SpArc:UpdateMSBTZonePositions()
   end)
 
-  CreateElvSlider(grpCenter, "SL_CT_OUT_X", "ctOutgoingX", 0, 550, 5, 16, -138, 290, function()
+  CreateElvSlider(grpCenter, "SL_CT_OUT_X", "ctOutgoingX", 0, 750, 5, 16, -138, 190, function()
     SpArc:UpdateMSBTZonePositions()
   end)
-  CreateElvSlider(grpCenter, "SL_CT_OUT_Y", "ctOutgoingY", -250, 250, 5, 332, -138, 290, function()
+  CreateElvSlider(grpCenter, "SL_CT_OUT_Y", "ctOutgoingY", -300, 300, 5, 224, -138, 190, function()
     SpArc:UpdateMSBTZonePositions()
+  end)
+  CreateElvSlider(grpCenter, "SL_CT_ARC_CURVE", "ctArcCurve", -120, 120, 5, 432, -138, 190, function(val)
+    local db = SpArc:EnsureDB()
+    db.visual.ctScrollStyle = (val == 0) and "UP" or "ARC"
+    SpArc:UpdateMSBTZonePositions()
+    SpArc:RefreshCombatTextPage(ui)
+    SpArc:SpawnMSBTText("INCOMING", "+3,420", 0.22, 1.00, 0.48, false)
+    SpArc:SpawnMSBTText("OUTGOING", "* 14,850 *", 1.00, 0.42, 0.15, true)
   end)
 
-  -- Group 2: 3D Enemy Damage Numbers & Smart AoE Filter
+  -- Group 2: Center Target Yellow Damage Numbers, Haptic Crit Shake & Smart AoE Filter
   local grpEnemy = RegisterGroupBox(page, "M11_GRP_ENEMY", 0, -250, 640, 126)
-  CreateElvCheck(grpEnemy, "CK_CT_DIRECT_DMG", "ctShowDirectDamage", 14, -8, false, false, function()
+  local cDirect = CreateElvCheck(grpEnemy, "CK_CT_DIRECT_DMG", "ctShowDirectDamage", 14, -8, false, false, function()
     SpArc:ApplyCombatTextSettings()
     SpArc:RefreshCombatTextPage(ui)
   end)
-  CreateElvCheck(grpEnemy, "CK_CT_HIDE_PET", "ctHidePetDamage", 300, -8, false, false, function()
+  cDirect:SetWidth(205)
+  local cShake = CreateElvCheck(grpEnemy, "CK_CT_CRIT_SHAKE", "ctCritShake", 224, -8, false, false, function()
+    SpArc:SpawnMSBTText("OUTGOING", "* 18,400 *", 1.00, 0.40, 0.12, true)
+    SpArc:SpawnOverheadTargetText("18 400", true, true)
+  end)
+  cShake:SetWidth(215)
+  local cPet = CreateElvCheck(grpEnemy, "CK_CT_HIDE_PET", "ctHidePetDamage", 444, -8, false, false, function()
     SpArc:ApplyCombatTextSettings()
   end)
-  CreateElvCheck(grpEnemy, "CK_CT_HIDE_MISS", "ctHideDodgeParryMiss", 480, -8, false, false, function()
-    SpArc:ApplyCombatTextSettings()
-  end)
+  cPet:SetWidth(185)
 
   local dotLbl = grpEnemy:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   ApplyCyrFont(dotLbl, 11)
@@ -1219,15 +1315,22 @@ function SpArc:BuildCombatTextPage(page, ui, helpers)
     SpArc:SpawnOverheadTargetText("4 318", false, true)
   end)
 
-  -- Group 3: Nameplate View Distance, Smooth Distance Fade & Stacking Anti-Overlap
+  -- Group 3: Nameplate View Distance, Smooth Distance Fade, Out-of-Combat Dimming & Stacking
   local grpScale = RegisterGroupBox(page, "M11_GRP_SCALE", 0, -384, 640, 150)
-  CreateElvCheck(grpScale, "CK_NP_DIST_FADE", "npDistanceFade", 14, -8, false, false, function()
+  local cDistFade = CreateElvCheck(grpScale, "CK_NP_DIST_FADE", "npDistanceFade", 14, -8, false, false, function()
     SpArc:ApplyCombatTextSettings()
     SpArc:RefreshCombatTextPage(ui)
   end)
-  CreateElvCheck(grpScale, "CK_CT_SPREAD_NP", "ctSpreadNameplates", 356, -8, false, false, function()
+  cDistFade:SetWidth(205)
+  local cOocDim = CreateElvCheck(grpScale, "CK_NP_OOC_DIM", "npDimOutOfCombat", 224, -8, false, false, function()
+    SpArc:ApplyCombatTextSettings()
+    SpArc:RefreshCombatTextPage(ui)
+  end)
+  cOocDim:SetWidth(215)
+  local cSpreadNP = CreateElvCheck(grpScale, "CK_CT_SPREAD_NP", "ctSpreadNameplates", 444, -8, false, false, function()
     SpArc:ApplyCombatTextSettings()
   end)
+  cSpreadNP:SetWidth(185)
 
   CreateElvSlider(grpScale, "SL_NP_MAX_DIST", "npMaxDistance", 20, 60, 2, 16, -42, 190, function()
     SpArc:ApplyCombatTextSettings()

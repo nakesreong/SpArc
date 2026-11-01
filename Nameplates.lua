@@ -830,8 +830,11 @@ end
 local function SuppressBlizzardUnitFrame(plate, metro)
   if not plate or IsBlockedByUnresolvedConflict() then return end
   local uFrame = plate.UnitFrame
+  local inLockdown = InCombatLockdown and InCombatLockdown()
   if uFrame then
-    pcall(uFrame.Hide, uFrame)
+    if not inLockdown then
+      pcall(uFrame.Hide, uFrame)
+    end
     pcall(uFrame.SetAlpha, uFrame, 0)
     if not hookedBlizzFrames[uFrame] then
       hookedBlizzFrames[uFrame] = true
@@ -846,7 +849,9 @@ local function SuppressBlizzardUnitFrame(plate, metro)
       SuppressSubFrameEvents(uFrame.ClassificationFrame)
       pcall(_G.hooksecurefunc, uFrame, "Show", function(self)
         if SpArc:IsNameplatesEnabled() and not IsBlockedByUnresolvedConflict() then
-          pcall(self.Hide, self)
+          if not (InCombatLockdown and InCombatLockdown()) then
+            pcall(self.Hide, self)
+          end
           pcall(self.SetAlpha, self, 0)
         end
       end)
@@ -867,7 +872,9 @@ local function SuppressBlizzardUnitFrame(plate, metro)
   -- Only hide ElvUI's per-plate unitFrame if the user explicitly chose SpArc over ElvUI
   if elvUINPSuppressed and plate.unitFrame and plate.unitFrame ~= metro then
     pcall(plate.unitFrame.UnregisterAllEvents, plate.unitFrame)
-    pcall(plate.unitFrame.Hide, plate.unitFrame)
+    if not inLockdown then
+      pcall(plate.unitFrame.Hide, plate.unitFrame)
+    end
     pcall(plate.unitFrame.SetAlpha, plate.unitFrame, 0)
   end
 end

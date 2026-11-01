@@ -749,9 +749,10 @@ function SpArc:BuildRotationQueue(maxSlots)
 
   for step = 1, maxSlots do
     for spK, spD in pairs(SPELL_DEFS) do
-      simReady[spK] = simKnown[spK] and (simCD[spK] <= 0.05) or false
-      if step > 1 and simReady[spK] and not spD.procOnly and not spD.isExecute and not spD.isSpender then
-        simUsable[spK] = true
+      if step == 1 then
+        simReady[spK] = simKnown[spK] and (states[spK] and states[spK].isReady == true) and (simCD[spK] <= 0.05) or false
+      else
+        simReady[spK] = simKnown[spK] and (simCD[spK] <= 0.05) or false
       end
     end
 
@@ -906,8 +907,8 @@ function SpArc:BuildRotationQueue(maxSlots)
               simReady[pickedKey] = false
             end
           end
-        elseif def.baseCD and def.baseCD > 0 then
-          simCD[pickedKey] = def.baseCD
+        elseif (def.liveChargeCD and def.liveChargeCD > 0) or (def.baseCD and def.baseCD > 0) then
+          simCD[pickedKey] = def.liveChargeCD or def.baseCD
           simReady[pickedKey] = false
         else
           simCD[pickedKey] = 0
@@ -941,6 +942,8 @@ function SpArc:BuildRotationQueue(maxSlots)
           end
         end
       end
+    else
+      break
     end
   end
 
@@ -1076,16 +1079,13 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   if maxCh > 1 or (def.baseCD and def.baseCD > 0 and def.baseCD <= 30) then
     SpArc:GetTrackedSpellCharges(defKey, now)
     local used = st.spellChargesUsed[defKey] or 0
-    local hadOverlayProc = st.lastOverlayProcAt and st.lastOverlayProcAt[defKey] and (now - st.lastOverlayProcAt[defKey]) <= 1.2
-    if hadOverlayProc then
+    if st.lastOverlayProcAt and st.lastOverlayProcAt[defKey] then
       st.lastOverlayProcAt[defKey] = nil
     end
-    if not (maxCh > 1 and hadOverlayProc and used < maxCh) then
-      if used == 0 or not st.spellChargeStart[defKey] or st.spellChargeStart[defKey] <= 0 then
-        st.spellChargeStart[defKey] = now
-      end
-      st.spellChargesUsed[defKey] = math.min(maxCh, used + 1)
+    if used == 0 or not st.spellChargeStart[defKey] or st.spellChargeStart[defKey] <= 0 then
+      st.spellChargeStart[defKey] = now
     end
+    st.spellChargesUsed[defKey] = math.min(maxCh, used + 1)
   end
 end
 

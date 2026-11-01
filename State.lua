@@ -105,7 +105,7 @@ function SpArc:GetTrackedSpellCharges(defKey, now)
   end
   if used > 0 and chStart > 0 then
     local elapsed = now - chStart
-    local recovered = math.floor(elapsed / cdDur)
+    local recovered = math.floor((elapsed + 0.05) / cdDur)
     if recovered > 0 then
       used = math.max(0, used - recovered)
       st.spellChargesUsed[defKey] = used
@@ -486,29 +486,32 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       if IsSecret(s) or IsSecret(d) then
         if cdRaw == "0s" then cdRaw = "ACT_SECRET" end
       elseif type(d) == "number" then
-        gotCleanCD = true
-        if s and s > 0 then
-          if d >= 0.25 and d <= 1.6 and (s + d) > now then
-            st.gcdStartTime = s
-            st.gcdDuration = d
-            ClearKnownCD()
-          elseif d > 1.6 then
-            local r = s + d - now
-            if r > 0.15 then
-              isOnCD = true
-              remSec = r
-              durSec = d
-              startTime = s
-              charges = 0
-              cdRaw = string.format("act:%.1fs/%.1fs", remSec, durSec)
-              SaveKnownCD(s, d)
-            else
-              ClearKnownCD()
-            end
-          else
+        if s and s > 0 and d > 1.6 then
+          local r = s + d - now
+          if r > 0.15 then
+            gotCleanCD = true
+            isOnCD = true
+            remSec = r
+            durSec = d
+            startTime = s
+            charges = 0
+            cdRaw = string.format("act:%.1fs/%.1fs", remSec, durSec)
+            SaveKnownCD(s, d)
+          elseif cdRaw ~= "SECRET" then
+            gotCleanCD = true
             ClearKnownCD()
           end
-        else
+        elseif s and s > 0 and d >= 0.25 and d <= 1.6 and (s + d) > now then
+          st.gcdStartTime = s
+          st.gcdDuration = d
+          if cdRaw ~= "SECRET" then
+            gotCleanCD = true
+            ClearKnownCD()
+          end
+        elseif cdRaw ~= "SECRET" then
+          -- Never trust a 0s macro cooldown when C_Spell.GetSpellCooldown returned SECRET in combat
+          -- (e.g., [@target] macros return 0,0 when the target dies, which would wipe active CDs)
+          gotCleanCD = true
           ClearKnownCD()
         end
       end
@@ -592,27 +595,20 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
 
-    -- Self-heal simulated cooldown/charges in combat when C++ engine proves readiness
-    -- via SpellActivationOverlay proc (e.g., Shadowy Insight) or AssistedCombat next-cast
+    -- Non-destructive readiness override when C++ AssistedCombat or a non-execute proc overlay
+    -- proves a spell is castable right now (never wipe underlying timers, and never let execute
+    -- <20% HP overlays bypass an active execute cooldown like Shadow Word: Death)
     local sinceLastCast = now - (st.lastCastAt[defKey] or 0)
-    if isOnCD and (hasSpellOverlayProc or assistedKey == defKey) and sinceLastCast > 0.55 then
+    local allowProcCDReset = (not def.isExecute) and hasSpellOverlayProc and (sinceLastCast > 1.2)
+    local allowAssistCDReset = (assistedKey == defKey) and (sinceLastCast > 1.5)
+    if isOnCD and (allowProcCDReset or allowAssistCDReset) then
       isOnCD = false
       remSec = 0
+      charges = math.max(1, charges)
       if maxCh > 1 then
-        local curUsed = st.spellChargesUsed[defKey] or 0
-        local healedUsed = math.min(maxCh - 1, math.max(0, curUsed - 1))
-        st.spellChargesUsed[defKey] = healedUsed
-        if healedUsed == 0 then
-          st.spellChargeStart[defKey] = 0
-        end
-        charges = math.max(1, maxCh - healedUsed)
         chargesRaw = "sim:" .. tostring(charges) .. "/" .. tostring(maxCh)
-      else
-        charges = 1
-        st.lastCastAt[defKey] = nil
-        ClearKnownCD()
       end
-      cdRaw = hasSpellOverlayProc and "proc:0s" or "assist:0s"
+      cdRaw = allowProcCDReset and "proc:0s" or "assist:0s"
     end
   end
 
@@ -667,11 +663,19 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   end
 
   local isUsable = true
+  local blockedBySpellBookState = (bookUsableVal == false and not bookNoPowerVal)
   if def.isExecute then
     local tgtHP = SpArc:GetTargetHPPercent()
     local hasCD = (def.baseCD and def.baseCD >= 3.0) and true or false
     local alwaysCastableExecute = (defKey == "SHADOW_WORD_DEATH" or spellID == 32379)
-    if isProc then
+    if blockedBySpellBookState then
+      isUsable = false
+      isProc = false
+      usableSource = "ExecuteSpellBook(false)"
+    elseif bookUsableVal == true and not bookNoPowerVal then
+      isUsable = true
+      usableSource = isProc and "ExecuteProcOverlay" or "ExecuteSpellBook(true)"
+    elseif isProc then
       isUsable = true
       usableSource = "ExecuteProcOverlay"
     elseif assistedKey == defKey then
@@ -718,7 +722,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
 
-    if def.isSpender and UnitPower then
+    if def.isSpender and not blockedBySpellBookState and UnitPower then
       if defKey == "DEVOURING_PLAGUE" or SPELL_DEFS["DEVOURING_PLAGUE"] then
         local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 50
         local okP, rawP = pcall(UnitPower, "player", 13)
@@ -810,7 +814,16 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
 
-    if (isProc or assistedKey == defKey) and not (def.isSpender and not SPELL_DEFS["DEVOURING_PLAGUE"] and gotCleanUsable and not isUsable) then
+    if not blockedBySpellBookState and (isProc or assistedKey == defKey) and not (def.isSpender and not SPELL_DEFS["DEVOURING_PLAGUE"] and gotCleanUsable and not isUsable) then
+      isUsable = true
+      usableSource = isProc and "ProcOverride" or "AssistedCombat"
+    end
+  elseif bookUsableVal ~= nil then
+    isUsable = (bookUsableVal == true) and (not bookNoPowerVal)
+    usableSource = "SpellBook(" .. tostring(spellID) .. ")"
+    if blockedBySpellBookState then
+      isProc = false
+    elseif not isUsable and (isProc or assistedKey == defKey) then
       isUsable = true
       usableSource = isProc and "ProcOverride" or "AssistedCombat"
     end

@@ -717,7 +717,9 @@ function SpArc:UpdateDynamicAoEPeriodicFilter(forceApply)
   SpArc:CountActiveCombatEnemyPlates()
   if forceApply or lastAppliedPeriodicVal ~= "0" then
     SafeSetCVar("floatingCombatTextCombatDamage", "0")
+    SafeSetCVar("floatingCombatTextCombatDamage_v2", "0")
     SafeSetCVar("floatingCombatTextCombatLogPeriodicSpells", "0")
+    SafeSetCVar("floatingCombatTextCombatLogPeriodicSpells_v2", "0")
     lastAppliedPeriodicVal = "0"
   end
 end
@@ -967,19 +969,29 @@ function SpArc:ApplyCombatTextSettings()
   end
 
   -- 2. Center Target Haptic Numbers (rendered by SpArc with custom alpha, smaller font & high Y offset)
-  -- Turn off Blizzard's un-dimmable 100%-bright #FFFF00 3D text so it never sits on the character's head
+  -- Turn off Blizzard's un-dimmable 100%-bright #FFFF00 3D text (both 11.x and 12.x _v2 CVars)
   SafeSetCVar("floatingCombatTextCombatDamage", "0")
+  SafeSetCVar("floatingCombatTextCombatDamage_v2", "0")
   SafeSetCVar("floatingCombatTextCombatLogPeriodicSpells", "0")
+  SafeSetCVar("floatingCombatTextCombatLogPeriodicSpells_v2", "0")
   SafeSetCVar("floatingCombatTextPetMeleeDamage", (showDirect and not hidePet) and "1" or "0")
+  SafeSetCVar("floatingCombatTextPetMeleeDamage_v2", (showDirect and not hidePet) and "1" or "0")
   SafeSetCVar("floatingCombatTextPetSpellDamage", (showDirect and not hidePet) and "1" or "0")
+  SafeSetCVar("floatingCombatTextPetSpellDamage_v2", (showDirect and not hidePet) and "1" or "0")
 
   SafeSetCVar("floatingCombatTextCombatHealing", hideHeal and "0" or "1")
+  SafeSetCVar("floatingCombatTextCombatHealing_v2", hideHeal and "0" or "1")
   SafeSetCVar("floatingCombatTextCombatHealingAbsorbTarget", hideHeal and "0" or "1")
+  SafeSetCVar("floatingCombatTextCombatHealingAbsorbTarget_v2", hideHeal and "0" or "1")
   SafeSetCVar("floatingCombatTextCombatHealingAbsorbSelf", hideHeal and "0" or "1")
+  SafeSetCVar("floatingCombatTextCombatHealingAbsorbSelf_v2", hideHeal and "0" or "1")
   SafeSetCVar("floatingCombatTextDodgeParryMiss", hideMiss and "0" or "1")
+  SafeSetCVar("floatingCombatTextDodgeParryMiss_v2", hideMiss and "0" or "1")
 
   -- 3. Number Scale & Fountain Spread
-  SafeSetCVar("WorldTextScale", string.format("%.2f", math.max(0.40, math.min(1.50, worldScale))))
+  local scaleStr = string.format("%.2f", math.max(0.40, math.min(1.50, worldScale)))
+  SafeSetCVar("WorldTextScale", scaleStr)
+  SafeSetCVar("WorldTextScale_v2", scaleStr)
   SafeSetCVar("WorldTextRampPow", "1.0")
   SafeSetCVar("WorldTextRampPowCrit", "1.5")
   SafeSetCVar("floatingCombatTextCombatDamageDirectionalScale", tostring(math.max(0, math.min(2, dirScale))))
@@ -1063,6 +1075,12 @@ function SpArc:RestoreBlizzardCombatTextDefaults()
   vis.npMaxDistance = 60
   vis.npDistanceFade = false
   vis.npMinAlpha = 0.90
+  SafeSetCVar("floatingCombatTextCombatDamage", "1")
+  SafeSetCVar("floatingCombatTextCombatDamage_v2", "1")
+  SafeSetCVar("floatingCombatTextCombatLogPeriodicSpells", "1")
+  SafeSetCVar("floatingCombatTextCombatLogPeriodicSpells_v2", "1")
+  SafeSetCVar("WorldTextScale", "1.0")
+  SafeSetCVar("WorldTextScale_v2", "1.0")
   SpArc:ApplyCombatTextSettings()
 end
 

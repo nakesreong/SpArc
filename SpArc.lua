@@ -1935,8 +1935,7 @@ if _G.C_Timer and _G.C_Timer.After then
 end
 
 _G.SLASH_SPARC1 = "/sparc"
-_G.SLASH_SPARC2 = "/sa"
-_G.SLASH_SPARC3 = "/sparkarc"
+_G.SLASH_SPARC2 = "/sparkarc"
 _G.SlashCmdList["SPARC"] = function(msg)
   local cmd = (msg or ""):match("^(%S*)")
   cmd = (cmd or ""):lower()

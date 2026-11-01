@@ -257,12 +257,34 @@ local function ExtractMacroCastLines(body)
   return tooltipLines, castLines
 end
 
+local slotScanTimerPending = false
+
+function SpArc:RequestSlotScan()
+  if slotScanTimerPending then return end
+  slotScanTimerPending = true
+  if _G.C_Timer and _G.C_Timer.After then
+    _G.C_Timer.After(0.08, function()
+      slotScanTimerPending = false
+      SpArc:ScanActionSlotsAndSpells(true)
+    end)
+  else
+    slotScanTimerPending = false
+    SpArc:ScanActionSlotsAndSpells(true)
+  end
+end
+
 function SpArc:ScanActionSlotsAndSpells(force)
   local now = GetTime()
   if not force and (now - st.lastSlotScanAt) < 1.5 then
     return
   end
+  if force == true and st.lastForcedSlotScanAt and (now - st.lastForcedSlotScanAt) < 0.05 then
+    return
+  end
   st.lastSlotScanAt = now
+  if force then
+    st.lastForcedSlotScanAt = now
+  end
 
   local explicitOwnerBySpellID = {}
   for k, def in pairs(SPELL_DEFS) do

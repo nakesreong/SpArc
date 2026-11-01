@@ -1076,7 +1076,7 @@ eventFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
 pcall(eventFrame.RegisterEvent, eventFrame, "TRAIT_CONFIG_UPDATED")
 pcall(eventFrame.RegisterEvent, eventFrame, "PLAYER_TALENT_UPDATE")
 eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-eventFrame:RegisterEvent("PLAYER_FLAGS_CHANGED")
+eventFrame:RegisterUnitEvent("PLAYER_FLAGS_CHANGED", "player")
 eventFrame:RegisterEvent("UI_ERROR_MESSAGE")
 eventFrame:RegisterEvent("UNIT_SPELLCAST_SENT")
 eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
@@ -1142,7 +1142,11 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
       st.lastSyncedPresetID = nil
       SpArc:SelectActiveParsedProfile()
     end
-    SpArc:ScanActionSlotsAndSpells(true)
+    if SpArc.RequestSlotScan then
+      SpArc:RequestSlotScan()
+    else
+      SpArc:ScanActionSlotsAndSpells(true)
+    end
     return
   end
 

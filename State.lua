@@ -616,11 +616,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     startTime = now - math.max(0, durSec - remSec)
   end
 
-  if def.procOnly and isOnCD then
+  if isOnCD then
     isProc = false
-  end
-
-  if isVoidBlastOverride and not isOnCD then
+  elseif isVoidBlastOverride then
     isProc = true
   end
 

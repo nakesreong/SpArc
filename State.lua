@@ -341,7 +341,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     end
     if okC and type(ch) == "table" then
       if not IsSecret(ch.maxCharges) and type(ch.maxCharges) == "number" and ch.maxCharges >= 1 then
-        local effectiveMax = math.max(ch.maxCharges, def.maxCharges or 1)
+        local effectiveMax = ch.maxCharges
         local prevMax = def.liveMaxCharges or def.maxCharges or 1
         if effectiveMax ~= prevMax then
           if IsSecret(ch.currentCharges) and effectiveMax < prevMax then
@@ -367,6 +367,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         st.spellChargesUsed[defKey] = newUsed
         if newUsed == 0 then
           st.spellChargeStart[defKey] = 0
+          if st.lastCastAt[defKey] and (now - st.lastCastAt[defKey]) > 1.6 then
+            st.lastCastAt[defKey] = nil
+          end
         elseif not IsSecret(ch.cooldownStartTime) and type(ch.cooldownStartTime) == "number" and ch.cooldownStartTime > 0 then
           st.spellChargeStart[defKey] = ch.cooldownStartTime
         elseif (st.spellChargeStart[defKey] or 0) <= 0 or newUsed > prevUsed or (now - (st.spellChargeStart[defKey] or 0)) >= chCDDur then
@@ -437,6 +440,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     st.knownCDStart[defKey] = nil
     st.knownCDDur[defKey] = nil
     db.runtimeCDs[defKey] = nil
+    if st.lastCastAt[defKey] and (now - st.lastCastAt[defKey]) > 1.6 then
+      st.lastCastAt[defKey] = nil
+    end
   end
 
   if not gotCleanCD and C_Spell and C_Spell.GetSpellCooldown and spellID then
@@ -559,8 +565,11 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
 
       local last = st.lastCastAt[defKey]
-      local effCD = def.baseCD or 0
-      if last and effCD > 1.6 then
+      local effCD = def.liveChargeCD or def.baseCD or 0
+      if not def.liveChargeCD and (defKey == "MIND_BLAST" or defKey == "FLURRY" or defKey == "TENTACLE_SLAM") and effCD > 0 then
+        effCD = effCD / SpArc:GetPlayerSpellHasteMult()
+      end
+      if bestRem <= 0 and last and effCD > 1.6 then
         local elapsed = now - last
         if elapsed >= 0 and elapsed < (effCD - 0.15) then
           local rCast = effCD - elapsed
@@ -600,6 +609,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         chargesRaw = "sim:" .. tostring(charges) .. "/" .. tostring(maxCh)
       else
         charges = 1
+        st.lastCastAt[defKey] = nil
         ClearKnownCD()
       end
       cdRaw = hasSpellOverlayProc and "proc:0s" or "assist:0s"

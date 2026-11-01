@@ -883,13 +883,33 @@ function SpArc:SyncExternalNameplateAddons()
   if enabled and C_CVar and C_CVar.SetCVar and not (InCombatLockdown and InCombatLockdown()) then
     pcall(C_CVar.SetCVar, "nameplateShowEnemies", "1")
     local db = SpArc:EnsureDB()
-    if db and db.visual and db.visual.npShowFriendlyPlayers ~= false then
+    local vis = (db and db.visual) or SpArc.DEFAULT_VISUAL
+    if vis.npShowFriendlyPlayers ~= false then
       pcall(C_CVar.SetCVar, "nameplateShowFriends", "1")
       pcall(C_CVar.SetCVar, "nameplateShowOnlyNameForFriendlyPlayerUnits", "0")
     end
     pcall(C_CVar.SetCVar, "nameplateMinScale", "1")
     pcall(C_CVar.SetCVar, "nameplateMaxScale", "1")
     pcall(C_CVar.SetCVar, "nameplateSelectedScale", "1")
+
+    -- View Distance (20..60 yd) & Smooth Distance Fading (fixes Plater's -158489 nameplateMinAlphaDistance)
+    local maxDist = math.floor(math.max(20, math.min(60, tonumber(vis.npMaxDistance) or 40)) + 0.5)
+    local distFade = (vis.npDistanceFade ~= false)
+    local minAlpha = math.max(0.10, math.min(1.00, tonumber(vis.npMinAlpha) or 0.30))
+    pcall(C_CVar.SetCVar, "nameplateMaxDistance", tostring(maxDist))
+    pcall(C_CVar.SetCVar, "nameplatePlayerMaxDistance", tostring(maxDist))
+    pcall(C_CVar.SetCVar, "nameplateSelectedAlpha", "1.0")
+    pcall(C_CVar.SetCVar, "nameplateMaxAlpha", "1.0")
+    pcall(C_CVar.SetCVar, "nameplateMaxAlphaDistance", "18")
+    if distFade then
+      pcall(C_CVar.SetCVar, "nameplateMinAlpha", string.format("%.2f", minAlpha))
+      pcall(C_CVar.SetCVar, "nameplateMinAlphaDistance", "10")
+      pcall(C_CVar.SetCVar, "nameplateOccludedAlphaMult", string.format("%.2f", math.max(0.15, minAlpha * 0.85)))
+    else
+      pcall(C_CVar.SetCVar, "nameplateMinAlpha", "0.95")
+      pcall(C_CVar.SetCVar, "nameplateMinAlphaDistance", "10")
+      pcall(C_CVar.SetCVar, "nameplateOccludedAlphaMult", "0.60")
+    end
   end
 end
 ---------------------------------------------------------------------------------------
@@ -1397,8 +1417,74 @@ FullUpdateMetroPlate = function(metro)
   local now = GetTime()
   UpdateMetroHealthAndColor(metro, now)
   UpdateMetroCastbar(metro, now)
+  if SpArc.UpdateMetroDistanceFade then
+    SpArc:UpdateMetroDistanceFade(metro, 0.05, true, true)
+  end
   if not metro:IsShown() then
     metro:Show()
+  end
+end
+
+function SpArc:UpdateMetroDistanceFade(metro, dt, recomputeTarget, forceSnap)
+  if not metro or not metro.unit then return end
+  local db = SpArc:EnsureDB()
+  local vis = (db and db.visual) or SpArc.DEFAULT_VISUAL
+  if metro.isTarget or vis.npDistanceFade == false then
+    metro._targetFadeAlpha = 1.0
+    metro._curFadeAlpha = 1.0
+    if metro._appliedFadeAlpha ~= 1.0 then
+      metro._appliedFadeAlpha = 1.0
+      metro:SetAlpha(1.0)
+    end
+    return
+  end
+
+  if recomputeTarget or not metro._targetFadeAlpha then
+    local unit = metro.unit
+    local minA = math.max(0.10, math.min(1.00, tonumber(vis.npMinAlpha) or 0.30))
+    local tierA = minA
+    local close10 = _G.CheckInteractDistance and SafeBool(_G.CheckInteractDistance, unit, 3)
+    if close10 then
+      tierA = 1.0
+    else
+      local mid28 = _G.CheckInteractDistance and (SafeBool(_G.CheckInteractDistance, unit, 4) or SafeBool(_G.CheckInteractDistance, unit, 1))
+      if mid28 then
+        tierA = minA + (1.0 - minA) * 0.72
+      else
+        local inRange40 = false
+        if C_Spell and C_Spell.IsSpellInRange then
+          local okR, r40 = pcall(C_Spell.IsSpellInRange, 589, unit)
+          if okR and not IsSecret(r40) and (r40 == true or r40 == 1) then
+            inRange40 = true
+          end
+        end
+        if not inRange40 and _G.UnitInRange then
+          inRange40 = SafeBool(_G.UnitInRange, unit)
+        end
+        if inRange40 then
+          tierA = minA + (1.0 - minA) * 0.38
+        else
+          tierA = minA
+        end
+      end
+    end
+    if st.currentTargetMetro ~= nil and not SafeBool(UnitAffectingCombat, unit) then
+      tierA = math.max(minA, tierA * 0.82)
+    end
+    metro._targetFadeAlpha = tierA
+  end
+
+  local cur = metro._curFadeAlpha or metro._targetFadeAlpha or 1.0
+  local tgt = metro._targetFadeAlpha or 1.0
+  if forceSnap or math.abs(tgt - cur) < 0.015 then
+    cur = tgt
+  else
+    cur = cur + (tgt - cur) * math.min(1.0, (dt or 0.05) * 8.0)
+  end
+  metro._curFadeAlpha = cur
+  if not metro._appliedFadeAlpha or math.abs(cur - metro._appliedFadeAlpha) >= 0.01 then
+    metro._appliedFadeAlpha = cur
+    metro:SetAlpha(cur)
   end
 end
 function SpArc:RefreshAllNameplates()
@@ -1613,6 +1699,9 @@ npDriver:SetScript("OnUpdate", function(_, elapsed)
       if doAuraRefresh or metro.castBar:IsShown() or (uEv and uEv.active) then
         UpdateMetroCastbar(metro, now)
       end
+      if SpArc.UpdateMetroDistanceFade then
+        SpArc:UpdateMetroDistanceFade(metro, 0.05, doAuraRefresh, false)
+      end
     end
   end
 end)
@@ -1702,21 +1791,29 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
     SpArc:RefreshAllNameplates()
   end)
   cFriendly:SetWidth(255)
-  -- Group 1: Geometry Sliders + Live Metro Preview Tile (Top Box)
-  local geoBox = RegisterGroupBox(page, "M10_GRP_GEO", 0, -52, 640, 154)
-  CreateElvSlider(geoBox, "SL_NP_WIDTH", "npWidth", 90, 240, 2, 16, -12, 195, function()
+  -- Group 1: Geometry Sliders + Distance Fade + Live Metro Preview Tile (Top Box)
+  local geoBox = RegisterGroupBox(page, "M10_GRP_GEO", 0, -52, 640, 200)
+  CreateElvSlider(geoBox, "SL_NP_WIDTH", "npWidth", 90, 240, 2, 16, -8, 195, function()
     SpArc:RefreshAllNameplates()
     if SpArc.RefreshNameplatesPage then SpArc:RefreshNameplatesPage(ui) end
   end)
-  CreateElvSlider(geoBox, "SL_NP_HEIGHT", "npHeight", 18, 46, 1, 224, -12, 195, function()
+  CreateElvSlider(geoBox, "SL_NP_HEIGHT", "npHeight", 18, 46, 1, 224, -8, 195, function()
     SpArc:RefreshAllNameplates()
     if SpArc.RefreshNameplatesPage then SpArc:RefreshNameplatesPage(ui) end
   end)
-  CreateElvSlider(geoBox, "SL_NP_CAST_H", "npCastHeight", 8, 24, 1, 16, -74, 195, function()
+  CreateElvSlider(geoBox, "SL_NP_CAST_H", "npCastHeight", 8, 24, 1, 16, -66, 195, function()
     SpArc:RefreshAllNameplates()
     if SpArc.RefreshNameplatesPage then SpArc:RefreshNameplatesPage(ui) end
   end)
-  CreateElvSlider(geoBox, "SL_NP_FONT", "npFontSize", 8, 16, 1, 224, -74, 195, function()
+  CreateElvSlider(geoBox, "SL_NP_FONT", "npFontSize", 8, 16, 1, 224, -66, 195, function()
+    SpArc:RefreshAllNameplates()
+    if SpArc.RefreshNameplatesPage then SpArc:RefreshNameplatesPage(ui) end
+  end)
+  CreateElvSlider(geoBox, "SL_NP_MAX_DIST", "npMaxDistance", 20, 60, 2, 16, -124, 195, function()
+    SpArc:RefreshAllNameplates()
+    if SpArc.RefreshNameplatesPage then SpArc:RefreshNameplatesPage(ui) end
+  end)
+  CreateElvSlider(geoBox, "SL_NP_MIN_ALPHA", "npMinAlpha", 0.10, 1.00, 0.05, 224, -124, 195, function()
     SpArc:RefreshAllNameplates()
     if SpArc.RefreshNameplatesPage then SpArc:RefreshNameplatesPage(ui) end
   end)
@@ -1759,14 +1856,20 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
   end)
   ui.m10CyclePrevBtn = cycleBtn
   -- Group 2: Dynamic Aura / DoT Color Rules (Auto-synced from .MD + Custom rules)
-  local rulesBox = RegisterGroupBox(page, "M10_GRP_AURAS", 0, -218, 640, 306)
-  CreateElvCheck(rulesBox, "CK_NP_AUTO_MD", "npAutoAurasFromMD", 14, -8, false, false, function(checked)
+  local rulesBox = RegisterGroupBox(page, "M10_GRP_AURAS", 0, -262, 640, 262)
+  local cAutoMD = CreateElvCheck(rulesBox, "CK_NP_AUTO_MD", "npAutoAurasFromMD", 14, -8, false, false, function(checked)
     if checked and SpArc.SyncNameplateAurasFromActiveMD then
       SpArc:SyncNameplateAurasFromActiveMD(nil, false)
     end
     SpArc:RefreshAllNameplates()
     if SpArc.RefreshNameplatesPage then SpArc:RefreshNameplatesPage(ui) end
   end)
+  cAutoMD:SetWidth(330)
+  local cDistFade = CreateElvCheck(rulesBox, "CK_NP_DIST_FADE", "npDistanceFade", 350, -8, false, false, function()
+    SpArc:RefreshAllNameplates()
+    if SpArc.RefreshNameplatesPage then SpArc:RefreshNameplatesPage(ui) end
+  end)
+  cDistFade:SetWidth(275)
   -- Add New Rule Bar
   local newIDBg = CreateFrame("Frame", nil, rulesBox, "BackdropTemplate")
   newIDBg:SetPoint("TOPLEFT", rulesBox, "TOPLEFT", 14, -34)

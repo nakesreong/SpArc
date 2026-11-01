@@ -1972,6 +1972,14 @@ _G.SlashCmdList["SPARC"] = function(msg)
     OpenControlCenter(10)
   elseif cmd == "ct" or cmd == "combattext" or cmd == "sct" or cmd == "fct" or cmd == "numbers" then
     OpenControlCenter(11)
+  elseif cmd == "msbt" then
+    OpenControlCenter(11)
+    if SpArc.SetMSBTZonesUnlocked then
+      SpArc:SetMSBTZonesUnlocked(not SpArc.msbtZonesUnlocked)
+      if controlFrame and controlFrame.RefreshUI then
+        controlFrame:RefreshUI()
+      end
+    end
   elseif cmd == "fixcursor" or cmd == "cursor" then
     if SpArc.FlushHardwareCursor then
       SpArc:FlushHardwareCursor(true)

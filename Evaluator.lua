@@ -892,8 +892,7 @@ function SpArc:BuildRotationQueue(maxSlots)
             simReady["POWER_INFUSION"] = false
           end
         elseif (def.liveMaxCharges or def.maxCharges or 1) > 1 then
-          if pickedKey == "TENTACLE_SLAM" then
-            -- Never queue two Tentacle Slams back-to-back in the same lookahead preview
+          if def.oncePerQueue then
             simCharges[pickedKey] = 0
             simCD[pickedKey] = def.liveChargeCD or def.baseCD or 15
             simReady[pickedKey] = false

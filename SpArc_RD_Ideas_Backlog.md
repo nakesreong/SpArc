@@ -20,6 +20,20 @@
 
 Никакого раздувания фич — чистим архитектуру, убираем малейшие пики времени кадра в `StutterAlert` и доводим потребление памяти/CPU в бою до эталона.
 
+### 0. Полное вычищение хардкода спеллов из Lua-ядра в `.MD` (`State.lua`, `Evaluator.lua`, `HUD.lua`)
+* **Проблема (справедливо пойманная Аней!):** По задумке **SpArc** — это 100% data-driven движок, где вся логика, ресурсы и свойства спеллов описываются в `.md`, а Lua-ядро вообще не должно знать названия конкретных абилок. Но за время отладки 6 спеков (ШП, Фрост Маг, Рога, Вар, Ферал, Сова) в `State.lua`, `Evaluator.lua` и `HUD.lua` просочилось около 25 точечных проверок по именам спеллов (`DEVOURING_PLAGUE`, `STARSURGE`, `FEROCIOUS_BITE`, `TIGERS_FURY`, `POWER_INFUSION`, `VOID_ERUPTION`, `SHADOW_WORD_DEATH`) и хардкодные таблицы (`DEFAULT_ENERGY_COST`, `SELF_OR_AURA_SPELLS`, `SPELL_AOE_THRESHOLD`).
+* **Что уже переведено в `.MD` прямо сейчас (`v2.9.6`):**
+  - Теги `HASTED_CD:true` (кулдаун/заряды делятся на множитель Скорости персонажа) и `ONCE_PER_QUEUE:true` (не ставить 2 заряда одного спелла подряд в превью очереди) перенесены в `Parser.lua` и `Presets.lua`.
+* **Что вычистим из Lua-ядра на 90 лвл:**
+  1. Убрать все проверки `if defKey == "DEVOURING_PLAGUE"`, `"STARSURGE"`, `"FEROCIOUS_BITE"`, `"TIGERS_FURY"` из `State.lua` и `Evaluator.lua`, заменив их декларативными тегами в `SPELL_BOOK` `.md`:
+     - `RESOURCE:INSANITY` / `ASTRAL_POWER` / `COMBO_POINTS` / `ENERGY` / `RAGE`
+     - `ENERGY_COST:25`, `ENERGY_GAIN:50` (вместо таблицы `DEFAULT_ENERGY_COST` в `State.lua`)
+     - `FREE_ON_PROC:true` (вместо хардкода `FEROCIOUS_BITE` / `STARSURGE` при проке)
+     - `SELF_CAST:true` (вместо хардкодной таблицы `SELF_OR_AURA_SPELLS` на 40 спеллов в `State.lua`)
+     - `AOE_TARGETS:2` (вместо таблицы `SPELL_AOE_THRESHOLD` в `State.lua`)
+     - `ALWAYS_CASTABLE_EXECUTE:true` (вместо проверки `SHADOW_WORD_DEATH` в `State.lua`)
+  2. В `HUD.lua:550` заменить хардкодные пары `MIND_FLAY <-> MIND_FLAY_INSANITY` и `VOID_ERUPTION <-> VOID_BOLT` на универсальную проверку `def.overrideOf` из `.md`!
+
 ### 1. Ленивый кэш спеллбука и экшен-баров с дебаунсом (`Scanner.lua` & `MacroGen.lua`)
 * **Проблема (откуда в `StutterAlert` взялись старые пики до `790 ms`):** При смене локации (`PLAYER_ENTERING_WORLD`), спека, талантов или закрытии окна макросов WoW выстреливает пачкой событий (`SPELLS_CHANGED`, `ACTIONBAR_SLOT_CHANGED`, `UPDATE_MACROS` — иногда по 6–10 раз за один кадр). Полный проход по 180 слотам экшен-баров и книге заклинаний синхронно в каждом событии даёт ощутимую микро-ступеньку.
 * **Решение:**

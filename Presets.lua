@@ -796,7 +796,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 35
+SpArc.PROFILE_SCHEMA_VERSION = 36
 
 ---------------------------------------------------------------------------------------
 --         6 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID)           --
@@ -828,7 +828,7 @@ RegisterPreset("PRIEST_01_SHADOW_PVE", "PRIEST", "1. Жрец: Тьма (ШП �
 SPELL SHADOWFORM = ID:232698 | AURA_ID:232698 | AURA_UNIT:player | AURA_DUR:3600 | NAME:"Облик Тьмы","Shadowform" | CD:0 | ICON:136200
 SPELL SILENCE = ID:15487 | NAME:"Безмолвие","Silence" | CD:45 | INTERRUPT:true | ICON:458230
 SPELL PSYCHIC_HORROR = ID:64044,8122 | NAME:"Глубинный ужас","Ментальный крик","Psychic Horror","Psychic Scream" | CD:45 | PVP:true | ICON:237568
-SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | GAIN:15 | ICON:136201
+SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | HASTED_CD:true | ONCE_PER_QUEUE:true | GAIN:15 | ICON:136201
 SPELL VAMPIRIC_TOUCH = ID:34914 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Прикосновение вампира","Vampiric Touch" | CD:0 | CHARGES:1 | GAIN:6 | ICON:135978
 AURA SHADOW_WORD_PAIN = ID:589 | AURA_UNIT:target | AURA_DUR:16 | NAME:"Слово Тьмы: Боль","Shadow Word: Pain" | ICON:136207
 SPELL VOID_ERUPTION = ID:228260,391109,194249 | AURA_ID:194249,391109 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | BOSS:true | NAME:"Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | ICON:537079
@@ -836,7 +836,7 @@ SPELL POWER_INFUSION = ID:10060 | AURA_ID:10060 | AURA_UNIT:player | AURA_DUR:15
 SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела Бездны","Void Volley","Void Bolt" | CD:6 | GAIN:10 | OVERRIDE_OF:VOID_ERUPTION | PROC_ONLY:true | ICON:1386548
 SPELL DEVOURING_PLAGUE = ID:335467 | AURA_ID:335467 | AURA_DUR:6 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума","Shadow Word: Madness","Devouring Plague" | CD:0 | COST:50 | SPENDER:true | ICON:252997
 SPELL SHADOW_WORD_DEATH = ID:32379 | NAME:"Слово Тьмы: Смерть","Shadow Word: Death" | CD:10 | GAIN:10 | EXECUTE:true | ICON:136149
-SPELL MIND_BLAST = ID:450983,8092 | NAME:"Выброс Бездны","Взрыв разума","Void Blast","Mind Blast" | CD:7.5 | CHARGES:1 | GAIN:15 | ICON:136224
+SPELL MIND_BLAST = ID:450983,8092 | NAME:"Выброс Бездны","Взрыв разума","Void Blast","Mind Blast" | CD:7.5 | CHARGES:1 | HASTED_CD:true | GAIN:15 | ICON:136224
 SPELL VOID_TORRENT = ID:263165 | NAME:"Поток бездны","Поток Бездны","Void Torrent" | CD:45 | CHARGES:1 | GAIN:35 | LOCK_CHANNEL:true | ICON:1386551
 SPELL MIND_FLAY_INSANITY = ID:391403 | NAME:"Пытка разума: безумие","Mind Flay: Insanity" | CD:0 | GAIN:16 | OVERRIDE_OF:MIND_FLAY | PROC_ONLY:true | ICON:136208
 SPELL MIND_FLAY = ID:15407 | NAME:"Пытка разума","Mind Flay" | CD:0 | GAIN:12 | FILLER_INTERRUPTIBLE:true | ICON:136208
@@ -924,7 +924,7 @@ SPELL ICY_VEINS = ID:12472 | AURA_ID:12472 | AURA_UNIT:player | AURA_DUR:20 | BU
 SPELL RAY_OF_FROST = ID:205021 | BOSS:true | NAME:"Морозный луч","Луч холода","Ray of Frost" | CD:60 | CHARGES:1 | STACKS:+3 | LOCK_CHANNEL:true | ICON:1698700
 SPELL COMET_STORM = ID:153595,455396 | NAME:"Кометная буря","Comet Storm" | CD:30 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:RAY_OF_FROST | ICON:1033912
 SPELL GLACIAL_SPIKE = ID:199786,257537 | NAME:"Ледниковый шип","Черная стрела","Glacial Spike","Ebonbolt" | CD:0 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:FROSTBOLT | ICON:1394891
-SPELL FLURRY = ID:44614 | NAME:"Шквал","Flurry" | CD:30 | CHARGES:2 | STACKS:+2 | ICON:135859
+SPELL FLURRY = ID:44614 | NAME:"Шквал","Flurry" | CD:30 | CHARGES:2 | HASTED_CD:true | STACKS:+2 | ICON:135859
 SPELL FROZEN_ORB = ID:84714 | NAME:"Ледяной шар","Мерзлая сфера","Frozen Orb" | CD:60 | STACKS:+2 | ICON:629077
 SPELL ICE_LANCE = ID:30455 | NAME:"Ледяное копье","Ice Lance" | CD:0 | CONSUMES_STACKS:true | STACKS:-4 | ICON:135844
 SPELL BLIZZARD = ID:190356,1248829 | NAME:"Снежная буря","Blizzard" | CD:12 | ICON:135858

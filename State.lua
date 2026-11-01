@@ -89,7 +89,7 @@ function SpArc:GetTrackedSpellCharges(defKey, now)
   local maxCh = (def and (def.liveMaxCharges or def.maxCharges)) or 1
   local rawCD = (def and def.liveChargeCD) or nil
   if not rawCD and def and def.baseCD and def.baseCD > 0 then
-    if defKey == "FLURRY" or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" then
+    if def.hastedCD then
       rawCD = def.baseCD / SpArc:GetPlayerSpellHasteMult()
     else
       rawCD = def.baseCD
@@ -566,7 +566,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
 
       local last = st.lastCastAt[defKey]
       local effCD = def.liveChargeCD or def.baseCD or 0
-      if not def.liveChargeCD and (defKey == "MIND_BLAST" or defKey == "FLURRY" or defKey == "TENTACLE_SLAM") and effCD > 0 then
+      if not def.liveChargeCD and def.hastedCD and effCD > 0 then
         effCD = effCD / SpArc:GetPlayerSpellHasteMult()
       end
       if bestRem <= 0 and last and effCD > 1.6 then

@@ -24,4 +24,5 @@ Camera.lua
 Telemetry.lua
 MacroGen.lua
 Nameplates.lua
+CombatText.lua
 SpArc.lua

@@ -237,7 +237,7 @@ local function OpenControlCenter(initialTab)
     sidebar:SetWidth(204)
     SetBackdropFlat(sidebar, 0.04, 0.04, 0.06, 0.98, 0.18, 0.18, 0.24, 1.0)
 
-    local navKeys = { "NAV_1", "NAV_2", "NAV_3", "NAV_4", "NAV_5", "NAV_6", "NAV_7", "NAV_8", "NAV_9", "NAV_10" }
+    local navKeys = { "NAV_1", "NAV_2", "NAV_3", "NAV_4", "NAV_5", "NAV_6", "NAV_7", "NAV_8", "NAV_9", "NAV_10", "NAV_11" }
     local navButtons = {}
     local pages = {}
     local groupBoxes = {}
@@ -296,6 +296,7 @@ local function OpenControlCenter(initialTab)
     -- 3. Standalone Modules — each separated by a divider:
     --    • Combat Camera (6)
     --    • Metro Nameplates (10)
+    --    • Combat Text (11)
     --    • Macro Generator (9)
     -- 4. System & Profiles anchored at the very bottom (7, 8)
     local sidebarLayout = {
@@ -306,7 +307,8 @@ local function OpenControlCenter(initialTab)
       { idx = 5,  nKey = "NAV_5",  y = -147, divAfter = -181 },
       { idx = 6,  nKey = "NAV_6",  y = -188, divAfter = -222 },
       { idx = 10, nKey = "NAV_10", y = -229, divAfter = -263 },
-      { idx = 9,  nKey = "NAV_9",  y = -270, divAfter = -304 },
+      { idx = 11, nKey = "NAV_11", y = -270, divAfter = -304 },
+      { idx = 9,  nKey = "NAV_9",  y = -311, divAfter = -345 },
       { idx = 7,  nKey = "NAV_7",  y = -443, divBefore = -436, divAfter = -477 },
       { idx = 8,  nKey = "NAV_8",  y = -484 },
     }
@@ -1390,6 +1392,25 @@ local function OpenControlCenter(initialTab)
     end
 
     -----------------------------------------------------------------------------------
+    -- MODULE 11: TACTILE HAPTIC COMBAT TEXT & ANTI-CLUTTER FILTERS
+    -----------------------------------------------------------------------------------
+    SpArc.controlFrame = controlFrame
+    if SpArc.BuildCombatTextPage and pages[11] then
+      SpArc:BuildCombatTextPage(pages[11], ui, {
+        ApplyCyrFont = ApplyCyrFont,
+        CreateElvButton = CreateElvButton,
+        RegisterGroupBox = RegisterGroupBox,
+        SetBackdropFlat = SetBackdropFlat,
+        CreateElvCheck = CreateElvCheck,
+        CreateElvSlider = CreateElvSlider,
+        StyleToggleButton = function(btn, isSel)
+          if btn and btn.SetSelected then btn:SetSelected(isSel) end
+        end,
+        controlFrame = controlFrame,
+      })
+    end
+
+    -----------------------------------------------------------------------------------
     -- MASTER REFRESH UI
     -----------------------------------------------------------------------------------
     function controlFrame:RefreshUI()
@@ -1673,6 +1694,11 @@ local function OpenControlCenter(initialTab)
         SpArc:RefreshNameplatesPage(ui)
       end
 
+      -- Module 11 (Combat Text) refresh
+      if SpArc.RefreshCombatTextPage then
+        SpArc:RefreshCombatTextPage(ui)
+      end
+
       isRefreshingUI = false
     end
 
@@ -1942,6 +1968,8 @@ _G.SlashCmdList["SPARC"] = function(msg)
     OpenControlCenter(9)
   elseif cmd == "np" or cmd == "nameplate" or cmd == "nameplates" or cmd == "plates" or cmd == "metro" then
     OpenControlCenter(10)
+  elseif cmd == "ct" or cmd == "combattext" or cmd == "sct" or cmd == "fct" or cmd == "numbers" then
+    OpenControlCenter(11)
   elseif cmd == "fixcursor" or cmd == "cursor" then
     if SpArc.FlushHardwareCursor then
       SpArc:FlushHardwareCursor(true)

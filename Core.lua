@@ -197,6 +197,19 @@ SpArc.DEFAULT_VISUAL = {
   npShowFriendlyPlayers = true,
   npShowHostileClassIcon = true,
   npAutoAurasFromMD = true,
+  enableCombatText = true,
+  ctHidePlayerScrolling = true,
+  ctSuppressAlerts = true,
+  ctShowDirectDamage = true,
+  ctDotTickMode = "AUTO_AOE",
+  ctHidePetDamage = true,
+  ctHideWorldHealing = true,
+  ctHideDodgeParryMiss = true,
+  ctWorldTextScale = 0.65,
+  ctDirectionalScale = 0,
+  ctSpreadNameplates = true,
+  ctNameplateOverlapV = 1.35,
+  ctNameplateOverlapH = 0.90,
   lang = "AUTO",
 }
 
@@ -678,6 +691,7 @@ local function ApplyAllActiveProfileSubsystems()
   if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
   if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
   if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
+  if SpArc.ApplyCombatTextSettings then SpArc:ApplyCombatTextSettings() end
 end
 
 function SpArc:SetProfile(profileName)

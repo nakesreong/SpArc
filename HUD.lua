@@ -95,6 +95,38 @@ local function CreateStyledIconBox(parent, size, isPrimary)
     banner:SetTextColor(1, 0.25, 0.65, 1)
     banner:SetText("")
     f.banner = banner
+
+    -- Secret-Safe Interrupt Overlay for Slot #1 (evaluates secret notInterruptible via C++ SetAlphaFromBoolean)
+    local intOv = CreateFrame("Frame", nil, f)
+    intOv:SetAllPoints(f)
+    local ovGlow = intOv:CreateTexture(nil, "BACKGROUND", nil, -2)
+    ovGlow:SetPoint("TOPLEFT", intOv, "TOPLEFT", -2, 2)
+    ovGlow:SetPoint("BOTTOMRIGHT", intOv, "BOTTOMRIGHT", 2, -2)
+    ovGlow:SetColorTexture(1.0, 0.80, 0.15, 0.28)
+    intOv.glow = ovGlow
+    local ovBorder = intOv:CreateTexture(nil, "BACKGROUND", nil, -1)
+    ovBorder:SetPoint("TOPLEFT", intOv, "TOPLEFT", -1, 1)
+    ovBorder:SetPoint("BOTTOMRIGHT", intOv, "BOTTOMRIGHT", 1, -1)
+    ovBorder:SetColorTexture(1.0, 0.82, 0.15, 1.0)
+    intOv.border = ovBorder
+    local ovBg = intOv:CreateTexture(nil, "BACKGROUND", nil, 0)
+    ovBg:SetAllPoints(intOv)
+    ovBg:SetColorTexture(0.05, 0.05, 0.08, 1.0)
+    intOv.bg = ovBg
+    local ovIcon = intOv:CreateTexture(nil, "ARTWORK")
+    ovIcon:SetAllPoints(intOv)
+    ovIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    intOv.icon = ovIcon
+    local ovKb = intOv:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(ovKb, 16)
+    ovKb:SetPoint("BOTTOMRIGHT", intOv, "BOTTOMRIGHT", -2, 2)
+    ovKb:SetJustifyH("RIGHT")
+    ovKb:SetTextColor(1.0, 0.94, 0.35, 1)
+    ovKb:SetShadowColor(0, 0, 0, 1)
+    ovKb:SetShadowOffset(1, -1)
+    intOv.keybind = ovKb
+    intOv:Hide()
+    f.intOverlay = intOv
   end
 
   f:Hide()
@@ -255,6 +287,9 @@ function SpArc:ApplyVisualLayout()
     if arcSlots[i].cd then
       arcSlots[i].cd:SetFrameLevel(slotLevel + 2)
     end
+    if arcSlots[i].intOverlay then
+      arcSlots[i].intOverlay:SetFrameLevel(slotLevel + 4)
+    end
     arcAnchors[i]:ClearAllPoints()
     arcAnchors[i]:SetPoint("CENTER", UIParent, "CENTER", x, y)
     arcSlots[i]:SetScale(i == 1 and pScale or qScale)
@@ -268,6 +303,14 @@ function SpArc:ApplyVisualLayout()
       arcSlots[1].glow:ClearAllPoints()
       arcSlots[1].glow:SetPoint("TOPLEFT", arcSlots[1], "TOPLEFT", -gSize, gSize)
       arcSlots[1].glow:SetPoint("BOTTOMRIGHT", arcSlots[1], "BOTTOMRIGHT", gSize, -gSize)
+      if arcSlots[1].intOverlay then
+        arcSlots[1].intOverlay.border:ClearAllPoints()
+        arcSlots[1].intOverlay.border:SetPoint("TOPLEFT", arcSlots[1].intOverlay, "TOPLEFT", -bSize, bSize)
+        arcSlots[1].intOverlay.border:SetPoint("BOTTOMRIGHT", arcSlots[1].intOverlay, "BOTTOMRIGHT", bSize, -bSize)
+        arcSlots[1].intOverlay.glow:ClearAllPoints()
+        arcSlots[1].intOverlay.glow:SetPoint("TOPLEFT", arcSlots[1].intOverlay, "TOPLEFT", -gSize, gSize)
+        arcSlots[1].intOverlay.glow:SetPoint("BOTTOMRIGHT", arcSlots[1].intOverlay, "BOTTOMRIGHT", gSize, -gSize)
+      end
     end
   end
 
@@ -926,8 +969,20 @@ rootFrame:SetScript("OnUpdate", function()
             box.glow:SetColorTexture(0, 0, 0, 0)
           end
         end
+        if i == 1 and box.intOverlay then
+          local ov = st.secretInterruptOverlay
+          if ov and ov.rawNotInterruptible ~= nil and box.intOverlay.SetAlphaFromBoolean then
+            box.intOverlay.icon:SetTexture(ov.icon)
+            box.intOverlay.keybind:SetText(ov.keybind or "")
+            box.intOverlay:Show()
+            pcall(box.intOverlay.SetAlphaFromBoolean, box.intOverlay, ov.rawNotInterruptible, 0, 1)
+          else
+            box.intOverlay:Hide()
+          end
+        end
         box:Show()
       else
+        if box.intOverlay then box.intOverlay:Hide() end
         box.currentDefKey = nil
         box.currentSlot = nil
         box.currentKeybind = nil
@@ -938,6 +993,7 @@ rootFrame:SetScript("OnUpdate", function()
     end
   else
     for i = 1, MAX_ARC_SLOTS do
+      if arcSlots[i].intOverlay then arcSlots[i].intOverlay:Hide() end
       arcSlots[i].currentDefKey = nil
       arcSlots[i].currentSlot = nil
       arcSlots[i].currentKeybind = nil

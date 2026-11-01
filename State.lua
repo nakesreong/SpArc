@@ -89,7 +89,7 @@ function SpArc:GetTrackedSpellCharges(defKey, now)
   local maxCh = (def and (def.liveMaxCharges or def.maxCharges)) or 1
   local rawCD = (def and def.liveChargeCD) or nil
   if not rawCD and def and def.baseCD and def.baseCD > 0 then
-    if defKey == "FLURRY" or defKey == "MIND_BLAST" or defKey == "TENTACLE_SLAM" then
+    if def.hastedCD then
       rawCD = def.baseCD / SpArc:GetPlayerSpellHasteMult()
     else
       rawCD = def.baseCD
@@ -99,9 +99,13 @@ function SpArc:GetTrackedSpellCharges(defKey, now)
   if cdDur <= 0 then cdDur = 7.5 end
   local used = st.spellChargesUsed[defKey] or 0
   local chStart = st.spellChargeStart[defKey] or 0
+  if used > 0 and (not chStart or chStart <= 0) then
+    chStart = now
+    st.spellChargeStart[defKey] = now
+  end
   if used > 0 and chStart > 0 then
     local elapsed = now - chStart
-    local recovered = math.floor(elapsed / cdDur)
+    local recovered = math.floor((elapsed + 0.05) / cdDur)
     if recovered > 0 then
       used = math.max(0, used - recovered)
       st.spellChargesUsed[defKey] = used
@@ -122,7 +126,7 @@ function SpArc:GetTargetHPPercent()
   return nil
 end
 
--- Returns: isCasting, isInterruptible, isChannel, spellName, spellIcon, remSec, durSec, spellID
+-- Returns: isCasting, isInterruptible, isChannel, spellName, spellIcon, remSec, durSec, spellID, rawNotInterruptible
 function SpArc:GetUnitCastInterruptState(unit, now)
   unit = unit or "target"
   now = now or GetTime()
@@ -131,22 +135,31 @@ function SpArc:GetUnitCastInterruptState(unit, now)
 
   if _G.UnitExists and not SafeBool(_G.UnitExists, unit) then
     if uEv then uEv.active = false end
-    return false, false, false, nil, nil, 0, 0, nil
+    return false, false, false, nil, nil, 0, 0, nil, nil
   end
   if _G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, unit) then
     if uEv then uEv.active = false end
-    return false, false, false, nil, nil, 0, 0, nil
+    return false, false, false, nil, nil, 0, 0, nil, nil
   end
 
   -- 1. Check regular cast via UnitCastingInfo (8th return = notInterruptible)
   if _G.UnitCastingInfo then
     local ok, name, _, texture, startTimeMS, endTimeMS, _, _, notInterruptible, spellID = pcall(_G.UnitCastingInfo, unit)
     if ok and name ~= nil then
-      local isInt = true
+      local isInt = false
+      local rawNotInt = notInterruptible
       if not IsSecret(notInterruptible) and type(notInterruptible) == "boolean" then
         isInt = not notInterruptible
+        rawNotInt = notInterruptible
       elseif uEv and uEv.active and uEv.interruptible ~= nil then
         isInt = uEv.interruptible
+        rawNotInt = not isInt
+      elseif _G.C_CurveUtil and _G.C_CurveUtil.EvaluateColorValueFromBoolean and notInterruptible ~= nil then
+        local okEv, evVal = pcall(_G.C_CurveUtil.EvaluateColorValueFromBoolean, notInterruptible, 1, 0)
+        if okEv and not IsSecret(evVal) and type(evVal) == "number" then
+          isInt = (evVal < 0.5)
+          rawNotInt = not isInt
+        end
       end
       local sSec = (not IsSecret(startTimeMS) and type(startTimeMS) == "number" and (startTimeMS / 1000.0)) or (uEv and uEv.startTime) or now
       local eSec = (not IsSecret(endTimeMS) and type(endTimeMS) == "number" and (endTimeMS / 1000.0)) or (uEv and uEv.endTime) or (sSec + 2.0)
@@ -155,7 +168,7 @@ function SpArc:GetUnitCastInterruptState(unit, now)
       local cleanName = (not IsSecret(name) and type(name) == "string" and name) or (uEv and uEv.name) or "Cast"
       local cleanIcon = (not IsSecret(texture) and texture) or (uEv and uEv.icon) or 136243
       local cleanID = (not IsSecret(spellID) and type(spellID) == "number" and spellID) or (uEv and uEv.spellID) or nil
-      return true, isInt, false, cleanName, cleanIcon, remSec, durSec, cleanID
+      return true, isInt, false, cleanName, cleanIcon, remSec, durSec, cleanID, rawNotInt
     end
   end
 
@@ -163,11 +176,20 @@ function SpArc:GetUnitCastInterruptState(unit, now)
   if _G.UnitChannelInfo then
     local ok, name, _, texture, startTimeMS, endTimeMS, _, notInterruptible, spellID = pcall(_G.UnitChannelInfo, unit)
     if ok and name ~= nil then
-      local isInt = true
+      local isInt = false
+      local rawNotInt = notInterruptible
       if not IsSecret(notInterruptible) and type(notInterruptible) == "boolean" then
         isInt = not notInterruptible
+        rawNotInt = notInterruptible
       elseif uEv and uEv.active and uEv.interruptible ~= nil then
         isInt = uEv.interruptible
+        rawNotInt = not isInt
+      elseif _G.C_CurveUtil and _G.C_CurveUtil.EvaluateColorValueFromBoolean and notInterruptible ~= nil then
+        local okEv, evVal = pcall(_G.C_CurveUtil.EvaluateColorValueFromBoolean, notInterruptible, 1, 0)
+        if okEv and not IsSecret(evVal) and type(evVal) == "number" then
+          isInt = (evVal < 0.5)
+          rawNotInt = not isInt
+        end
       end
       local sSec = (not IsSecret(startTimeMS) and type(startTimeMS) == "number" and (startTimeMS / 1000.0)) or (uEv and uEv.startTime) or now
       local eSec = (not IsSecret(endTimeMS) and type(endTimeMS) == "number" and (endTimeMS / 1000.0)) or (uEv and uEv.endTime) or (sSec + 3.0)
@@ -176,7 +198,7 @@ function SpArc:GetUnitCastInterruptState(unit, now)
       local cleanName = (not IsSecret(name) and type(name) == "string" and name) or (uEv and uEv.name) or "Channel"
       local cleanIcon = (not IsSecret(texture) and texture) or (uEv and uEv.icon) or 136243
       local cleanID = (not IsSecret(spellID) and type(spellID) == "number" and spellID) or (uEv and uEv.spellID) or nil
-      return true, isInt, true, cleanName, cleanIcon, remSec, durSec, cleanID
+      return true, isInt, true, cleanName, cleanIcon, remSec, durSec, cleanID, rawNotInt
     end
   end
 
@@ -184,10 +206,11 @@ function SpArc:GetUnitCastInterruptState(unit, now)
   if uEv and uEv.active and uEv.endTime and now < uEv.endTime then
     local durSec = math.max(0.1, uEv.endTime - (uEv.startTime or now))
     local remSec = math.max(0, uEv.endTime - now)
-    return true, (uEv.interruptible ~= false), (uEv.isChannel or false), (uEv.name or "Cast"), (uEv.icon or 136243), remSec, durSec, uEv.spellID
+    local evInt = (uEv.interruptible == true)
+    return true, evInt, (uEv.isChannel or false), (uEv.name or "Cast"), (uEv.icon or 136243), remSec, durSec, uEv.spellID, (uEv.interruptible ~= nil and not uEv.interruptible or nil)
   end
 
-  return false, false, false, nil, nil, 0, 0, nil
+  return false, false, false, nil, nil, 0, 0, nil, nil
 end
 
 local function FormatSecretOrVal(v)
@@ -258,11 +281,23 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
             isVoidBlastOverride = true
             spellID = over
             overlayRaw = "override(" .. tostring(over) .. ")"
+            if not hasSpellOverlayProc and _G.C_SpellActivationOverlay and _G.C_SpellActivationOverlay.IsSpellOverlayed then
+              local okS2, overS2 = pcall(_G.C_SpellActivationOverlay.IsSpellOverlayed, over)
+              if okS2 and not IsSecret(overS2) and overS2 then
+                hasSpellOverlayProc = true
+                isProc = true
+                overlayRaw = "sao(" .. tostring(over) .. ")"
+              end
+            end
             break
           end
         end
       end
     end
+  end
+  st.lastOverlayProcAt = st.lastOverlayProcAt or {}
+  if hasSpellOverlayProc then
+    st.lastOverlayProcAt[defKey] = now
   end
   if def.overrideOf and SPELL_DEFS[def.overrideOf] then
     local baseDef = SPELL_DEFS[def.overrideOf]
@@ -316,19 +351,23 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
 
   if C_Spell and C_Spell.GetSpellCharges and spellID then
     local okC, ch = pcall(C_Spell.GetSpellCharges, spellID)
+    if (not okC or type(ch) ~= "table" or (not IsSecret(ch.maxCharges) and (tonumber(ch.maxCharges) or 0) < 2)) and isVoidBlastOverride and def.liveSpellID and def.liveSpellID ~= spellID then
+      local okBaseC, baseCh = pcall(C_Spell.GetSpellCharges, def.liveSpellID)
+      if okBaseC and type(baseCh) == "table" then
+        ch = baseCh
+        okC = true
+      end
+    end
     if okC and type(ch) == "table" then
       if not IsSecret(ch.maxCharges) and type(ch.maxCharges) == "number" and ch.maxCharges >= 1 then
+        local effectiveMax = ch.maxCharges
         local prevMax = def.liveMaxCharges or def.maxCharges or 1
-        if ch.maxCharges ~= prevMax then
-          if IsSecret(ch.currentCharges) then
+        if effectiveMax ~= prevMax then
+          if IsSecret(ch.currentCharges) and effectiveMax < prevMax then
             local used = st.spellChargesUsed[defKey] or 0
-            if ch.maxCharges > prevMax then
-              st.spellChargesUsed[defKey] = used + (ch.maxCharges - prevMax)
-            else
-              st.spellChargesUsed[defKey] = math.min(ch.maxCharges, used)
-            end
+            st.spellChargesUsed[defKey] = math.min(effectiveMax, used)
           end
-          def.liveMaxCharges = ch.maxCharges
+          def.liveMaxCharges = effectiveMax
         end
       end
       if not IsSecret(ch.cooldownDuration) and type(ch.cooldownDuration) == "number" and ch.cooldownDuration > 1.5 then
@@ -347,6 +386,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         st.spellChargesUsed[defKey] = newUsed
         if newUsed == 0 then
           st.spellChargeStart[defKey] = 0
+          if st.lastCastAt[defKey] and (now - st.lastCastAt[defKey]) > 1.6 then
+            st.lastCastAt[defKey] = nil
+          end
         elseif not IsSecret(ch.cooldownStartTime) and type(ch.cooldownStartTime) == "number" and ch.cooldownStartTime > 0 then
           st.spellChargeStart[defKey] = ch.cooldownStartTime
         elseif (st.spellChargeStart[defKey] or 0) <= 0 or newUsed > prevUsed or (now - (st.spellChargeStart[defKey] or 0)) >= chCDDur then
@@ -417,6 +459,9 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     st.knownCDStart[defKey] = nil
     st.knownCDDur[defKey] = nil
     db.runtimeCDs[defKey] = nil
+    if st.lastCastAt[defKey] and (now - st.lastCastAt[defKey]) > 1.6 then
+      st.lastCastAt[defKey] = nil
+    end
   end
 
   if not gotCleanCD and C_Spell and C_Spell.GetSpellCooldown and spellID then
@@ -460,29 +505,32 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       if IsSecret(s) or IsSecret(d) then
         if cdRaw == "0s" then cdRaw = "ACT_SECRET" end
       elseif type(d) == "number" then
-        gotCleanCD = true
-        if s and s > 0 then
-          if d >= 0.25 and d <= 1.6 and (s + d) > now then
-            st.gcdStartTime = s
-            st.gcdDuration = d
-            ClearKnownCD()
-          elseif d > 1.6 then
-            local r = s + d - now
-            if r > 0.15 then
-              isOnCD = true
-              remSec = r
-              durSec = d
-              startTime = s
-              charges = 0
-              cdRaw = string.format("act:%.1fs/%.1fs", remSec, durSec)
-              SaveKnownCD(s, d)
-            else
-              ClearKnownCD()
-            end
-          else
+        if s and s > 0 and d > 1.6 then
+          local r = s + d - now
+          if r > 0.15 then
+            gotCleanCD = true
+            isOnCD = true
+            remSec = r
+            durSec = d
+            startTime = s
+            charges = 0
+            cdRaw = string.format("act:%.1fs/%.1fs", remSec, durSec)
+            SaveKnownCD(s, d)
+          elseif cdRaw ~= "SECRET" then
+            gotCleanCD = true
             ClearKnownCD()
           end
-        else
+        elseif s and s > 0 and d >= 0.25 and d <= 1.6 and (s + d) > now then
+          st.gcdStartTime = s
+          st.gcdDuration = d
+          if cdRaw ~= "SECRET" then
+            gotCleanCD = true
+            ClearKnownCD()
+          end
+        elseif cdRaw ~= "SECRET" then
+          -- Never trust a 0s macro cooldown when C_Spell.GetSpellCooldown returned SECRET in combat
+          -- (e.g., [@target] macros return 0,0 when the target dies, which would wipe active CDs)
+          gotCleanCD = true
           ClearKnownCD()
         end
       end
@@ -539,8 +587,11 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
 
       local last = st.lastCastAt[defKey]
-      local effCD = def.baseCD or 0
-      if last and effCD > 1.6 then
+      local effCD = def.liveChargeCD or def.baseCD or 0
+      if not def.liveChargeCD and def.hastedCD and effCD > 0 then
+        effCD = effCD / SpArc:GetPlayerSpellHasteMult()
+      end
+      if bestRem <= 0 and last and effCD > 1.6 then
         local elapsed = now - last
         if elapsed >= 0 and elapsed < (effCD - 0.15) then
           local rCast = effCD - elapsed
@@ -562,17 +613,31 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         cdRaw = string.format("%s:%.1fs", bestTag, remSec)
       end
     end
+
+    -- Non-destructive readiness override when C++ AssistedCombat or a non-execute proc overlay
+    -- proves a spell is castable right now (never wipe underlying timers, and never let execute
+    -- <20% HP overlays bypass an active execute cooldown like Shadow Word: Death)
+    local sinceLastCast = now - (st.lastCastAt[defKey] or 0)
+    local allowProcCDReset = (not def.isExecute) and hasSpellOverlayProc and (sinceLastCast > 1.2)
+    local allowAssistCDReset = (assistedKey == defKey) and (sinceLastCast > 1.5)
+    if isOnCD and (allowProcCDReset or allowAssistCDReset) then
+      isOnCD = false
+      remSec = 0
+      charges = math.max(1, charges)
+      if maxCh > 1 then
+        chargesRaw = "sim:" .. tostring(charges) .. "/" .. tostring(maxCh)
+      end
+      cdRaw = allowProcCDReset and "proc:0s" or "assist:0s"
+    end
   end
 
   if isOnCD and remSec > 0 and durSec > 0 and (not startTime or startTime <= 0) then
     startTime = now - math.max(0, durSec - remSec)
   end
 
-  if def.procOnly and isOnCD then
+  if isOnCD then
     isProc = false
-  end
-
-  if isVoidBlastOverride and not isOnCD then
+  elseif isVoidBlastOverride then
     isProc = true
   end
 
@@ -615,11 +680,19 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   end
 
   local isUsable = true
+  local blockedBySpellBookState = (bookUsableVal == false and not bookNoPowerVal)
   if def.isExecute then
     local tgtHP = SpArc:GetTargetHPPercent()
     local hasCD = (def.baseCD and def.baseCD >= 3.0) and true or false
     local alwaysCastableExecute = (defKey == "SHADOW_WORD_DEATH" or spellID == 32379)
-    if isProc then
+    if blockedBySpellBookState then
+      isUsable = false
+      isProc = false
+      usableSource = "ExecuteSpellBook(false)"
+    elseif bookUsableVal == true and not bookNoPowerVal then
+      isUsable = true
+      usableSource = isProc and "ExecuteProcOverlay" or "ExecuteSpellBook(true)"
+    elseif isProc then
       isUsable = true
       usableSource = "ExecuteProcOverlay"
     elseif assistedKey == defKey then
@@ -666,7 +739,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
 
-    if def.isSpender and UnitPower then
+    if def.isSpender and not blockedBySpellBookState and UnitPower then
       if defKey == "DEVOURING_PLAGUE" or SPELL_DEFS["DEVOURING_PLAGUE"] then
         local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 50
         local okP, rawP = pcall(UnitPower, "player", 13)
@@ -758,7 +831,16 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       end
     end
 
-    if (isProc or assistedKey == defKey) and not (def.isSpender and not SPELL_DEFS["DEVOURING_PLAGUE"] and gotCleanUsable and not isUsable) then
+    if not blockedBySpellBookState and (isProc or assistedKey == defKey) and not (def.isSpender and not SPELL_DEFS["DEVOURING_PLAGUE"] and gotCleanUsable and not isUsable) then
+      isUsable = true
+      usableSource = isProc and "ProcOverride" or "AssistedCombat"
+    end
+  elseif bookUsableVal ~= nil then
+    isUsable = (bookUsableVal == true) and (not bookNoPowerVal)
+    usableSource = "SpellBook(" .. tostring(spellID) .. ")"
+    if blockedBySpellBookState then
+      isProc = false
+    elseif not isUsable and (isProc or assistedKey == defKey) then
       isUsable = true
       usableSource = isProc and "ProcOverride" or "AssistedCombat"
     end

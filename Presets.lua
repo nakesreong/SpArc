@@ -196,25 +196,28 @@ local STRINGS = {
     SL_CT_INC_Y = "Incoming Zone Y (px)",
     SL_CT_OUT_X = "Outgoing Zone X (px)",
     SL_CT_OUT_Y = "Outgoing Zone Y (px)",
+    SL_CT_ARC_CURVE = "MSBT Arc Curve: ) - | - (",
     SL_CT_FONT_SIZE = "MSBT Font Size (pt)",
     M11_ZONE_INC_TITLE = "MSBT: INCOMING\n(Heals / Shields / Hits)\nDrag with Mouse",
     M11_ZONE_OUT_TITLE = "MSBT: OUTGOING\n(Target Damage & Crits)\nDrag with Mouse",
-    M11_GRP_ENEMY = "2. Center Target Yellow Numbers ('Haptic') & Smart AoE DoT Filter",
-    CK_CT_DIRECT_DMG = "Show yellow damage numbers in center above Target",
+    M11_GRP_ENEMY = "2. Center Target Yellow Numbers ('Haptic'), Crit Shake & Smart AoE Filter",
+    CK_CT_DIRECT_DMG = "Show yellow numbers in center",
+    CK_CT_CRIT_SHAKE = "Haptic Crit Shake & Flash",
     M11_DOT_MODE_LBL = "Periodic DoT Ticks:",
     M11_DOT_AUTO = "Smart Auto-AoE (1-2: ON | 3+ pack: OFF)",
     M11_DOT_OFF = "Direct Hits Only (OFF)",
     M11_DOT_ON = "Always ON",
-    CK_CT_HIDE_PET = "Hide Pet / Guardian damage",
+    CK_CT_HIDE_PET = "Hide Pet damage",
     CK_CT_HIDE_HEAL = "Hide 3D world green heals",
-    CK_CT_HIDE_MISS = "Hide Dodge / Parry / Miss",
-    M11_GRP_SCALE = "3. Nameplate View Distance, Distance Fading (Further = Transparent) & Stacking",
+    CK_CT_HIDE_MISS = "Hide Dodge / Miss",
+    M11_GRP_SCALE = "3. Nameplate Distance, Fade, Out-of-Combat Dimming & Stacking",
     SL_CT_WORLD_SCALE = "Center Text Size (0.65 = Compact)",
     SL_CT_OVERHEAD_ALPHA = "Center Text Brightness (0.60 = Soft)",
     SL_CT_OVERHEAD_Y = "Height Above Target Y (px)",
     SL_CT_DIR_SCALE = "3D Number Spread (0 = Tight Over Target, 2 = Wide)",
-    CK_CT_SPREAD_NP = "Stacking Nameplates (anti-overlap ladder on packs)",
-    CK_NP_DIST_FADE = "Distance Fade: further = more transparent (Target = 100%)",
+    CK_CT_SPREAD_NP = "Stacking Nameplates (ladder)",
+    CK_NP_DIST_FADE = "Distance Fade (further = softer)",
+    CK_NP_OOC_DIM = "Dim non-combat mobs in fight",
     SL_NP_MAX_DIST = "Nameplate Max Distance (yd)",
     SL_NP_MIN_ALPHA = "Far Nameplate Opacity",
     SL_CT_OVERLAP_V = "Vertical Stacking Step (V)",
@@ -479,25 +482,28 @@ local STRINGS = {
     SL_CT_INC_Y = "Входящий Y (px)",
     SL_CT_OUT_X = "Исходящий X (px)",
     SL_CT_OUT_Y = "Исходящий Y (px)",
+    SL_CT_ARC_CURVE = "Изгиб дуги: ) - | - (",
     SL_CT_FONT_SIZE = "Шрифт MSBT (pt)",
     M11_ZONE_INC_TITLE = "MSBT: ВХОДЯЩИЙ\n(Хил / Щиты / Урон)\nТяни мышкой (ЛКМ)",
     M11_ZONE_OUT_TITLE = "MSBT: ИСХОДЯЩИЙ\n(Урон и Криты по цели)\nТяни мышкой (ЛКМ)",
-    M11_GRP_ENEMY = "2. Жёлтые Цифры Урона По Центру Над Целью («Хаптика») и Умный АоЕ-Фильтр",
-    CK_CT_DIRECT_DMG = "Показывать жёлтые цифры урона по центру над целью",
+    M11_GRP_ENEMY = "2. Жёлтые Цифры По Центру Над Целью, Крит-Вспышка и Умный АоЕ-Фильтр",
+    CK_CT_DIRECT_DMG = "Жёлтые цифры по центру",
+    CK_CT_CRIT_SHAKE = "Встряска и вспышка крита",
     M11_DOT_MODE_LBL = "Тики дотов (DoT):",
     M11_DOT_AUTO = "Умное АоЕ (1-2: ВКЛ | 3+ пак: ВЫКЛ)",
     M11_DOT_OFF = "Только прямые (ВЫКЛ)",
     M11_DOT_ON = "Всегда ВКЛ",
-    CK_CT_HIDE_PET = "Скрыть урон питомцев",
+    CK_CT_HIDE_PET = "Скрыть питомцев",
     CK_CT_HIDE_HEAL = "Скрыть 3D-хил в мире",
-    CK_CT_HIDE_MISS = "Скрыть Промах / Уклон",
-    M11_GRP_SCALE = "3. Дальность Неймплейтов, Фейдинг (Дальше = Прозрачнее) и Анти-Слипание",
+    CK_CT_HIDE_MISS = "Скрыть Промах/Уклон",
+    M11_GRP_SCALE = "3. Дальность Неймплейтов, Фейдинг, Приглушение Не-Боевых и Лесенка",
     SL_CT_WORLD_SCALE = "Размер цифр по центру (0.65 = Мелкий)",
     SL_CT_OVERHEAD_ALPHA = "Яркость цифр по центру (0.60 = Мягко)",
     SL_CT_OVERHEAD_Y = "Высота над целью по Y (px)",
     SL_CT_DIR_SCALE = "Разлёт 3D-цифр (0 = Ровно над целью, 2 = Широкий веер)",
-    CK_CT_SPREAD_NP = "Раздвигать неймплейты лесенкой (анти-слипание)",
-    CK_NP_DIST_FADE = "Фейдинг по дальности: дальше = прозрачнее (Цель = 100%)",
+    CK_CT_SPREAD_NP = "Лесенка (анти-слипание)",
+    CK_NP_DIST_FADE = "Фейдинг по дальности",
+    CK_NP_OOC_DIM = "Приглушать не-боевых в бою",
     SL_NP_MAX_DIST = "Дальность неймплейтов (м)",
     SL_NP_MIN_ALPHA = "Прозрачность вдалеке",
     SL_CT_OVERLAP_V = "Шаг лесенки по вертикали (V)",
@@ -790,7 +796,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 33
+SpArc.PROFILE_SCHEMA_VERSION = 36
 
 ---------------------------------------------------------------------------------------
 --         6 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID)           --
@@ -822,16 +828,16 @@ RegisterPreset("PRIEST_01_SHADOW_PVE", "PRIEST", "1. Жрец: Тьма (ШП �
 SPELL SHADOWFORM = ID:232698 | AURA_ID:232698 | AURA_UNIT:player | AURA_DUR:3600 | NAME:"Облик Тьмы","Shadowform" | CD:0 | ICON:136200
 SPELL SILENCE = ID:15487 | NAME:"Безмолвие","Silence" | CD:45 | INTERRUPT:true | ICON:458230
 SPELL PSYCHIC_HORROR = ID:64044,8122 | NAME:"Глубинный ужас","Ментальный крик","Psychic Horror","Psychic Scream" | CD:45 | PVP:true | ICON:237568
-SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | GAIN:15 | ICON:136201
+SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | HASTED_CD:true | ONCE_PER_QUEUE:true | GAIN:15 | ICON:136201
 SPELL VAMPIRIC_TOUCH = ID:34914 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Прикосновение вампира","Vampiric Touch" | CD:0 | CHARGES:1 | GAIN:6 | ICON:135978
 AURA SHADOW_WORD_PAIN = ID:589 | AURA_UNIT:target | AURA_DUR:16 | NAME:"Слово Тьмы: Боль","Shadow Word: Pain" | ICON:136207
 SPELL VOID_ERUPTION = ID:228260,391109,194249 | AURA_ID:194249,391109 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | BOSS:true | NAME:"Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | ICON:537079
 SPELL POWER_INFUSION = ID:10060 | AURA_ID:10060 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | BOSS:true | NAME:"Придание сил","Power Infusion" | CD:120 | ICON:135939
 SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела Бездны","Void Volley","Void Bolt" | CD:6 | GAIN:10 | OVERRIDE_OF:VOID_ERUPTION | PROC_ONLY:true | ICON:1386548
-SPELL DEVOURING_PLAGUE = ID:335467 | AURA_ID:335467 | AURA_DUR:6 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума","Shadow Word: Madness","Devouring Plague" | CD:0 | COST:50 | GRANTS:MIND_FLAY_INSANITY | SPENDER:true | ICON:252997
+SPELL DEVOURING_PLAGUE = ID:335467 | AURA_ID:335467 | AURA_DUR:6 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума","Shadow Word: Madness","Devouring Plague" | CD:0 | COST:50 | SPENDER:true | ICON:252997
 SPELL SHADOW_WORD_DEATH = ID:32379 | NAME:"Слово Тьмы: Смерть","Shadow Word: Death" | CD:10 | GAIN:10 | EXECUTE:true | ICON:136149
-SPELL MIND_BLAST = ID:450983,8092 | NAME:"Выброс Бездны","Взрыв разума","Void Blast","Mind Blast" | CD:7.5 | CHARGES:1 | GAIN:15 | ICON:136224
-SPELL VOID_TORRENT = ID:263165 | NAME:"Поток бездны","Поток Бездны","Void Torrent" | CD:45 | CHARGES:1 | GAIN:35 | GRANTS:MIND_FLAY_INSANITY | LOCK_CHANNEL:true | ICON:1386551
+SPELL MIND_BLAST = ID:450983,8092 | NAME:"Выброс Бездны","Взрыв разума","Void Blast","Mind Blast" | CD:7.5 | CHARGES:1 | HASTED_CD:true | GAIN:15 | ICON:136224
+SPELL VOID_TORRENT = ID:263165 | NAME:"Поток бездны","Поток Бездны","Void Torrent" | CD:45 | CHARGES:1 | GAIN:35 | LOCK_CHANNEL:true | ICON:1386551
 SPELL MIND_FLAY_INSANITY = ID:391403 | NAME:"Пытка разума: безумие","Mind Flay: Insanity" | CD:0 | GAIN:16 | OVERRIDE_OF:MIND_FLAY | PROC_ONLY:true | ICON:136208
 SPELL MIND_FLAY = ID:15407 | NAME:"Пытка разума","Mind Flay" | CD:0 | GAIN:12 | FILLER_INTERRUPTIBLE:true | ICON:136208
 SPELL PSYFIEND = ID:34433,211522,375901,451235,200174 | BOSS:true | NAME:"Исчадие Тьмы","Ментальный демон","Игры разума","Призрак Бездны","Shadowfiend","Psyfiend" | CD:60 | ICON:136199
@@ -892,6 +898,8 @@ ELSE IF READY(VOID_TORRENT) THEN
     RETURN CAST(VOID_TORRENT)
 ELSE IF READY(MIND_BLAST) THEN
     RETURN CAST(MIND_BLAST)
+ELSE IF READY(TENTACLE_SLAM) THEN
+    RETURN CAST(TENTACLE_SLAM)
 ELSE IF PROC(MIND_FLAY_INSANITY) THEN
     RETURN CAST(MIND_FLAY_INSANITY)
 ELSE
@@ -916,7 +924,7 @@ SPELL ICY_VEINS = ID:12472 | AURA_ID:12472 | AURA_UNIT:player | AURA_DUR:20 | BU
 SPELL RAY_OF_FROST = ID:205021 | BOSS:true | NAME:"Морозный луч","Луч холода","Ray of Frost" | CD:60 | CHARGES:1 | STACKS:+3 | LOCK_CHANNEL:true | ICON:1698700
 SPELL COMET_STORM = ID:153595,455396 | NAME:"Кометная буря","Comet Storm" | CD:30 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:RAY_OF_FROST | ICON:1033912
 SPELL GLACIAL_SPIKE = ID:199786,257537 | NAME:"Ледниковый шип","Черная стрела","Glacial Spike","Ebonbolt" | CD:0 | STACKS:+2 | PROC_ONLY:true | OVERRIDE_OF:FROSTBOLT | ICON:1394891
-SPELL FLURRY = ID:44614 | NAME:"Шквал","Flurry" | CD:30 | CHARGES:2 | STACKS:+2 | ICON:135859
+SPELL FLURRY = ID:44614 | NAME:"Шквал","Flurry" | CD:30 | CHARGES:2 | HASTED_CD:true | STACKS:+2 | ICON:135859
 SPELL FROZEN_ORB = ID:84714 | NAME:"Ледяной шар","Мерзлая сфера","Frozen Orb" | CD:60 | STACKS:+2 | ICON:629077
 SPELL ICE_LANCE = ID:30455 | NAME:"Ледяное копье","Ice Lance" | CD:0 | CONSUMES_STACKS:true | STACKS:-4 | ICON:135844
 SPELL BLIZZARD = ID:190356,1248829 | NAME:"Снежная буря","Blizzard" | CD:12 | ICON:135858

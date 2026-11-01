@@ -154,6 +154,10 @@ local function ParseSpellDefLine(line)
         def.isPvPSkill = (val:lower() == "true" or val == "1")
       elseif prop == "INTERRUPT" or prop == "KICK" then
         def.isInterrupt = (val:lower() == "true" or val == "1")
+      elseif prop == "HASTED_CD" or prop == "HASTE_CD" then
+        def.hastedCD = (val:lower() == "true" or val == "1")
+      elseif prop == "ONCE_PER_QUEUE" or prop == "NO_CONSECUTIVE" then
+        def.oncePerQueue = (val:lower() == "true" or val == "1")
       end
     end
   end

@@ -57,12 +57,14 @@ local SafeBool = SpArc.SafeBool
 local st = SpArc.state
 local FLAT_TEX = "Interface\\Buttons\\WHITE8x8"
 local CLASS_ICONS_TEX = "Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES"
--- Base Metro Colors
-local COLOR_HOSTILE_RED   = { r = 0.85, g = 0.15, b = 0.15 } -- #D92626 Ruby Red
-local COLOR_DK_CHERRY     = { r = 0.48, g = 0.06, b = 0.18 } -- #7A0F2E Deep Dark Cherry for Friendly Death Knights
-local COLOR_TAPPED_GREY   = { r = 0.50, g = 0.50, b = 0.54 }
-local COLOR_CAST_GOLD     = { r = 1.00, g = 0.80, b = 0.15 } -- #FFCC26 Interruptible Gold
-local COLOR_CAST_GREY     = { r = 0.45, g = 0.47, b = 0.50 } -- #737780 Uninterruptible Grey
+-- Base Metro Colors (Reaction Triad: Aggressive = Red, Neutral = Yellow, Friendly = Green)
+local COLOR_HOSTILE_RED    = { r = 0.85, g = 0.15, b = 0.15 } -- #D92626 Aggressive / In-Combat Red
+local COLOR_NEUTRAL_YELLOW = { r = 0.92, g = 0.78, b = 0.16 } -- #EBC729 Peaceful Neutral Yellow
+local COLOR_FRIENDLY_GREEN = { r = 0.18, g = 0.80, b = 0.32 } -- #2ECC52 Friendly Emerald Green
+local COLOR_DK_CHERRY      = { r = 0.48, g = 0.06, b = 0.18 } -- #7A0F2E Deep Dark Cherry
+local COLOR_TAPPED_GREY    = { r = 0.50, g = 0.50, b = 0.54 }
+local COLOR_CAST_GOLD      = { r = 1.00, g = 0.80, b = 0.15 } -- #FFCC26 Interruptible Gold
+local COLOR_CAST_GREY      = { r = 0.45, g = 0.47, b = 0.50 } -- #737780 Uninterruptible Grey
 -- Known Cast Spell ID <-> Debuff Aura ID aliases (so either Wowhead ID works seamlessly)
 local SPELL_AURA_ALIASES = {
   [8921]    = { 164812 },         -- Moonfire (cast) -> Moonfire (debuff)
@@ -828,8 +830,11 @@ end
 local function SuppressBlizzardUnitFrame(plate, metro)
   if not plate or IsBlockedByUnresolvedConflict() then return end
   local uFrame = plate.UnitFrame
+  local inLockdown = InCombatLockdown and InCombatLockdown()
   if uFrame then
-    pcall(uFrame.Hide, uFrame)
+    if not inLockdown then
+      pcall(uFrame.Hide, uFrame)
+    end
     pcall(uFrame.SetAlpha, uFrame, 0)
     if not hookedBlizzFrames[uFrame] then
       hookedBlizzFrames[uFrame] = true
@@ -844,7 +849,9 @@ local function SuppressBlizzardUnitFrame(plate, metro)
       SuppressSubFrameEvents(uFrame.ClassificationFrame)
       pcall(_G.hooksecurefunc, uFrame, "Show", function(self)
         if SpArc:IsNameplatesEnabled() and not IsBlockedByUnresolvedConflict() then
-          pcall(self.Hide, self)
+          if not (InCombatLockdown and InCombatLockdown()) then
+            pcall(self.Hide, self)
+          end
           pcall(self.SetAlpha, self, 0)
         end
       end)
@@ -865,7 +872,9 @@ local function SuppressBlizzardUnitFrame(plate, metro)
   -- Only hide ElvUI's per-plate unitFrame if the user explicitly chose SpArc over ElvUI
   if elvUINPSuppressed and plate.unitFrame and plate.unitFrame ~= metro then
     pcall(plate.unitFrame.UnregisterAllEvents, plate.unitFrame)
-    pcall(plate.unitFrame.Hide, plate.unitFrame)
+    if not inLockdown then
+      pcall(plate.unitFrame.Hide, plate.unitFrame)
+    end
     pcall(plate.unitFrame.SetAlpha, plate.unitFrame, 0)
   end
 end
@@ -1155,10 +1164,15 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
   local db = SpArc:EnsureDB()
   local vis = (db and db.visual) or SpArc.DEFAULT_VISUAL
   local isPlayer = SafeBool(UnitIsPlayer, unit)
-  local isEnemy = SafeBool(UnitIsEnemy, "player", unit) or SafeBool(UnitCanAttack, "player", unit)
-  local isFriend = SafeBool(UnitIsFriend, "player", unit) and not isEnemy
+  local canAttack = SafeBool(UnitCanAttack, "player", unit)
+  local isHostileEnemy = SafeBool(UnitIsEnemy, "player", unit)
+  local isEnemy = isHostileEnemy or canAttack
+  local isFriend = SafeBool(UnitIsFriend, "player", unit) and not canAttack
   local okR, reaction = pcall(UnitReaction, "player", unit)
-  local reactNum = (okR and not IsSecret(reaction) and type(reaction) == "number" and reaction) or (isEnemy and 2 or 5)
+  local reactNum = (okR and not IsSecret(reaction) and type(reaction) == "number" and reaction)
+    or (isHostileEnemy and 2)
+    or (canAttack and 4)
+    or 5
   local tgtMetro = GetMetroForUnitToken("target")
   local isTarget = (tgtMetro ~= nil and tgtMetro == metro) or SafeBool(UnitIsUnit, unit, "target")
   if isTarget then
@@ -1182,8 +1196,12 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
         metro.cachedClassFile = classFile
       end
     end
-    if isEnemy or reactNum <= 4 then
+    if canAttack or reactNum <= 3 then
       metro.plateCategory = "ENEMY_PLAYER"
+      metro.isQuestNPC = false
+      return true
+    elseif reactNum == 4 then
+      metro.plateCategory = "NEUTRAL_PLAYER"
       metro.isQuestNPC = false
       return true
     else
@@ -1200,28 +1218,39 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
   metro.cachedClassFile = nil
   local isQuest = IsUnitQuestRelated(unit, cleanGUID)
   metro.isQuestNPC = isQuest
-  -- Hostile NPC (reaction <= 3)
-  if reactNum <= 3 or SafeBool(UnitIsEnemy, "player", unit) then
+  local inCombat = SafeBool(UnitAffectingCombat, unit)
+  -- 1. Aggressive / Hostile NPC (reaction <= 3) or any attackable NPC actively in combat
+  if reactNum <= 3 or isHostileEnemy or (canAttack and inCombat) then
     metro.plateCategory = "ENEMY_NPC"
     return true
   end
-  -- Quest NPC (even if neutral or friendly)
-  if isQuest then
-    metro.plateCategory = "QUEST_NPC"
+  -- 2. Neutral (yellow) NPC (reaction == 4, not yet in combat: peaceful caterpillars, quest critters, dummies)
+  if reactNum == 4 and (canAttack or isQuest or isTarget) then
+    metro.plateCategory = "NEUTRAL_NPC"
     return true
   end
-  -- Neutral (yellow) NPC that is in combat, targeted, or attackable dummy
-  if reactNum == 4 and (SafeBool(UnitAffectingCombat, unit) or isTarget) then
-    metro.plateCategory = "ENEMY_NPC"
+  -- 3. Friendly NPC (reaction >= 5: quest givers, companions in combat, targeted allies)
+  if isQuest or (isFriend and (inCombat or isTarget)) then
+    metro.plateCategory = "FRIENDLY_NPC"
     return true
   end
-  -- Non-quest Friendly/Neutral out-of-combat NPCs are hidden to keep towns clean
+  -- Non-quest Friendly out-of-combat town NPCs are hidden to keep cities clean
   return false
 end
 UpdateMetroHealthAndColor = function(metro, now)
   local unit = metro and metro.unit
   if not unit then return end
   now = now or GetTime()
+  -- Keep reaction & combat state fresh on every color tick so neutral mobs turn red the instant they aggro
+  local okR, reaction = pcall(UnitReaction, "player", unit)
+  if okR and not IsSecret(reaction) and type(reaction) == "number" then
+    metro.reaction = reaction
+  end
+  local reactNum = metro.reaction or 4
+  local inCombat = SafeBool(UnitAffectingCombat, unit)
+  local canAttack = SafeBool(UnitCanAttack, "player", unit)
+  local isHostileEnemy = SafeBool(UnitIsEnemy, "player", unit)
+
   -- 1. Health Values (Secret-Safe C++ StatusBar pass-through)
   local ok1, hp = pcall(UnitHealth, unit)
   local ok2, maxHp = pcall(UnitHealthMax, unit)
@@ -1230,7 +1259,7 @@ UpdateMetroHealthAndColor = function(metro, now)
     pcall(metro.healthBar.SetValue, metro.healthBar, hp)
     if not IsSecret(hp) and not IsSecret(maxHp) and type(hp) == "number" and type(maxHp) == "number" and maxHp > 0 then
       local pct = math.floor((hp / maxHp) * 100 + 0.5)
-      if metro.plateCategory == "FRIENDLY_PLAYER" and pct >= 100 then
+      if (metro.plateCategory == "FRIENDLY_PLAYER" or metro.plateCategory == "FRIENDLY_NPC") and pct >= 100 then
         metro.hpText:SetText("")
       else
         metro.hpText:SetText(pct .. "%")
@@ -1241,43 +1270,39 @@ UpdateMetroHealthAndColor = function(metro, now)
   else
     metro.hpText:SetText("")
   end
-  -- 2. Color Evaluation
+  -- 2. Color Evaluation:
+  --    • Active Tracked DoTs (.MD) -> Custom DoT Rule Color
+  --    • Friendly (Players & NPCs) -> Green (#2ECC52)
+  --    • Neutral out-of-combat (reaction == 4, not in combat) -> Yellow (#EBC729)
+  --    • Aggressive (Hostile Players, Hostile Mobs <= 3, or Mobs in Combat) -> Red (#D92626)
   local r, g, b = COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
-  if metro.plateCategory == "FRIENDLY_PLAYER" then
-    local cf = (not IsSecret(metro.classFile) and metro.classFile) or metro.cachedClassFile or metro.classFile
-    if cf == "DEATHKNIGHT" then
-      r, g, b = COLOR_DK_CHERRY.r, COLOR_DK_CHERRY.g, COLOR_DK_CHERRY.b
-    else
-      local cObj = nil
-      if cf then
-        if IsSecret(cf) and C_ClassColor and C_ClassColor.GetClassColor then
-          local okCC, cc = pcall(C_ClassColor.GetClassColor, cf)
-          if okCC then cObj = cc end
-        elseif not IsSecret(cf) and RAID_CLASS_COLORS and RAID_CLASS_COLORS[cf] then
-          cObj = RAID_CLASS_COLORS[cf]
-        end
-      end
-      if cObj and cObj.r then
-        -- Also catch Death Knight by its default RGB (#C41E3A: 0.77, 0.12, 0.23) if classFile was secret
-        if not IsSecret(cObj.r) and type(cObj.r) == "number" and cObj.r > 0.70 and cObj.r < 0.82 and (cObj.g or 1) < 0.16 and (cObj.b or 0) > 0.18 and (cObj.b or 1) < 0.28 then
-          r, g, b = COLOR_DK_CHERRY.r, COLOR_DK_CHERRY.g, COLOR_DK_CHERRY.b
-        else
-          r, g, b = cObj.r, cObj.g, cObj.b
-        end
-      else
-        r, g, b = 0.25, 0.78, 0.92
-      end
-    end
+  if metro.plateCategory == "FRIENDLY_PLAYER" or metro.plateCategory == "FRIENDLY_NPC" or (metro.isFriend and not canAttack) then
+    metro.hasActiveDoT = false
+    r, g, b = COLOR_FRIENDLY_GREEN.r, COLOR_FRIENDLY_GREEN.g, COLOR_FRIENDLY_GREEN.b
   else
-    -- Hostile NPC, Hostile Player, or Quest NPC:
-    -- First check Dynamic Aura / DoT Color Rules!
     local auraR, auraG, auraB = EvaluateNameplateAuraColor(unit, metro, now)
+    metro.hasActiveDoT = (auraR ~= nil)
     if auraR and auraG and auraB then
       r, g, b = auraR, auraG, auraB
     elseif not metro.isPlayer and UnitIsTapDenied and SafeBool(UnitIsTapDenied, unit) then
       r, g, b = COLOR_TAPPED_GREY.r, COLOR_TAPPED_GREY.g, COLOR_TAPPED_GREY.b
+    elseif metro.isPlayer then
+      if canAttack or reactNum <= 3 or inCombat then
+        r, g, b = COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
+      elseif reactNum == 4 then
+        r, g, b = COLOR_NEUTRAL_YELLOW.r, COLOR_NEUTRAL_YELLOW.g, COLOR_NEUTRAL_YELLOW.b
+      else
+        r, g, b = COLOR_FRIENDLY_GREEN.r, COLOR_FRIENDLY_GREEN.g, COLOR_FRIENDLY_GREEN.b
+      end
     else
-      r, g, b = COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
+      -- NPC: Red ONLY if aggressive (reactNum <= 3 / UnitIsEnemy) OR actively in combat!
+      if inCombat or reactNum <= 3 or isHostileEnemy then
+        r, g, b = COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
+      elseif reactNum == 4 then
+        r, g, b = COLOR_NEUTRAL_YELLOW.r, COLOR_NEUTRAL_YELLOW.g, COLOR_NEUTRAL_YELLOW.b
+      else
+        r, g, b = COLOR_FRIENDLY_GREEN.r, COLOR_FRIENDLY_GREEN.g, COLOR_FRIENDLY_GREEN.b
+      end
     end
   end
   metro.healthBar:SetStatusBarColor(r, g, b, 1.0)
@@ -1287,7 +1312,7 @@ UpdateMetroCastbar = function(metro, now)
   if not unit then return end
   now = now or GetTime()
   local cbCont = metro.castBar
-  local isCasting, isInterruptible, isChannel, spellName, spellIcon, remSec, durSec = SpArc:GetUnitCastInterruptState(unit, now)
+  local isCasting, isInterruptible, isChannel, spellName, spellIcon, remSec, durSec, _, rawNotInterruptible = SpArc:GetUnitCastInterruptState(unit, now)
   if not isCasting then
     if cbCont:IsShown() then
       cbCont:Hide()
@@ -1326,12 +1351,30 @@ UpdateMetroCastbar = function(metro, now)
   else
     cbCont.timeText:SetText("")
   end
-  if isInterruptible then
+  if rawNotInterruptible ~= nil and IsSecret(rawNotInterruptible) then
+    if _G.C_CurveUtil and _G.C_CurveUtil.EvaluateColorValueFromBoolean then
+      local r = _G.C_CurveUtil.EvaluateColorValueFromBoolean(rawNotInterruptible, COLOR_CAST_GREY.r, COLOR_CAST_GOLD.r)
+      local g = _G.C_CurveUtil.EvaluateColorValueFromBoolean(rawNotInterruptible, COLOR_CAST_GREY.g, COLOR_CAST_GOLD.g)
+      local b = _G.C_CurveUtil.EvaluateColorValueFromBoolean(rawNotInterruptible, COLOR_CAST_GREY.b, COLOR_CAST_GOLD.b)
+      pcall(cbCont.bar.SetStatusBarColor, cbCont.bar, r, g, b, 1.0)
+    else
+      cbCont.bar:SetStatusBarColor(COLOR_CAST_GOLD.r, COLOR_CAST_GOLD.g, COLOR_CAST_GOLD.b, 1.0)
+    end
+    cbCont.border:SetBackdropBorderColor(0.05, 0.05, 0.08, 1.0)
+    local pulse = 0.72 + 0.28 * math.abs(math.sin(now * 6.5))
+    cbCont.glow:SetBackdropBorderColor(1.00, 0.86, 0.20, pulse)
+    cbCont.glow.outerGlow:SetColorTexture(1.00, 0.82, 0.15, 0.18 + 0.18 * pulse)
+    cbCont.glow:Show()
+    if cbCont.glow.SetAlphaFromBoolean then
+      pcall(cbCont.glow.SetAlphaFromBoolean, cbCont.glow, rawNotInterruptible, 0, 1)
+    end
+  elseif isInterruptible then
     cbCont.bar:SetStatusBarColor(COLOR_CAST_GOLD.r, COLOR_CAST_GOLD.g, COLOR_CAST_GOLD.b, 1.0)
     cbCont.border:SetBackdropBorderColor(1.00, 0.85, 0.20, 1.0)
     local pulse = 0.72 + 0.28 * math.abs(math.sin(now * 6.5))
     cbCont.glow:SetBackdropBorderColor(1.00, 0.86, 0.20, pulse)
     cbCont.glow.outerGlow:SetColorTexture(1.00, 0.82, 0.15, 0.18 + 0.18 * pulse)
+    cbCont.glow:SetAlpha(1.0)
     cbCont.glow:Show()
   else
     cbCont.bar:SetStatusBarColor(COLOR_CAST_GREY.r, COLOR_CAST_GREY.g, COLOR_CAST_GREY.b, 1.0)
@@ -1429,7 +1472,19 @@ function SpArc:UpdateMetroDistanceFade(metro, dt, recomputeTarget, forceSnap)
   if not metro or not metro.unit then return end
   local db = SpArc:EnsureDB()
   local vis = (db and db.visual) or SpArc.DEFAULT_VISUAL
-  if metro.isTarget or vis.npDistanceFade == false then
+  if metro.isTarget then
+    metro._targetFadeAlpha = 1.0
+    metro._curFadeAlpha = 1.0
+    if metro._appliedFadeAlpha ~= 1.0 then
+      metro._appliedFadeAlpha = 1.0
+      metro:SetAlpha(1.0)
+    end
+    return
+  end
+
+  local distFadeOn = (vis.npDistanceFade ~= false)
+  local oocDimOn = (vis.npDimOutOfCombat ~= false)
+  if not distFadeOn and not oocDimOn then
     metro._targetFadeAlpha = 1.0
     metro._curFadeAlpha = 1.0
     if metro._appliedFadeAlpha ~= 1.0 then
@@ -1442,34 +1497,47 @@ function SpArc:UpdateMetroDistanceFade(metro, dt, recomputeTarget, forceSnap)
   if recomputeTarget or not metro._targetFadeAlpha then
     local unit = metro.unit
     local minA = math.max(0.10, math.min(1.00, tonumber(vis.npMinAlpha) or 0.30))
-    local tierA = minA
-    local close10 = _G.CheckInteractDistance and SafeBool(_G.CheckInteractDistance, unit, 3)
-    if close10 then
-      tierA = 1.0
-    else
-      local mid28 = _G.CheckInteractDistance and (SafeBool(_G.CheckInteractDistance, unit, 4) or SafeBool(_G.CheckInteractDistance, unit, 1))
-      if mid28 then
-        tierA = minA + (1.0 - minA) * 0.72
+    local tierA = 1.0
+    if distFadeOn then
+      tierA = minA
+      local close10 = _G.CheckInteractDistance and SafeBool(_G.CheckInteractDistance, unit, 3)
+      if close10 then
+        tierA = 1.0
       else
-        local inRange40 = false
-        if C_Spell and C_Spell.IsSpellInRange then
-          local okR, r40 = pcall(C_Spell.IsSpellInRange, 589, unit)
-          if okR and not IsSecret(r40) and (r40 == true or r40 == 1) then
-            inRange40 = true
-          end
-        end
-        if not inRange40 and _G.UnitInRange then
-          inRange40 = SafeBool(_G.UnitInRange, unit)
-        end
-        if inRange40 then
-          tierA = minA + (1.0 - minA) * 0.38
+        local mid28 = _G.CheckInteractDistance and (SafeBool(_G.CheckInteractDistance, unit, 4) or SafeBool(_G.CheckInteractDistance, unit, 1))
+        if mid28 then
+          tierA = minA + (1.0 - minA) * 0.72
         else
-          tierA = minA
+          local inRange40 = false
+          if C_Spell and C_Spell.IsSpellInRange then
+            local okR, r40 = pcall(C_Spell.IsSpellInRange, 589, unit)
+            if okR and not IsSecret(r40) and (r40 == true or r40 == 1) then
+              inRange40 = true
+            end
+          end
+          if not inRange40 and _G.UnitInRange then
+            inRange40 = SafeBool(_G.UnitInRange, unit)
+          end
+          if inRange40 then
+            tierA = minA + (1.0 - minA) * 0.38
+          else
+            tierA = minA
+          end
         end
       end
     end
-    if st.currentTargetMetro ~= nil and not SafeBool(UnitAffectingCombat, unit) then
-      tierA = math.max(minA, tierA * 0.82)
+
+    -- 2.2 Out-of-Combat Dimming: softly dim non-combat mobs while fighting or targeting another unit
+    local unitInCombat = SafeBool(UnitAffectingCombat, unit) or metro.hasActiveDoT
+    if not unitInCombat then
+      local playerInCombat = (InCombatLockdown and InCombatLockdown()) or SafeBool(UnitAffectingCombat, "player")
+      if oocDimOn and playerInCombat then
+        tierA = math.min(0.32, tierA * 0.40)
+      elseif oocDimOn and st.currentTargetMetro ~= nil then
+        tierA = math.max(minA * 0.75, tierA * 0.62)
+      elseif oocDimOn and metro.reaction == 4 then
+        tierA = math.max(minA, tierA * 0.85)
+      end
     end
     metro._targetFadeAlpha = tierA
   end
@@ -1627,6 +1695,8 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
           elseif isNowTarget then
             UpdateMetroHealthAndColor(metro, now)
             UpdateMetroCastbar(metro, now)
+          else
+            SpArc:UpdateMetroDistanceFade(metro, 0.05, true, false)
           end
         end
       end

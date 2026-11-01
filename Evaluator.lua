@@ -559,6 +559,7 @@ function SpArc:BuildRotationQueue(maxSlots)
   end
 
   local parsed = SpArc:SelectActiveParsedProfile()
+  st.secretInterruptOverlay = nil
   if not parsed or not parsed.rules then
     return EMPTY_TABLE, EMPTY_TABLE, parsed, nil, false, false
   end
@@ -697,12 +698,13 @@ function SpArc:BuildRotationQueue(maxSlots)
   simCtx.canPickPocket = (SpArc.CanPickPocketTarget and SpArc:CanPickPocketTarget(now)) or false
   simCtx.bossMode = (SpArc.IsBossRotationEnabled and SpArc:IsBossRotationEnabled()) or false
   simCtx.pvpMode = (SpArc.IsPvPRotationEnabled and SpArc:IsPvPRotationEnabled()) or false
-  local tCast, tInt = false, false
+  local tCast, tInt, _, _, _, _, _, _, rawNotInt = false, false, false, nil, nil, 0, 0, nil, nil
   if SpArc.GetUnitCastInterruptState then
-    tCast, tInt = SpArc:GetUnitCastInterruptState("target", now)
+    tCast, tInt, _, _, _, _, _, _, rawNotInt = SpArc:GetUnitCastInterruptState("target", now)
   end
+  local isSecretCastInt = (tCast and rawNotInt ~= nil and IsSecret(rawNotInt)) or false
   simCtx.targetIsCasting = tCast or false
-  simCtx.targetCastingInterruptible = (tCast and tInt) or false
+  simCtx.targetCastingInterruptible = (tCast and not isSecretCastInt and tInt) or false
   simCtx.insanity = simInsanity
   simCtx.comboPoints = math.floor(simInsanity / 20)
   simCtx.energy = simEnergy
@@ -722,6 +724,9 @@ function SpArc:BuildRotationQueue(maxSlots)
     end
     if d.isInterrupt then
       if stepIdx ~= 1 or not simCtx.targetCastingInterruptible then
+        return false
+      end
+      if states[spKey] and states[spKey].isOutOfRange then
         return false
       end
     end
@@ -747,11 +752,36 @@ function SpArc:BuildRotationQueue(maxSlots)
     return true
   end
 
+  if isSecretCastInt and not SpArc.testMode then
+    for spK in pairs(SPELL_DEFS) do
+      simReady[spK] = simKnown[spK] and (states[spK] and states[spK].isReady == true) and (simCD[spK] <= 0.05) or false
+    end
+    simCtx.targetCastingInterruptible = true
+    for _, rule in ipairs(parsed.rules) do
+      local sp = rule.spell
+      local d = SPELL_DEFS[sp]
+      local s = states[sp]
+      if d and d.isInterrupt and simReady[sp] and simUsable[sp] and not simNoResource[sp] and s and not s.isOutOfRange and not s.isUnavailable then
+        if IsSpellAllowedByToggles(sp, 1) and SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
+          st.secretInterruptOverlay = {
+            key = sp,
+            icon = s.icon,
+            keybind = s.keybind or "",
+            rawNotInterruptible = rawNotInt,
+          }
+          break
+        end
+      end
+    end
+    simCtx.targetCastingInterruptible = false
+  end
+
   for step = 1, maxSlots do
     for spK, spD in pairs(SPELL_DEFS) do
-      simReady[spK] = simKnown[spK] and (simCD[spK] <= 0.05) or false
-      if step > 1 and simReady[spK] and not spD.procOnly and not spD.isExecute and not spD.isSpender then
-        simUsable[spK] = true
+      if step == 1 then
+        simReady[spK] = simKnown[spK] and (states[spK] and states[spK].isReady == true) and (simCD[spK] <= 0.05) or false
+      else
+        simReady[spK] = simKnown[spK] and (simCD[spK] <= 0.05) or false
       end
     end
 
@@ -892,16 +922,22 @@ function SpArc:BuildRotationQueue(maxSlots)
             simReady["POWER_INFUSION"] = false
           end
         elseif (def.liveMaxCharges or def.maxCharges or 1) > 1 then
-          simCharges[pickedKey] = (simCharges[pickedKey] or 1) - 1
-          if simCharges[pickedKey] <= 0 then
-            simCD[pickedKey] = def.liveChargeCD or def.baseCD or 7.5
+          if def.oncePerQueue then
+            simCharges[pickedKey] = 0
+            simCD[pickedKey] = def.liveChargeCD or def.baseCD or 15
             simReady[pickedKey] = false
-          elseif def.baseCD and def.baseCD > 1.6 then
-            simCD[pickedKey] = 1.4
-            simReady[pickedKey] = false
+          else
+            simCharges[pickedKey] = (simCharges[pickedKey] or 1) - 1
+            if simCharges[pickedKey] <= 0 then
+              simCD[pickedKey] = def.liveChargeCD or def.baseCD or 7.5
+              simReady[pickedKey] = false
+            elseif def.baseCD and def.baseCD > 1.6 then
+              simCD[pickedKey] = 1.4
+              simReady[pickedKey] = false
+            end
           end
-        elseif def.baseCD and def.baseCD > 0 then
-          simCD[pickedKey] = def.baseCD
+        elseif (def.liveChargeCD and def.liveChargeCD > 0) or (def.baseCD and def.baseCD > 0) then
+          simCD[pickedKey] = def.liveChargeCD or def.baseCD
           simReady[pickedKey] = false
         else
           simCD[pickedKey] = 0
@@ -935,6 +971,8 @@ function SpArc:BuildRotationQueue(maxSlots)
           end
         end
       end
+    else
+      break
     end
   end
 
@@ -1070,7 +1108,10 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   if maxCh > 1 or (def.baseCD and def.baseCD > 0 and def.baseCD <= 30) then
     SpArc:GetTrackedSpellCharges(defKey, now)
     local used = st.spellChargesUsed[defKey] or 0
-    if used == 0 then
+    if st.lastOverlayProcAt and st.lastOverlayProcAt[defKey] then
+      st.lastOverlayProcAt[defKey] = nil
+    end
+    if used == 0 or not st.spellChargeStart[defKey] or st.spellChargeStart[defKey] <= 0 then
       st.spellChargeStart[defKey] = now
     end
     st.spellChargesUsed[defKey] = math.min(maxCh, used + 1)
@@ -1345,7 +1386,7 @@ unitCastFrame:SetScript("OnEvent", function(_, event, unit, _, spellID)
     end
     uEv.active = true
     uEv.isChannel = isChan
-    uEv.interruptible = true
+    uEv.interruptible = nil
     uEv.startTime = now
     uEv.endTime = now + dur
     uEv.spellID = (not IsSecret(spellID) and type(spellID) == "number" and spellID) or nil

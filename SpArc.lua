@@ -140,7 +140,7 @@ local function OpenControlCenter(initialTab)
 
   if not controlFrame then
     controlFrame = CreateFrame("Frame", "SpArcControlCenter", UIParent, "BackdropTemplate")
-    controlFrame:SetSize(880, 646)
+    controlFrame:SetSize(880, 662)
     controlFrame:SetPoint("CENTER")
     controlFrame:SetFrameStrata("DIALOG")
     controlFrame:SetMovable(true)
@@ -189,7 +189,7 @@ local function OpenControlCenter(initialTab)
 
     local subTitle = topBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ApplyCyrFont(subTitle, 12)
-    subTitle:SetPoint("LEFT", topBar, "LEFT", 218, 0)
+    subTitle:SetPoint("LEFT", topBar, "LEFT", 128, 0)
     subTitle:SetTextColor(0.80, 0.80, 0.88, 1)
     ui.subTitle = subTitle
 
@@ -234,22 +234,24 @@ local function OpenControlCenter(initialTab)
     local footerBar = CreateFrame("Frame", nil, controlFrame, "BackdropTemplate")
     footerBar:SetPoint("BOTTOMLEFT", controlFrame, "BOTTOMLEFT", 1, 1)
     footerBar:SetPoint("BOTTOMRIGHT", controlFrame, "BOTTOMRIGHT", -1, 1)
-    footerBar:SetHeight(24)
+    footerBar:SetHeight(40)
     SetBackdropFlat(footerBar, 0.06, 0.06, 0.09, 0.98, 0.18, 0.18, 0.24, 1.0)
 
-    local footerCreditsTxt = footerBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ApplyCyrFont(footerCreditsTxt, 10)
-    footerCreditsTxt:SetPoint("LEFT", footerBar, "LEFT", 12, 0)
-    footerCreditsTxt:SetPoint("RIGHT", footerBar, "RIGHT", -12, 0)
+    local footerCreditsTxt = footerBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ApplyCyrFont(footerCreditsTxt, 11)
+    footerCreditsTxt:SetPoint("TOPLEFT", footerBar, "TOPLEFT", 12, -4)
+    footerCreditsTxt:SetPoint("BOTTOMRIGHT", footerBar, "BOTTOMRIGHT", -12, 4)
     footerCreditsTxt:SetJustifyH("CENTER")
-    footerCreditsTxt:SetWordWrap(false)
-    footerCreditsTxt:SetTextColor(0.72, 0.70, 0.84, 0.95)
+    footerCreditsTxt:SetJustifyV("MIDDLE")
+    footerCreditsTxt:SetWordWrap(true)
+    footerCreditsTxt:SetSpacing(2)
+    footerCreditsTxt:SetTextColor(0.76, 0.74, 0.88, 0.98)
     ui.footerCreditsTxt = footerCreditsTxt
 
     -- Left Sidebar (ElvUI Navigation Column)
     local sidebar = CreateFrame("Frame", nil, controlFrame, "BackdropTemplate")
     sidebar:SetPoint("TOPLEFT", controlFrame, "TOPLEFT", 1, -50)
-    sidebar:SetPoint("BOTTOMLEFT", controlFrame, "BOTTOMLEFT", 1, 24)
+    sidebar:SetPoint("BOTTOMLEFT", controlFrame, "BOTTOMLEFT", 1, 40)
     sidebar:SetWidth(204)
     SetBackdropFlat(sidebar, 0.04, 0.04, 0.06, 0.98, 0.18, 0.18, 0.24, 1.0)
 
@@ -292,7 +294,7 @@ local function OpenControlCenter(initialTab)
     for i = 1, #navKeys do
       local page = CreateFrame("Frame", nil, controlFrame)
       page:SetPoint("TOPLEFT", controlFrame, "TOPLEFT", 220, -64)
-      page:SetPoint("BOTTOMRIGHT", controlFrame, "BOTTOMRIGHT", -16, 34)
+      page:SetPoint("BOTTOMRIGHT", controlFrame, "BOTTOMRIGHT", -16, 50)
       page:Hide()
       pages[i] = page
     end

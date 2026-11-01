@@ -222,7 +222,7 @@ local STRINGS = {
     M11_PRESET_HAPTIC_BTN = "'Clean Haptic' Preset",
     M11_PRESET_BLIZZ_BTN = "Restore Blizzard Defaults",
     M11_STATUS_FMT = "Active:  Center = |cff00ff96%.2f (Alpha %.0f%%, +%dpx)|r  •  DoTs = |cffffd100%s|r  •  NP = |cff00ccff%d yd (Fade %.0f%%)|r  •  Combat = |cff00ff96%d|r",
-    FOOTER_CREDITS = "Special thanks for the inspiration to the creators of |cffffd100MSBT, Plater, WeakAuras, Hekili, Combat Mode & ElvUI|r — their finest ideas live on under this single high-FPS roof.",
+    FOOTER_CREDITS = "Special thanks for the inspiration to the creators of |cffffd100MSBT, Plater, WeakAuras, Hekili, Combat Mode & ElvUI|r —\ntheir finest ideas live on under this single high-FPS roof.",
 
     P1_SUMMARY = "Total Presets: |cffffd100%d|r  |  Your Class (%s): |cff00ff00%d|r  |  Active: |cffa335ee%s|r (%s)",
     FILTER_CLASS = "Filter: Only %s (%d)",
@@ -505,7 +505,7 @@ local STRINGS = {
     M11_PRESET_HAPTIC_BTN = "Пресет «Чистая Хаптика»",
     M11_PRESET_BLIZZ_BTN = "Стандарт Blizzard",
     M11_STATUS_FMT = "Статус:  Центр = |cff00ff96%.2f (Яркость %.0f%%, +%dpx)|r  •  Доты = |cffffd100%s|r  •  Дальность NP = |cff00ccff%d м (Фейд %.0f%%)|r  •  В бою = |cff00ff96%d|r",
-    FOOTER_CREDITS = "Отдельное спасибо за вдохновение авторам легендарных аддонов: |cffffd100MSBT, Plater, WeakAuras, Hekili, Combat Mode и ElvUI|r — мы собрали ваши лучшие идеи под одной крышей с любовью к чистым фреймам и высокому FPS.",
+    FOOTER_CREDITS = "Отдельное спасибо за вдохновение авторам легендарных аддонов: |cffffd100MSBT, Plater, WeakAuras, Hekili, Combat Mode и ElvUI|r —\nмы собрали ваши лучшие идеи под одной крышей с любовью к чистым фреймам и высокому FPS.",
 
     P1_SUMMARY = "Всего пресетов: |cffffd100%d|r  |  Для вашего класса (%s): |cff00ff00%d|r  |  Активный: |cffa335ee%s|r (%s)",
     FILTER_CLASS = "Фильтр: Только %s (%d)",

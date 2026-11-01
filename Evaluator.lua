@@ -1070,10 +1070,16 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   if maxCh > 1 or (def.baseCD and def.baseCD > 0 and def.baseCD <= 30) then
     SpArc:GetTrackedSpellCharges(defKey, now)
     local used = st.spellChargesUsed[defKey] or 0
-    if used == 0 then
-      st.spellChargeStart[defKey] = now
+    local hadOverlayProc = st.lastOverlayProcAt and st.lastOverlayProcAt[defKey] and (now - st.lastOverlayProcAt[defKey]) <= 1.2
+    if hadOverlayProc then
+      st.lastOverlayProcAt[defKey] = nil
     end
-    st.spellChargesUsed[defKey] = math.min(maxCh, used + 1)
+    if not (maxCh > 1 and hadOverlayProc and used < maxCh) then
+      if used == 0 or not st.spellChargeStart[defKey] or st.spellChargeStart[defKey] <= 0 then
+        st.spellChargeStart[defKey] = now
+      end
+      st.spellChargesUsed[defKey] = math.min(maxCh, used + 1)
+    end
   end
 end
 

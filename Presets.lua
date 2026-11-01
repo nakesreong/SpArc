@@ -796,7 +796,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 33
+SpArc.PROFILE_SCHEMA_VERSION = 34
 
 ---------------------------------------------------------------------------------------
 --         6 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID)           --
@@ -834,10 +834,10 @@ AURA SHADOW_WORD_PAIN = ID:589 | AURA_UNIT:target | AURA_DUR:16 | NAME:"Слов
 SPELL VOID_ERUPTION = ID:228260,391109,194249 | AURA_ID:194249,391109 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | BOSS:true | NAME:"Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | ICON:537079
 SPELL POWER_INFUSION = ID:10060 | AURA_ID:10060 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | BOSS:true | NAME:"Придание сил","Power Infusion" | CD:120 | ICON:135939
 SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела Бездны","Void Volley","Void Bolt" | CD:6 | GAIN:10 | OVERRIDE_OF:VOID_ERUPTION | PROC_ONLY:true | ICON:1386548
-SPELL DEVOURING_PLAGUE = ID:335467 | AURA_ID:335467 | AURA_DUR:6 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума","Shadow Word: Madness","Devouring Plague" | CD:0 | COST:50 | GRANTS:MIND_FLAY_INSANITY | SPENDER:true | ICON:252997
+SPELL DEVOURING_PLAGUE = ID:335467 | AURA_ID:335467 | AURA_DUR:6 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума","Shadow Word: Madness","Devouring Plague" | CD:0 | COST:50 | SPENDER:true | ICON:252997
 SPELL SHADOW_WORD_DEATH = ID:32379 | NAME:"Слово Тьмы: Смерть","Shadow Word: Death" | CD:10 | GAIN:10 | EXECUTE:true | ICON:136149
-SPELL MIND_BLAST = ID:450983,8092 | NAME:"Выброс Бездны","Взрыв разума","Void Blast","Mind Blast" | CD:7.5 | CHARGES:1 | GAIN:15 | ICON:136224
-SPELL VOID_TORRENT = ID:263165 | NAME:"Поток бездны","Поток Бездны","Void Torrent" | CD:45 | CHARGES:1 | GAIN:35 | GRANTS:MIND_FLAY_INSANITY | LOCK_CHANNEL:true | ICON:1386551
+SPELL MIND_BLAST = ID:450983,8092 | NAME:"Выброс Бездны","Взрыв разума","Void Blast","Mind Blast" | CD:7.5 | CHARGES:2 | GAIN:15 | ICON:136224
+SPELL VOID_TORRENT = ID:263165 | NAME:"Поток бездны","Поток Бездны","Void Torrent" | CD:45 | CHARGES:1 | GAIN:35 | LOCK_CHANNEL:true | ICON:1386551
 SPELL MIND_FLAY_INSANITY = ID:391403 | NAME:"Пытка разума: безумие","Mind Flay: Insanity" | CD:0 | GAIN:16 | OVERRIDE_OF:MIND_FLAY | PROC_ONLY:true | ICON:136208
 SPELL MIND_FLAY = ID:15407 | NAME:"Пытка разума","Mind Flay" | CD:0 | GAIN:12 | FILLER_INTERRUPTIBLE:true | ICON:136208
 SPELL PSYFIEND = ID:34433,211522,375901,451235,200174 | BOSS:true | NAME:"Исчадие Тьмы","Ментальный демон","Игры разума","Призрак Бездны","Shadowfiend","Psyfiend" | CD:60 | ICON:136199
@@ -898,6 +898,8 @@ ELSE IF READY(VOID_TORRENT) THEN
     RETURN CAST(VOID_TORRENT)
 ELSE IF READY(MIND_BLAST) THEN
     RETURN CAST(MIND_BLAST)
+ELSE IF READY(TENTACLE_SLAM) THEN
+    RETURN CAST(TENTACLE_SLAM)
 ELSE IF PROC(MIND_FLAY_INSANITY) THEN
     RETURN CAST(MIND_FLAY_INSANITY)
 ELSE

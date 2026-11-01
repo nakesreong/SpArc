@@ -12,14 +12,6 @@ local function IsSecret(v)
   return issecretvalue(v)
 end
 
-local function SafeSetCVar(cvar, val)
-  if C_CVar and C_CVar.SetCVar then
-    pcall(C_CVar.SetCVar, cvar, tostring(val))
-  elseif _G.SetCVar then
-    pcall(_G.SetCVar, cvar, tostring(val))
-  end
-end
-
 local function SafeGetCVar(cvar)
   if C_CVar and C_CVar.GetCVar then
     local ok, v = pcall(C_CVar.GetCVar, cvar)
@@ -29,6 +21,18 @@ local function SafeGetCVar(cvar)
     if ok then return v end
   end
   return nil
+end
+
+local function SafeSetCVar(cvar, val)
+  local sVal = tostring(val)
+  if SafeGetCVar(cvar) == sVal then
+    return
+  end
+  if C_CVar and C_CVar.SetCVar then
+    pcall(C_CVar.SetCVar, cvar, sVal)
+  elseif _G.SetCVar then
+    pcall(_G.SetCVar, cvar, sVal)
+  end
 end
 
 function SpArc:IsCombatTextEnabled()

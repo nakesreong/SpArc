@@ -99,6 +99,10 @@ function SpArc:GetTrackedSpellCharges(defKey, now)
   if cdDur <= 0 then cdDur = 7.5 end
   local used = st.spellChargesUsed[defKey] or 0
   local chStart = st.spellChargeStart[defKey] or 0
+  if used > 0 and (not chStart or chStart <= 0) then
+    chStart = now
+    st.spellChargeStart[defKey] = now
+  end
   if used > 0 and chStart > 0 then
     local elapsed = now - chStart
     local recovered = math.floor(elapsed / cdDur)
@@ -258,11 +262,23 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
             isVoidBlastOverride = true
             spellID = over
             overlayRaw = "override(" .. tostring(over) .. ")"
+            if not hasSpellOverlayProc and _G.C_SpellActivationOverlay and _G.C_SpellActivationOverlay.IsSpellOverlayed then
+              local okS2, overS2 = pcall(_G.C_SpellActivationOverlay.IsSpellOverlayed, over)
+              if okS2 and not IsSecret(overS2) and overS2 then
+                hasSpellOverlayProc = true
+                isProc = true
+                overlayRaw = "sao(" .. tostring(over) .. ")"
+              end
+            end
             break
           end
         end
       end
     end
+  end
+  st.lastOverlayProcAt = st.lastOverlayProcAt or {}
+  if hasSpellOverlayProc then
+    st.lastOverlayProcAt[defKey] = now
   end
   if def.overrideOf and SPELL_DEFS[def.overrideOf] then
     local baseDef = SPELL_DEFS[def.overrideOf]
@@ -316,19 +332,23 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
 
   if C_Spell and C_Spell.GetSpellCharges and spellID then
     local okC, ch = pcall(C_Spell.GetSpellCharges, spellID)
+    if (not okC or type(ch) ~= "table" or (not IsSecret(ch.maxCharges) and (tonumber(ch.maxCharges) or 0) < 2)) and isVoidBlastOverride and def.liveSpellID and def.liveSpellID ~= spellID then
+      local okBaseC, baseCh = pcall(C_Spell.GetSpellCharges, def.liveSpellID)
+      if okBaseC and type(baseCh) == "table" then
+        ch = baseCh
+        okC = true
+      end
+    end
     if okC and type(ch) == "table" then
       if not IsSecret(ch.maxCharges) and type(ch.maxCharges) == "number" and ch.maxCharges >= 1 then
+        local effectiveMax = math.max(ch.maxCharges, def.maxCharges or 1)
         local prevMax = def.liveMaxCharges or def.maxCharges or 1
-        if ch.maxCharges ~= prevMax then
-          if IsSecret(ch.currentCharges) then
+        if effectiveMax ~= prevMax then
+          if IsSecret(ch.currentCharges) and effectiveMax < prevMax then
             local used = st.spellChargesUsed[defKey] or 0
-            if ch.maxCharges > prevMax then
-              st.spellChargesUsed[defKey] = used + (ch.maxCharges - prevMax)
-            else
-              st.spellChargesUsed[defKey] = math.min(ch.maxCharges, used)
-            end
+            st.spellChargesUsed[defKey] = math.min(effectiveMax, used)
           end
-          def.liveMaxCharges = ch.maxCharges
+          def.liveMaxCharges = effectiveMax
         end
       end
       if not IsSecret(ch.cooldownDuration) and type(ch.cooldownDuration) == "number" and ch.cooldownDuration > 1.5 then
@@ -561,6 +581,28 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         charges = 0
         cdRaw = string.format("%s:%.1fs", bestTag, remSec)
       end
+    end
+
+    -- Self-heal simulated cooldown/charges in combat when C++ engine proves readiness
+    -- via SpellActivationOverlay proc (e.g., Shadowy Insight) or AssistedCombat next-cast
+    local sinceLastCast = now - (st.lastCastAt[defKey] or 0)
+    if isOnCD and (hasSpellOverlayProc or assistedKey == defKey) and sinceLastCast > 0.55 then
+      isOnCD = false
+      remSec = 0
+      if maxCh > 1 then
+        local curUsed = st.spellChargesUsed[defKey] or 0
+        local healedUsed = math.min(maxCh - 1, math.max(0, curUsed - 1))
+        st.spellChargesUsed[defKey] = healedUsed
+        if healedUsed == 0 then
+          st.spellChargeStart[defKey] = 0
+        end
+        charges = math.max(1, maxCh - healedUsed)
+        chargesRaw = "sim:" .. tostring(charges) .. "/" .. tostring(maxCh)
+      else
+        charges = 1
+        ClearKnownCD()
+      end
+      cdRaw = hasSpellOverlayProc and "proc:0s" or "assist:0s"
     end
   end
 

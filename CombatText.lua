@@ -47,8 +47,9 @@ local msbtIncomingAnchor = nil
 local msbtOutgoingAnchor = nil
 local msbtPool = {}
 local msbtActive = {}
-local MAX_MSBT_POOL = 32
-local lastSpawnTimeByZone = { INCOMING = 0, OUTGOING = 0 }
+local MAX_MSBT_POOL = 44
+local lastSpawnTimeByZone = { INCOMING = 0, OUTGOING = 0, OVERHEAD = 0 }
+local lastOverheadRawTime = 0
 local demoStreamAccum = 0
 local demoStep = 0
 
@@ -256,21 +257,25 @@ local function EnsureMSBTFrames()
         if demoStep == 1 then
           SpArc:SpawnMSBTText("INCOMING", "+1,840", 0.20, 1.00, 0.45, false)
           SpArc:SpawnMSBTText("OUTGOING", "4,290", 1.00, 0.92, 0.30, false)
+          SpArc:SpawnOverheadTargetText("4 290", false, true)
         elseif demoStep == 2 then
           SpArc:SpawnMSBTText("INCOMING", "Щит +3,100", 0.35, 0.88, 1.00, false)
           SpArc:SpawnMSBTText("OUTGOING", "* 12,650 *", 1.00, 0.45, 0.15, true)
+          SpArc:SpawnOverheadTargetText("12 650", true, true)
         elseif demoStep == 3 then
           SpArc:SpawnMSBTText("INCOMING", "-920", 1.00, 0.35, 0.35, false)
           SpArc:SpawnMSBTText("OUTGOING", "2,810", 0.82, 0.55, 1.00, false)
         elseif demoStep == 4 then
           SpArc:SpawnMSBTText("INCOMING", "* +5,420 *", 0.25, 1.00, 0.55, true)
           SpArc:SpawnMSBTText("OUTGOING", "6,140", 1.00, 0.85, 0.25, false)
+          SpArc:SpawnOverheadTargetText("6 140", false, true)
         elseif demoStep == 5 then
           SpArc:SpawnMSBTText("INCOMING", "+740", 0.20, 0.95, 0.45, false)
           SpArc:SpawnMSBTText("OUTGOING", "* 15,900 *", 1.00, 0.38, 0.12, true)
         else
           SpArc:SpawnMSBTText("INCOMING", "-1,350", 1.00, 0.40, 0.40, false)
           SpArc:SpawnMSBTText("OUTGOING", "3,750", 0.85, 0.60, 1.00, false)
+          SpArc:SpawnOverheadTargetText("3 750", false, true)
         end
       end
     end
@@ -280,6 +285,12 @@ local function EnsureMSBTFrames()
     local db = SpArc:EnsureDB()
     local vis = (db and db.visual) or SpArc.DEFAULT_VISUAL
     local style = vis.ctScrollStyle or "ARC"
+    local overheadBaseY = tonumber(vis.ctOverheadY) or 55
+    local overheadMaxAlpha = math.max(0.20, math.min(1.00, tonumber(vis.ctOverheadAlpha) or 0.60))
+
+    -- Resolve target nameplate anchor once per frame if any OVERHEAD numbers are active
+    local targetAnchorFrame = nil
+    local checkedTargetPlate = false
 
     for i = #msbtActive, 1, -1 do
       local item = msbtActive[i]
@@ -290,6 +301,45 @@ local function EnsureMSBTFrames()
         item.active = false
         item.fs:Hide()
         table.remove(msbtActive, i)
+      elseif item.zone == "OVERHEAD" then
+        if not checkedTargetPlate then
+          checkedTargetPlate = true
+          if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
+            local okP, plate = pcall(C_NamePlate.GetNamePlateForUnit, "target")
+            if okP and plate and not IsSecret(plate) and plate:IsShown() then
+              targetAnchorFrame = (plate.sparcMetro and plate.sparcMetro.hpBar) or plate.sparcMetro or plate
+            end
+          end
+        end
+
+        local dx = item.jitterX
+        local dy = p * 36
+        local alpha = overheadMaxAlpha
+        if p < 0.10 then
+          alpha = overheadMaxAlpha * (p / 0.10)
+        elseif p > 0.64 then
+          alpha = math.max(0, overheadMaxAlpha * (1.0 - ((p - 0.64) / 0.36)))
+        end
+
+        if item.isCrit then
+          local scale = 1.0
+          if p < 0.08 then
+            scale = 1.0 + (p / 0.08) * 0.16
+          elseif p < 0.22 then
+            scale = 1.16 - ((p - 0.08) / 0.14) * 0.16
+          end
+          item.fs:SetScale(scale)
+        else
+          item.fs:SetScale(1.0)
+        end
+
+        item.fs:ClearAllPoints()
+        if targetAnchorFrame and targetAnchorFrame:IsShown() then
+          item.fs:SetPoint("BOTTOM", targetAnchorFrame, "TOP", dx, overheadBaseY + dy)
+        else
+          item.fs:SetPoint("CENTER", UIParent, "CENTER", dx, 95 + overheadBaseY + dy)
+        end
+        item.fs:SetAlpha(alpha)
       else
         local dx, dy = 0, 0
         local travelH = 148
@@ -335,6 +385,99 @@ local function EnsureMSBTFrames()
       end
     end
   end)
+end
+
+function SpArc:SpawnOverheadTargetText(textValue, isCrit, isPreview)
+  if not SpArc:IsCombatTextEnabled() then return end
+  EnsureMSBTFrames()
+
+  local db = SpArc:EnsureDB()
+  local vis = (db and db.visual) or SpArc.DEFAULT_VISUAL
+  if vis.ctShowDirectDamage == false and not isPreview then
+    return
+  end
+
+  local now = GetTime and GetTime() or 0
+  if not isPreview then
+    local mode = vis.ctDotTickMode or "AUTO_AOE"
+    if not isCrit and (mode == "OFF" or (mode == "AUTO_AOE" and (lastCombatPlateCount or 0) >= 3)) then
+      if (now - lastOverheadRawTime) < 0.42 then
+        return
+      end
+    end
+    lastOverheadRawTime = now
+  end
+
+  local entry = nil
+  for i = 1, MAX_MSBT_POOL do
+    if not msbtPool[i].active then
+      entry = msbtPool[i]
+      break
+    end
+  end
+  if not entry then
+    entry = table.remove(msbtActive, 1)
+  end
+  if not entry then return end
+
+  local prevT = lastSpawnTimeByZone["OVERHEAD"] or 0
+  if (now - prevT) < 0.14 then
+    for j = 1, #msbtActive do
+      local act = msbtActive[j]
+      if act.zone == "OVERHEAD" and act.elapsed < 0.22 then
+        act.elapsed = act.elapsed + 0.14
+      end
+    end
+  end
+  lastSpawnTimeByZone["OVERHEAD"] = now
+
+  local worldScale = tonumber(vis.ctWorldTextScale) or 0.65
+  local baseSize = math.max(9, math.min(22, math.floor(18 * worldScale + 0.5)))
+  local finalSize = isCrit and math.min(26, baseSize + 2) or baseSize
+  ApplyMSBTFont(entry.fs, finalSize, "OUTLINE")
+  entry.fs:SetShadowColor(0, 0, 0, 0.55)
+  entry.fs:SetShadowOffset(1.0, -1.0)
+
+  local okText = pcall(entry.fs.SetText, entry.fs, textValue)
+  if not okText then
+    return
+  end
+
+  -- Soft, warm muted yellow-gold (never blinding #FFFF00)
+  if isCrit then
+    entry.fs:SetTextColor(1.00, 0.78, 0.24, 1.0)
+  else
+    entry.fs:SetTextColor(0.95, 0.84, 0.32, 1.0)
+  end
+
+  local maxAlpha = math.max(0.20, math.min(1.00, tonumber(vis.ctOverheadAlpha) or 0.60))
+  local baseOffsetY = tonumber(vis.ctOverheadY) or 55
+
+  entry.active = true
+  entry.zone = "OVERHEAD"
+  entry.elapsed = 0
+  entry.duration = 1.25
+  entry.isCrit = isCrit and true or false
+  entry.baseSize = finalSize
+  entry.jitterX = math.random(-9, 9)
+
+  entry.fs:ClearAllPoints()
+  local anchorFrame = nil
+  if C_NamePlate and C_NamePlate.GetNamePlateForUnit then
+    local okP, plate = pcall(C_NamePlate.GetNamePlateForUnit, "target")
+    if okP and plate and not IsSecret(plate) and plate:IsShown() then
+      anchorFrame = (plate.sparcMetro and plate.sparcMetro.hpBar) or plate.sparcMetro or plate
+    end
+  end
+  if anchorFrame and anchorFrame:IsShown() then
+    entry.fs:SetPoint("BOTTOM", anchorFrame, "TOP", entry.jitterX, baseOffsetY)
+  else
+    entry.fs:SetPoint("CENTER", UIParent, "CENTER", entry.jitterX, 95 + baseOffsetY)
+  end
+  entry.fs:SetAlpha(maxAlpha)
+  entry.fs:Show()
+
+  msbtActive[#msbtActive + 1] = entry
 end
 
 function SpArc:SpawnMSBTText(zone, textValue, r, g, b, isCrit)
@@ -436,21 +579,27 @@ function SpArc:TriggerMSBTTestFountain()
   SpArc:UpdateMSBTZonePositions()
   local samples = {
     { delay = 0.00, zone = "INCOMING", txt = "+2,140",       r = 0.20, g = 1.00, b = 0.45, crit = false },
-    { delay = 0.05, zone = "OUTGOING", txt = "4,820",        r = 1.00, g = 0.90, b = 0.30, crit = false },
+    { delay = 0.05, zone = "OUTGOING", txt = "4,820",        r = 1.00, g = 0.90, b = 0.30, crit = false, overhead = "4 820" },
     { delay = 0.22, zone = "INCOMING", txt = "Щит +3,850",   r = 0.35, g = 0.90, b = 1.00, crit = false },
-    { delay = 0.28, zone = "OUTGOING", txt = "* 14,920 *",   r = 1.00, g = 0.42, b = 0.15, crit = true  },
+    { delay = 0.28, zone = "OUTGOING", txt = "* 14,920 *",   r = 1.00, g = 0.42, b = 0.15, crit = true,  overhead = "14 920" },
     { delay = 0.46, zone = "INCOMING", txt = "-1,120",       r = 1.00, g = 0.35, b = 0.35, crit = false },
-    { delay = 0.52, zone = "OUTGOING", txt = "6,310",        r = 0.82, g = 0.55, b = 1.00, crit = false },
+    { delay = 0.52, zone = "OUTGOING", txt = "6,310",        r = 0.82, g = 0.55, b = 1.00, crit = false, overhead = "6 310" },
     { delay = 0.70, zone = "INCOMING", txt = "* +6,700 *",   r = 0.25, g = 1.00, b = 0.55, crit = true  },
-    { delay = 0.76, zone = "OUTGOING", txt = "* 19,450 *",   r = 1.00, g = 0.35, b = 0.10, crit = true  },
+    { delay = 0.76, zone = "OUTGOING", txt = "* 19,450 *",   r = 1.00, g = 0.35, b = 0.10, crit = true,  overhead = "19 450" },
   }
   for _, s in ipairs(samples) do
     if C_Timer and C_Timer.After then
       C_Timer.After(s.delay, function()
         SpArc:SpawnMSBTText(s.zone, s.txt, s.r, s.g, s.b, s.crit)
+        if s.overhead then
+          SpArc:SpawnOverheadTargetText(s.overhead, s.crit, true)
+        end
       end)
     else
       SpArc:SpawnMSBTText(s.zone, s.txt, s.r, s.g, s.b, s.crit)
+      if s.overhead then
+        SpArc:SpawnOverheadTargetText(s.overhead, s.crit, true)
+      end
     end
   end
 end
@@ -494,35 +643,11 @@ end
 
 function SpArc:UpdateDynamicAoEPeriodicFilter(forceApply)
   if not SpArc:IsCombatTextEnabled() then return end
-  local db = SpArc:EnsureDB()
-  local vis = (db and db.visual) or SpArc.DEFAULT_VISUAL
-  if vis.ctShowDirectDamage == false then
-    if forceApply or lastAppliedPeriodicVal ~= "0" then
-      SafeSetCVar("floatingCombatTextCombatLogPeriodicSpells", "0")
-      lastAppliedPeriodicVal = "0"
-    end
-    return
-  end
-
-  local mode = vis.ctDotTickMode or "AUTO_AOE"
-  local targetVal = "1"
-  local activeCount = SpArc:CountActiveCombatEnemyPlates()
-
-  if mode == "OFF" then
-    targetVal = "0"
-  elseif mode == "ON" then
-    targetVal = "1"
-  else
-    if activeCount >= 3 then
-      targetVal = "0"
-    else
-      targetVal = "1"
-    end
-  end
-
-  if forceApply or lastAppliedPeriodicVal ~= targetVal then
-    SafeSetCVar("floatingCombatTextCombatLogPeriodicSpells", targetVal)
-    lastAppliedPeriodicVal = targetVal
+  SpArc:CountActiveCombatEnemyPlates()
+  if forceApply or lastAppliedPeriodicVal ~= "0" then
+    SafeSetCVar("floatingCombatTextCombatDamage", "0")
+    SafeSetCVar("floatingCombatTextCombatLogPeriodicSpells", "0")
+    lastAppliedPeriodicVal = "0"
   end
 end
 
@@ -653,11 +778,15 @@ local function HandleUnitCombatForMSBT(unit, action, flags, amount, school)
   local act = (not IsSecret(action)) and action or "WOUND"
 
   if unit == "target" then
-    if vis.ctShowOutgoingZone == false then return end
+    local wantMSBT = (vis.ctShowOutgoingZone ~= false)
+    local wantOverhead = (vis.ctShowDirectDamage ~= false)
+    if not wantMSBT and not wantOverhead then return end
     if act == "HEAL" or act == "ENERGIZE" then return end
     if act == "MISS" or act == "DODGE" or act == "PARRY" or act == "IMMUNE" then
       if vis.ctHideDodgeParryMiss ~= false then return end
-      SpArc:SpawnMSBTText("OUTGOING", tostring(act), 0.75, 0.78, 0.85, false)
+      if wantMSBT then
+        SpArc:SpawnMSBTText("OUTGOING", tostring(act), 0.75, 0.78, 0.85, false)
+      end
       return
     end
     if amount == nil then return end
@@ -676,11 +805,21 @@ local function HandleUnitCombatForMSBT(unit, action, flags, amount, school)
 
     if not IsSecret(amount) and type(amount) == "number" then
       if amount <= 0 then return end
-      local txt = (_G.BreakUpLargeNumbers and _G.BreakUpLargeNumbers(amount)) or tostring(amount)
-      if isCrit then txt = "* " .. txt .. " *" end
-      SpArc:SpawnMSBTText("OUTGOING", txt, r, g, b, isCrit)
+      local cleanTxt = (_G.BreakUpLargeNumbers and _G.BreakUpLargeNumbers(amount)) or tostring(amount)
+      if wantOverhead then
+        SpArc:SpawnOverheadTargetText(cleanTxt, isCrit, false)
+      end
+      if wantMSBT then
+        local msbtTxt = isCrit and ("* " .. cleanTxt .. " *") or cleanTxt
+        SpArc:SpawnMSBTText("OUTGOING", msbtTxt, r, g, b, isCrit)
+      end
     else
-      SpArc:SpawnMSBTText("OUTGOING", amount, r, g, b, isCrit)
+      if wantOverhead then
+        SpArc:SpawnOverheadTargetText(amount, isCrit, false)
+      end
+      if wantMSBT then
+        SpArc:SpawnMSBTText("OUTGOING", amount, r, g, b, isCrit)
+      end
     end
   elseif unit == "player" then
     if vis.ctShowIncomingZone == false then return end
@@ -756,8 +895,10 @@ function SpArc:ApplyCombatTextSettings()
     SafeSetCVar("floatingCombatTextReactives", "1")
   end
 
-  -- 2. Tactile Enemy 3D Damage Numbers & Clutter Filters
-  SafeSetCVar("floatingCombatTextCombatDamage", showDirect and "1" or "0")
+  -- 2. Center Target Haptic Numbers (rendered by SpArc with custom alpha, smaller font & high Y offset)
+  -- Turn off Blizzard's un-dimmable 100%-bright #FFFF00 3D text so it never sits on the character's head
+  SafeSetCVar("floatingCombatTextCombatDamage", "0")
+  SafeSetCVar("floatingCombatTextCombatLogPeriodicSpells", "0")
   SafeSetCVar("floatingCombatTextPetMeleeDamage", (showDirect and not hidePet) and "1" or "0")
   SafeSetCVar("floatingCombatTextPetSpellDamage", (showDirect and not hidePet) and "1" or "0")
 
@@ -768,11 +909,13 @@ function SpArc:ApplyCombatTextSettings()
 
   -- 3. Number Scale & Fountain Spread
   SafeSetCVar("WorldTextScale", string.format("%.2f", math.max(0.40, math.min(1.50, worldScale))))
+  SafeSetCVar("WorldTextRampPow", "1.0")
+  SafeSetCVar("WorldTextRampPowCrit", "1.5")
   SafeSetCVar("floatingCombatTextCombatDamageDirectionalScale", tostring(math.max(0, math.min(2, dirScale))))
   SafeSetCVar("floatingCombatTextFloatMode", "1")
 
   -- 4. Periodic DoT Ticks (Smart AoE / ON / OFF)
-  SpArc:UpdateDynamicAoEPeriodicFilter(true)
+  SpArc:CountActiveCombatEnemyPlates()
 
   -- 5. Nameplate View Distance, Distance Fade & Stacking Anti-Overlap
   if SpArc.SyncExternalNameplateAddons then
@@ -814,6 +957,8 @@ function SpArc:ApplyCleanHapticPreset()
   vis.ctHideWorldHealing = true
   vis.ctHideDodgeParryMiss = true
   vis.ctWorldTextScale = 0.65
+  vis.ctOverheadAlpha = 0.60
+  vis.ctOverheadY = 55
   vis.ctDirectionalScale = 0
   vis.ctSpreadNameplates = true
   vis.ctNameplateOverlapV = 1.35
@@ -1058,13 +1203,20 @@ function SpArc:BuildCombatTextPage(page, ui, helpers)
     ui.m11DotBtns[#ui.m11DotBtns + 1] = b
   end
 
-  CreateElvSlider(grpEnemy, "SL_CT_WORLD_SCALE", "ctWorldTextScale", 0.40, 1.50, 0.05, 16, -66, 290, function()
+  CreateElvSlider(grpEnemy, "SL_CT_WORLD_SCALE", "ctWorldTextScale", 0.40, 1.30, 0.05, 16, -66, 190, function()
     SpArc:ApplyCombatTextSettings()
     SpArc:RefreshCombatTextPage(ui)
+    SpArc:SpawnOverheadTargetText("4 318", false, true)
   end)
-  CreateElvSlider(grpEnemy, "SL_CT_DIR_SCALE", "ctDirectionalScale", 0, 2, 1, 332, -66, 290, function()
+  CreateElvSlider(grpEnemy, "SL_CT_OVERHEAD_ALPHA", "ctOverheadAlpha", 0.20, 1.00, 0.05, 224, -66, 190, function()
     SpArc:ApplyCombatTextSettings()
     SpArc:RefreshCombatTextPage(ui)
+    SpArc:SpawnOverheadTargetText("4 318", false, true)
+  end)
+  CreateElvSlider(grpEnemy, "SL_CT_OVERHEAD_Y", "ctOverheadY", 10, 140, 5, 432, -66, 190, function()
+    SpArc:ApplyCombatTextSettings()
+    SpArc:RefreshCombatTextPage(ui)
+    SpArc:SpawnOverheadTargetText("4 318", false, true)
   end)
 
   -- Group 3: Nameplate View Distance, Smooth Distance Fade & Stacking Anti-Overlap
@@ -1152,16 +1304,21 @@ function SpArc:RefreshCombatTextPage(ui)
 
   if ui.m11StatusTxt then
     local scaleVal = tonumber(vis.ctWorldTextScale) or 0.65
-    local cvarPeriodic = SafeGetCVar("floatingCombatTextCombatLogPeriodicSpells") or "1"
-    local periodicStr = (cvarPeriodic == "1") and "|cff00ff00ON|r" or "|cffff5555OFF (AoE)|r"
+    local overheadAlphaPct = math.floor(((tonumber(vis.ctOverheadAlpha) or 0.60) * 100) + 0.5)
+    local overheadYVal = math.floor((tonumber(vis.ctOverheadY) or 55) + 0.5)
+    local periodicStr = "|cff00ff00ON|r"
     if curMode == "OFF" then
       periodicStr = "|cffff5555OFF|r"
+    elseif curMode == "AUTO_AOE" and (lastCombatPlateCount or 0) >= 3 then
+      periodicStr = "|cffff5555OFF (AoE)|r"
     end
     local maxDist = math.floor((tonumber(vis.npMaxDistance) or 40) + 0.5)
     local minAlphaPct = math.floor(((tonumber(vis.npMinAlpha) or 0.30) * 100) + 0.5)
     ui.m11StatusTxt:SetText(string.format(
       SpArc:L("M11_STATUS_FMT"),
       scaleVal,
+      overheadAlphaPct,
+      overheadYVal,
       periodicStr,
       maxDist,
       minAlphaPct,

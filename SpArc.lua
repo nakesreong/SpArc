@@ -140,7 +140,7 @@ local function OpenControlCenter(initialTab)
 
   if not controlFrame then
     controlFrame = CreateFrame("Frame", "SpArcControlCenter", UIParent, "BackdropTemplate")
-    controlFrame:SetSize(880, 620)
+    controlFrame:SetSize(880, 646)
     controlFrame:SetPoint("CENTER")
     controlFrame:SetFrameStrata("DIALOG")
     controlFrame:SetMovable(true)
@@ -230,10 +230,26 @@ local function OpenControlCenter(initialTab)
     subTitle:SetJustifyH("LEFT")
     subTitle:SetWordWrap(false)
 
+    -- Bottom Inspiration Credits Footer Bar
+    local footerBar = CreateFrame("Frame", nil, controlFrame, "BackdropTemplate")
+    footerBar:SetPoint("BOTTOMLEFT", controlFrame, "BOTTOMLEFT", 1, 1)
+    footerBar:SetPoint("BOTTOMRIGHT", controlFrame, "BOTTOMRIGHT", -1, 1)
+    footerBar:SetHeight(24)
+    SetBackdropFlat(footerBar, 0.06, 0.06, 0.09, 0.98, 0.18, 0.18, 0.24, 1.0)
+
+    local footerCreditsTxt = footerBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ApplyCyrFont(footerCreditsTxt, 10)
+    footerCreditsTxt:SetPoint("LEFT", footerBar, "LEFT", 12, 0)
+    footerCreditsTxt:SetPoint("RIGHT", footerBar, "RIGHT", -12, 0)
+    footerCreditsTxt:SetJustifyH("CENTER")
+    footerCreditsTxt:SetWordWrap(false)
+    footerCreditsTxt:SetTextColor(0.72, 0.70, 0.84, 0.95)
+    ui.footerCreditsTxt = footerCreditsTxt
+
     -- Left Sidebar (ElvUI Navigation Column)
     local sidebar = CreateFrame("Frame", nil, controlFrame, "BackdropTemplate")
     sidebar:SetPoint("TOPLEFT", controlFrame, "TOPLEFT", 1, -50)
-    sidebar:SetPoint("BOTTOMLEFT", controlFrame, "BOTTOMLEFT", 1, 1)
+    sidebar:SetPoint("BOTTOMLEFT", controlFrame, "BOTTOMLEFT", 1, 24)
     sidebar:SetWidth(204)
     SetBackdropFlat(sidebar, 0.04, 0.04, 0.06, 0.98, 0.18, 0.18, 0.24, 1.0)
 
@@ -276,7 +292,7 @@ local function OpenControlCenter(initialTab)
     for i = 1, #navKeys do
       local page = CreateFrame("Frame", nil, controlFrame)
       page:SetPoint("TOPLEFT", controlFrame, "TOPLEFT", 220, -64)
-      page:SetPoint("BOTTOMRIGHT", controlFrame, "BOTTOMRIGHT", -16, 16)
+      page:SetPoint("BOTTOMRIGHT", controlFrame, "BOTTOMRIGHT", -16, 34)
       page:Hide()
       pages[i] = page
     end
@@ -1418,6 +1434,9 @@ local function OpenControlCenter(initialTab)
       db = SpArc:EnsureDB()
 
       ui.subTitle:SetText(SpArc:L("WINDOW_SUBTITLE"))
+      if ui.footerCreditsTxt then
+        ui.footerCreditsTxt:SetText(SpArc:L("FOOTER_CREDITS"))
+      end
       ui.langBtn:SetText(SpArc:L("LANG_BTN"))
       ui.fixCursorTopBtn:SetText(SpArc:L("TOP_FIX_CURSOR"))
       ui.testHudTopBtn:SetText(string.format(SpArc:L("TOP_TEST_HUD"), SpArc.testMode and SpArc:L("MSG_ON") or SpArc:L("MSG_OFF")))
@@ -1901,18 +1920,27 @@ local function RegisterSpArcBlizzardSettings()
   local qBtn5 = CreateQuickBtn(16, -194, 9)
   local qBtn6 = CreateQuickBtn(280, -194, 8)
 
+  local creditsBlock = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  ApplyCyrFont(creditsBlock, 12)
+  creditsBlock:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -246)
+  creditsBlock:SetWidth(580)
+  creditsBlock:SetJustifyH("LEFT")
+  creditsBlock:SetSpacing(3)
+  creditsBlock:SetTextColor(0.75, 0.73, 0.86, 0.95)
+
   local function RefreshBlizzardSettingsTexts()
     local isRU = SpArc.IsRU and SpArc:IsRU()
-    title:SetText("|cffa335eeSpArc v" .. tostring(SpArc.VERSION) .. "|r — " .. (isRU and "FSM-ротация (.MD), Неймплейты Metro и Боевая Камера" or "FSM Rotation (.MD), Metro Nameplates & Action Combat Camera"))
+    title:SetText("|cffa335eeSpArc v" .. tostring(SpArc.VERSION) .. "|r — " .. (isRU and "FSM-ротация (.MD), Неймплейты Metro, MSBT и Боевая Камера" or "FSM Rotation (.MD), Metro Nameplates, MSBT & Action Combat Camera"))
     desc:SetText(isRU
-      and "Авторы: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r\n\nМодульный визуализатор FSM-ротаций (.MD псевдокод), настраиваемая дуга/чаша/линия, неймплейты Metro с авто-трекингом дотов из .MD, двунаправленный кастбар, Боевая Камера и профили ElvUI."
-      or "Authors: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r\n\nModular FSM rotation visualizer (.MD pseudocode), customizable Dome/Line/Bowl arc, Metro Nameplates with .MD DoT auto-sync, dual-direction castbar, Action Combat Camera, and ElvUI-style profiles.")
+      and "Авторы: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r\n\nМодульный визуализатор FSM-ротаций (.MD псевдокод), настраиваемая дуга/чаша/линия, неймплейты Metro с авто-трекингом дотов и фейдингом по дальности, подвижные зоны боевого текста MSBT, двунаправленный кастбар, Боевая Камера и профили ElvUI."
+      or "Authors: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r\n\nModular FSM rotation visualizer (.MD pseudocode), customizable Dome/Line/Bowl arc, Metro Nameplates with .MD DoT auto-sync & distance fade, movable MSBT scroll zones, dual-direction castbar, Action Combat Camera, and ElvUI-style profiles.")
     qBtn1:SetText(isRU and "Открыть центр управления (/sparc)" or "Open Control Center (/sparc)")
     qBtn2:SetText(isRU and "Боевая Камера и клавиши (/sparc cam)" or "Combat Camera & Keybinds (/sparc cam)")
     qBtn3:SetText(isRU and "Дуга ротации и HUD (/sparc hud)" or "Rotation Arc & HUD (/sparc hud)")
     qBtn4:SetText(isRU and "Неймплейты Metro (/sparc np)" or "Metro Nameplates (/sparc np)")
     qBtn5:SetText(isRU and "Макросогенератор (/sparc macro)" or "Macro Generator (/sparc macro)")
     qBtn6:SetText(isRU and "Профили персонажей (/sparc prof)" or "Character Profiles (/sparc prof)")
+    creditsBlock:SetText(SpArc:L("FOOTER_CREDITS"))
   end
   RefreshBlizzardSettingsTexts()
   panel:SetScript("OnShow", RefreshBlizzardSettingsTexts)

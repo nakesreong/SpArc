@@ -9,8 +9,8 @@ _G.SparkArc = SpArc
 _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
-SpArc.VERSION = "2.9.4"
-SpArc.PROFILE_SCHEMA_VERSION = 32
+SpArc.VERSION = "2.9.5"
+SpArc.PROFILE_SCHEMA_VERSION = 33
 
 local C_CVar = _G.C_CVar
 local issecretvalue = _G.issecretvalue
@@ -209,6 +209,8 @@ SpArc.DEFAULT_VISUAL = {
   ctHideWorldHealing = true,
   ctHideDodgeParryMiss = true,
   ctWorldTextScale = 0.65,
+  ctOverheadAlpha = 0.60,
+  ctOverheadY = 55,
   ctDirectionalScale = 0,
   ctSpreadNameplates = true,
   ctNameplateOverlapV = 1.35,

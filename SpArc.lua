@@ -254,13 +254,13 @@ local function OpenControlCenter(initialTab)
       if activeKeybindCapture and activeKeybindCapture.CancelCapture then
         activeKeybindCapture:CancelCapture()
       end
-      for i = 1, #navButtons do
+      for i = 1, #navKeys do
         if i == currentTabIdx then
-          pages[i]:Show()
-          navButtons[i]:SetSelected(true)
+          if pages[i] then pages[i]:Show() end
+          if navButtons[i] then navButtons[i]:SetSelected(true) end
         else
-          pages[i]:Hide()
-          navButtons[i]:SetSelected(false)
+          if pages[i] then pages[i]:Hide() end
+          if navButtons[i] then navButtons[i]:SetSelected(false) end
         end
       end
       SpArc.previewCrosshairInConfig = (currentTabIdx == 6) and controlFrame:IsShown()
@@ -1423,9 +1423,12 @@ local function OpenControlCenter(initialTab)
       ui.testHudTopBtn:SetText(string.format(SpArc:L("TOP_TEST_HUD"), SpArc.testMode and SpArc:L("MSG_ON") or SpArc:L("MSG_OFF")))
       ui.testHudTopBtn:SetSelected(SpArc.testMode and true or false)
 
-      for i, nb in ipairs(ui.navButtons) do
-        nb:SetText(SpArc:L(nb.nKey))
-        nb:SetSelected(i == currentTabIdx)
+      for i = 1, #navKeys do
+        local nb = ui.navButtons[i]
+        if nb then
+          nb:SetText(SpArc:L(nb.nKey))
+          nb:SetSelected(i == currentTabIdx)
+        end
       end
 
       for _, gb in ipairs(ui.groupBoxes) do

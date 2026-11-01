@@ -4,8 +4,8 @@
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
 -- =====================================================================================
 
-local _, SpArc = ...
-_G.SpArc = SpArc
+local _G = _G
+local SpArc = _G.SpArc
 
 local issecretvalue = _G.issecretvalue or function() return false end
 local function IsSecret(v)

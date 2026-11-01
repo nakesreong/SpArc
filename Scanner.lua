@@ -663,6 +663,33 @@ function SpArc:ScanActionSlotsAndSpells(force)
       end
     end
 
+    -- Secondary pass for multi-spell or actionbar-conditional macros (e.g. 1_to_2 casting both Power Infusion & Void Eruption)
+    if not foundSlot and def.isKnown then
+      for _, slot in ipairs(ACTIVE_SLOTS) do
+        local cLines = castLinesBySlot[slot]
+        if cLines then
+          for _, line in ipairs(cLines) do
+            for _, nm in ipairs(def.names or {}) do
+              if line:find(nm, 1, true) then
+                foundSlot = slot
+                break
+              end
+            end
+            if not foundSlot and def.idSet then
+              for sid, _ in pairs(def.idSet) do
+                if line:match("%f[%d]" .. tostring(sid) .. "%f[%D]") then
+                  foundSlot = slot
+                  break
+                end
+              end
+            end
+            if foundSlot then break end
+          end
+        end
+        if foundSlot then break end
+      end
+    end
+
     if not foundSlot and def.idSet then
       for sid, _ in pairs(def.idSet) do
         if spellIDToSlot[sid] then

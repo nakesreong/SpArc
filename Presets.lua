@@ -784,7 +784,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 32
+SpArc.PROFILE_SCHEMA_VERSION = 33
 
 ---------------------------------------------------------------------------------------
 --         6 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID)           --
@@ -819,7 +819,7 @@ SPELL PSYCHIC_HORROR = ID:64044,8122 | NAME:"Глубинный ужас","Ме�
 SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | GAIN:15 | ICON:136201
 SPELL VAMPIRIC_TOUCH = ID:34914 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Прикосновение вампира","Vampiric Touch" | CD:0 | CHARGES:1 | GAIN:6 | ICON:135978
 AURA SHADOW_WORD_PAIN = ID:589 | AURA_UNIT:target | AURA_DUR:16 | NAME:"Слово Тьмы: Боль","Shadow Word: Pain" | ICON:136207
-SPELL VOID_ERUPTION = ID:228260,391109,194249 | AURA_ID:194249,391109 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | BOSS:true | NAME:"Вхождение в Бездну","Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | ICON:537079
+SPELL VOID_ERUPTION = ID:228260,391109,194249 | AURA_ID:194249,391109 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | BOSS:true | NAME:"Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | ICON:537079
 SPELL POWER_INFUSION = ID:10060 | AURA_ID:10060 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | BOSS:true | NAME:"Придание сил","Power Infusion" | CD:120 | ICON:135939
 SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела Бездны","Void Volley","Void Bolt" | CD:6 | GAIN:10 | OVERRIDE_OF:VOID_ERUPTION | PROC_ONLY:true | ICON:1386548
 SPELL DEVOURING_PLAGUE = ID:335467 | AURA_ID:335467 | AURA_DUR:6 | NAME:"Слово Тьмы: Безумие","Всепожирающая чума","Shadow Word: Madness","Devouring Plague" | CD:0 | COST:50 | GRANTS:MIND_FLAY_INSANITY | SPENDER:true | ICON:252997

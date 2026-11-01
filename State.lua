@@ -372,6 +372,53 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     end
   end
 
+  -- Resolve active spell on the assigned action slot FIRST so multi-spell/conditional macros
+  -- (e.g. 1_to_2 switching between Power Infusion, Void Eruption, and Mind Blast across Bar 1/2)
+  -- never contaminate one spell's cooldown with another spell's action slot cooldown!
+  local slotActiveSpellID = nil
+  local isBonusBarActive = _G.HasBonusActionBar and SafeBool(_G.HasBonusActionBar) or false
+  local useSlotActionState = slot and (not (isBonusBarActive and slot <= 12))
+  if useSlotActionState then
+    local btBtn = _G["BT4Button" .. slot]
+    if btBtn and btBtn.GetSpellId then
+      local okBS, btSID = pcall(btBtn.GetSpellId, btBtn)
+      if okBS and not IsSecret(btSID) and type(btSID) == "number" and btSID > 0 then
+        slotActiveSpellID = btSID
+      end
+    end
+    if not slotActiveSpellID and GetActionInfo then
+      local okAI, aType, aID, aSub = pcall(GetActionInfo, slot)
+      if okAI and not IsSecret(aID) and type(aID) == "number" and aID > 0 then
+        if aType == "spell" or aSub == "spell" then
+          slotActiveSpellID = aID
+        elseif aType == "macro" and _G.GetMacroSpell then
+          local okMS, msID = pcall(_G.GetMacroSpell, aID)
+          if okMS and not IsSecret(msID) and type(msID) == "number" and msID > 0 then
+            slotActiveSpellID = msID
+          end
+        end
+      end
+    end
+  end
+  local slotMatchesDef = useSlotActionState and ((not slotActiveSpellID and (def.slotCastLineCount or 0) <= 1) or (slotActiveSpellID and def.idSet and def.idSet[slotActiveSpellID] == true)) or false
+
+  st.knownCDStart = st.knownCDStart or {}
+  st.knownCDDur = st.knownCDDur or {}
+  local db = SpArc:EnsureDB()
+  db.runtimeCDs = db.runtimeCDs or {}
+
+  local function SaveKnownCD(sTime, dTime)
+    st.knownCDStart[defKey] = sTime
+    st.knownCDDur[defKey] = dTime
+    db.runtimeCDs[defKey] = { s = sTime, d = dTime }
+  end
+
+  local function ClearKnownCD()
+    st.knownCDStart[defKey] = nil
+    st.knownCDDur[defKey] = nil
+    db.runtimeCDs[defKey] = nil
+  end
+
   if not gotCleanCD and C_Spell and C_Spell.GetSpellCooldown and spellID then
     local okCD, cd = pcall(C_Spell.GetSpellCooldown, spellID)
     if okCD and type(cd) == "table" then
@@ -383,6 +430,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
           if cd.duration >= 0.25 and cd.duration <= 1.6 and (cd.startTime + cd.duration) > now then
             st.gcdStartTime = cd.startTime
             st.gcdDuration = cd.duration
+            ClearKnownCD()
           elseif cd.duration > 1.6 then
             local r = cd.startTime + cd.duration - now
             if r > 0.15 then
@@ -392,14 +440,21 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
               startTime = cd.startTime
               charges = 0
               cdRaw = string.format("%.1fs/%.1fs", remSec, durSec)
+              SaveKnownCD(cd.startTime, cd.duration)
+            else
+              ClearKnownCD()
             end
+          else
+            ClearKnownCD()
           end
+        else
+          ClearKnownCD()
         end
       end
     end
   end
 
-  if not gotCleanCD and slot and GetActionCooldown then
+  if not gotCleanCD and slot and slotMatchesDef and GetActionCooldown then
     local okA, s, d = pcall(GetActionCooldown, slot)
     if okA then
       if IsSecret(s) or IsSecret(d) then
@@ -410,6 +465,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
           if d >= 0.25 and d <= 1.6 and (s + d) > now then
             st.gcdStartTime = s
             st.gcdDuration = d
+            ClearKnownCD()
           elseif d > 1.6 then
             local r = s + d - now
             if r > 0.15 then
@@ -419,8 +475,15 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
               startTime = s
               charges = 0
               cdRaw = string.format("act:%.1fs/%.1fs", remSec, durSec)
+              SaveKnownCD(s, d)
+            else
+              ClearKnownCD()
             end
+          else
+            ClearKnownCD()
           end
+        else
+          ClearKnownCD()
         end
       end
     end
@@ -444,18 +507,59 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
         cdRaw = string.format("sim:%.1fs", remSec)
       end
     else
+      local kStart = st.knownCDStart[defKey]
+      local kDur = st.knownCDDur[defKey]
+      if (not kStart or not kDur) and db.runtimeCDs and db.runtimeCDs[defKey] then
+        local saved = db.runtimeCDs[defKey]
+        if type(saved) == "table" and saved.s and saved.d and saved.s <= now and (saved.s + saved.d) > now then
+          kStart = saved.s
+          kDur = saved.d
+          st.knownCDStart[defKey] = kStart
+          st.knownCDDur[defKey] = kDur
+        else
+          db.runtimeCDs[defKey] = nil
+        end
+      end
+
+      local bestRem = 0
+      local bestDur = 0
+      local bestStart = 0
+      local bestTag = "timer"
+
+      if kStart and kDur and kDur > 1.6 and kStart <= (now + 0.5) then
+        local rK = (kStart + kDur) - now
+        if rK > 0.15 and rK <= (kDur + 5) then
+          bestRem = rK
+          bestDur = kDur
+          bestStart = kStart
+          bestTag = "cached"
+        else
+          ClearKnownCD()
+        end
+      end
+
       local last = st.lastCastAt[defKey]
       local effCD = def.baseCD or 0
       if last and effCD > 1.6 then
         local elapsed = now - last
-        if elapsed < (effCD - 0.15) then
-          isOnCD = true
-          remSec = effCD - elapsed
-          durSec = effCD
-          startTime = last
-          charges = 0
-          cdRaw = string.format("timer:%.1fs", remSec)
+        if elapsed >= 0 and elapsed < (effCD - 0.15) then
+          local rCast = effCD - elapsed
+          if rCast > bestRem then
+            bestRem = rCast
+            bestDur = effCD
+            bestStart = last
+            bestTag = "timer"
+          end
         end
+      end
+
+      if bestRem > 0.15 then
+        isOnCD = true
+        remSec = bestRem
+        durSec = bestDur
+        startTime = bestStart
+        charges = 0
+        cdRaw = string.format("%s:%.1fs", bestTag, remSec)
       end
     end
   end
@@ -490,31 +594,8 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   end
 
   local actUsableVal, actNoManaVal = nil, nil
-  local slotActiveSpellID = nil
-  local isBonusBarActive = _G.HasBonusActionBar and SafeBool(_G.HasBonusActionBar) or false
-  local useSlotActionState = slot and (not (isBonusBarActive and slot <= 12))
   if useSlotActionState then
     local btBtn = _G["BT4Button" .. slot]
-    if btBtn and btBtn.GetSpellId then
-      local okBS, btSID = pcall(btBtn.GetSpellId, btBtn)
-      if okBS and not IsSecret(btSID) and type(btSID) == "number" and btSID > 0 then
-        slotActiveSpellID = btSID
-      end
-    end
-    if not slotActiveSpellID and GetActionInfo then
-      local okAI, aType, aID, aSub = pcall(GetActionInfo, slot)
-      if okAI and not IsSecret(aID) and type(aID) == "number" and aID > 0 then
-        if aType == "spell" or aSub == "spell" then
-          slotActiveSpellID = aID
-        elseif aType == "macro" and _G.GetMacroSpell then
-          local okMS, msID = pcall(_G.GetMacroSpell, aID)
-          if okMS and not IsSecret(msID) and type(msID) == "number" and msID > 0 then
-            slotActiveSpellID = msID
-          end
-        end
-      end
-    end
-    local slotMatchesDef = (not slotActiveSpellID) or (def.idSet and def.idSet[slotActiveSpellID]) or false
     if slotMatchesDef and IsUsableAction then
       local okA, u, noM = pcall(IsUsableAction, slot)
       if okA then

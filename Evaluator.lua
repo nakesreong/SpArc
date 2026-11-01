@@ -732,6 +732,17 @@ function SpArc:BuildRotationQueue(maxSlots)
       if simActive[spKey] or rem > 1.5 then
         return false
       end
+      -- If Power Infusion shares the same macro button as Void Eruption (e.g. 1_to_2 on Q),
+      -- do not prompt Power Infusion alone while Void Eruption is still on cooldown!
+      if spKey == "POWER_INFUSION" and states["VOID_ERUPTION"] and not states["VOID_ERUPTION"].isUnavailable then
+        local piKB = states["POWER_INFUSION"] and states["POWER_INFUSION"].keybind
+        local veKB = states["VOID_ERUPTION"].keybind
+        if piKB and piKB ~= "" and piKB == veKB then
+          if not states["VOID_ERUPTION"].isReady and not simActive["VOID_ERUPTION"] then
+            return false
+          end
+        end
+      end
     end
     return true
   end
@@ -875,6 +886,11 @@ function SpArc:BuildRotationQueue(maxSlots)
           simActive[pickedKey] = true
           simCD[pickedKey] = math.max(def.burstDuration or 15, def.baseCD or 30)
           simReady[pickedKey] = false
+          if pickedKey == "VOID_ERUPTION" and states["POWER_INFUSION"] and s.keybind ~= "" and s.keybind == states["POWER_INFUSION"].keybind then
+            simActive["POWER_INFUSION"] = true
+            simCD["POWER_INFUSION"] = 120
+            simReady["POWER_INFUSION"] = false
+          end
         elseif (def.liveMaxCharges or def.maxCharges or 1) > 1 then
           simCharges[pickedKey] = (simCharges[pickedKey] or 1) - 1
           if simCharges[pickedKey] <= 0 then
@@ -892,8 +908,9 @@ function SpArc:BuildRotationQueue(maxSlots)
         end
       end
 
-      for spK, _ in pairs(SPELL_DEFS) do
-        if simCD[spK] and simCD[spK] < 9000 then
+      for spK, spD in pairs(SPELL_DEFS) do
+        local isMajorBurst = spD and (spD.isBossSkill or (spD.burstDuration and spD.burstDuration > 0) or ((spD.baseCD or 0) >= 30))
+        if not isMajorBurst and simCD[spK] and simCD[spK] < 9000 then
           simCD[spK] = math.max(0, simCD[spK] - 1.4)
         end
       end

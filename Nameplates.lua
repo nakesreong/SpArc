@@ -514,7 +514,14 @@ local function DoesUnitHaveAuraGroup(unit, metro, group, liveIDSet, liveNameSet,
     for id in pairs(group.idSet) do
       local entry = tMap[id] or tMap[tostring(id)]
       local exp = entry and (entry.expiresAt or entry.untilTime)
-      if exp and exp > now then return true end
+      if exp and exp > now then
+        metro.trackedAuras = metro.trackedAuras or {}
+        metro.trackedAuras[id] = exp
+        if id == 34914 and (not metro.trackedAuras[589] or metro.trackedAuras[589] < now) then
+          metro.trackedAuras[589] = now + (DEFAULT_AURA_DURATIONS[589] or 16.0)
+        end
+        return true
+      end
     end
   end
   return false

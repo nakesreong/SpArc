@@ -265,7 +265,7 @@ local function OpenControlCenter(initialTab)
     sidebar:SetWidth(224)
     SetBackdropFlat(sidebar, 0.04, 0.04, 0.06, 0.98, 0.18, 0.18, 0.24, 1.0)
 
-    local navKeys = { "NAV_1", "NAV_2", "NAV_3", "NAV_4", "NAV_5", "NAV_6", "NAV_7", "NAV_8", "NAV_9", "NAV_10", "NAV_11" }
+    local navKeys = { "NAV_1", "NAV_2", "NAV_3", "NAV_4", "NAV_5", "NAV_6", "NAV_7", "NAV_8", "NAV_9", "NAV_10", "NAV_11", "NAV_12" }
     local navButtons = {}
     local pages = {}
     local groupBoxes = {}
@@ -334,9 +334,10 @@ local function OpenControlCenter(initialTab)
       { idx = 4,  nKey = "NAV_4",  y = -115 },
       { idx = 5,  nKey = "NAV_5",  y = -147, divAfter = -181 },
       { idx = 6,  nKey = "NAV_6",  y = -188, divAfter = -222 },
-      { idx = 10, nKey = "NAV_10", y = -229, divAfter = -263 },
-      { idx = 11, nKey = "NAV_11", y = -270, divAfter = -304 },
-      { idx = 9,  nKey = "NAV_9",  y = -311, divAfter = -345 },
+      { idx = 12, nKey = "NAV_12", y = -229, divAfter = -263 },
+      { idx = 10, nKey = "NAV_10", y = -270, divAfter = -304 },
+      { idx = 11, nKey = "NAV_11", y = -311, divAfter = -345 },
+      { idx = 9,  nKey = "NAV_9",  y = -352, divAfter = -386 },
       { idx = 7,  nKey = "NAV_7",  y = -515, divBefore = -506, divAfter = -550 },
       { idx = 8,  nKey = "NAV_8",  y = -558 },
     }
@@ -1461,6 +1462,21 @@ local function OpenControlCenter(initialTab)
     end
 
     -----------------------------------------------------------------------------------
+    -- MODULE 12: CIRCULAR-PORTRAIT & METRO UNITFRAMES SUITE
+    -----------------------------------------------------------------------------------
+    if SpArc.BuildUnitFramesPage and pages[12] then
+      SpArc:BuildUnitFramesPage(pages[12], ui, {
+        ApplyCyrFont = ApplyCyrFont,
+        CreateElvButton = CreateElvButton,
+        RegisterGroupBox = RegisterGroupBox,
+        SetBackdropFlat = SetBackdropFlat,
+        CreateElvCheck = CreateElvCheck,
+        CreateElvSlider = CreateElvSlider,
+        controlFrame = controlFrame,
+      })
+    end
+
+    -----------------------------------------------------------------------------------
     -- MASTER REFRESH UI
     -----------------------------------------------------------------------------------
     function controlFrame:RefreshUI()
@@ -1759,6 +1775,11 @@ local function OpenControlCenter(initialTab)
         SpArc:RefreshCombatTextPage(ui)
       end
 
+      -- Module 12 (UnitFrames) refresh
+      if SpArc.RefreshUnitFramesPage then
+        SpArc:RefreshUnitFramesPage(ui)
+      end
+
       isRefreshingUI = false
     end
 
@@ -2046,6 +2067,8 @@ _G.SlashCmdList["SPARC"] = function(msg)
         controlFrame:RefreshUI()
       end
     end
+  elseif cmd == "uf" or cmd == "unitframes" or cmd == "frames" then
+    OpenControlCenter(12)
   elseif cmd == "editmode" or cmd == "move" or cmd == "movers" then
     if SpArc.ToggleEditMode then
       SpArc:ToggleEditMode()

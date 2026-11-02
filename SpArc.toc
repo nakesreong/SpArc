@@ -27,4 +27,5 @@ MacroGen.lua
 Nameplates.lua
 CombatText.lua
 EditMode.lua
+UnitFrames.lua
 SpArc.lua

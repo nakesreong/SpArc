@@ -964,7 +964,7 @@ local function CreateMetroPlate(plate, isDemo)
   metro.topSheen = topSheen
   -- Crisp 1px dark border
   metro.border = CreateBorderFrame(hb, 1, 0.04, 0.04, 0.06, 1.0, 2)
-  -- 2px Target Highlight Border
+  -- 2px Target Highlight Border + Golden Target Chevrons (> [Plate] <)
   local tBorder = CreateFrame("Frame", nil, hb, "BackdropTemplate")
   tBorder:SetPoint("TOPLEFT", hb, "TOPLEFT", -1, 1)
   tBorder:SetPoint("BOTTOMRIGHT", hb, "BOTTOMRIGHT", 1, -1)
@@ -973,7 +973,19 @@ local function CreateMetroPlate(plate, isDemo)
     edgeFile = FLAT_TEX,
     edgeSize = 2,
   })
-  tBorder:SetBackdropBorderColor(1.00, 0.96, 0.82, 1.0)
+  tBorder:SetBackdropBorderColor(1.00, 0.90, 0.28, 1.0)
+  local leftBracket = tBorder:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  ApplyCyrFont(leftBracket, 18)
+  leftBracket:SetPoint("RIGHT", tBorder, "LEFT", -3, 0)
+  leftBracket:SetTextColor(1.00, 0.85, 0.15, 1.0)
+  leftBracket:SetText(">")
+  tBorder.leftBracket = leftBracket
+  local rightBracket = tBorder:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  ApplyCyrFont(rightBracket, 18)
+  rightBracket:SetPoint("LEFT", tBorder, "RIGHT", 3, 0)
+  rightBracket:SetTextColor(1.00, 0.85, 0.15, 1.0)
+  rightBracket:SetText("<")
+  tBorder.rightBracket = rightBracket
   tBorder:Hide()
   metro.targetBorder = tBorder
   -- Text Layer Frame (above borders)

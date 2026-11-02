@@ -233,6 +233,37 @@ SpArc.DEFAULT_VISUAL = {
   ctArcCurve = 55,
   ctCritShake = true,
   ctFontSize = 16,
+  enableUnitFrames = true,
+  ufHideBlizzard = true,
+  ufPortraitStyle = "CIRCLE",
+  ufColorMode = "CLASS",
+  ufShowPowerBar = true,
+  ufShowTargetCastbar = true,
+  ufShowTargetAuras = true,
+  ufShowToT = true,
+  ufShowFocus = true,
+  ufShowPet = true,
+  ufShowBoss = true,
+  ufOocAlpha = 0.85,
+  ufWidth = 176,
+  ufHeight = 28,
+  ufPortraitSize = 48,
+  ufFontSize = 11,
+  ufTargetCastHeight = 16,
+  ufPlayerX = -260,
+  ufPlayerY = -145,
+  ufTargetX = 260,
+  ufTargetY = -145,
+  ufTargetCastX = 260,
+  ufTargetCastY = -182,
+  ufToTX = 425,
+  ufToTY = -145,
+  ufFocusX = -430,
+  ufFocusY = -40,
+  ufPetX = -260,
+  ufPetY = -194,
+  ufBossX = 460,
+  ufBossY = 140,
   lang = "AUTO",
 }
 
@@ -715,6 +746,7 @@ local function ApplyAllActiveProfileSubsystems()
   if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
   if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
   if SpArc.ApplyCombatTextSettings then SpArc:ApplyCombatTextSettings() end
+  if SpArc.ApplyUnitFramesSettings then SpArc:ApplyUnitFramesSettings() end
 end
 
 function SpArc:SetProfile(profileName)

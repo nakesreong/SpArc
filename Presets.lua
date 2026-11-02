@@ -54,6 +54,7 @@ local STRINGS = {
     MOD_ENABLE = "Enable",
     MOD_ENABLE_SAVES = "Enable Left Saves Wing",
     MOD_ENABLE_CDS = "Enable Right CDs Wing",
+    TOP_EDIT_MODE = "Edit HUD",
     TOP_TEST_HUD = "Test HUD: %s",
     TOP_FIX_CURSOR = "Reset Cursor",
 
@@ -268,13 +269,33 @@ local STRINGS = {
     SL_PRIMARY_SCALE = "Primary Slot #1 Scale",
     SL_QUEUE_SCALE = "Queue Slots (#2..#6) Scale",
     SL_QUEUE_LEN = "Number of Arc Icons (3..6)",
+    SL_ARC_OFFSET_X = "Arc Horizontal Offset X (px)",
     SL_ARC_OFFSET_Y = "Arc Vertical Offset Y (px)",
     SL_PRIMARY_BORDER = "Primary Slot #1 Border Thickness (px)",
     SL_ARC_ALPHA = "Rotation Arc Opacity (%)",
     SL_CB_WIDTH = "Castbar Width (px)",
+    SL_CB_OFFSET_X = "Castbar Horizontal Offset X (px)",
     SL_CB_OFFSET_Y = "Castbar Vertical Offset Y (px)",
     SL_EMERG_HP = "Emergency Save HP Threshold (%)",
+    SL_EMERG_X = "Emergency Save X (px)",
+    SL_EMERG_Y = "Emergency Save Y (px)",
     SL_WINGS_Y = "Side Wings Vertical Offset Y (px)",
+    SL_SAVES_X = "Left Wing X (px)",
+    SL_SAVES_Y = "Left Wing Y (px)",
+    SL_CDS_X = "Right Wing X (px)",
+    SL_CDS_Y = "Right Wing Y (px)",
+    SL_CAM_CROSS_X = "Crosshair Horizontal Offset X (px)",
+
+    EM_BAR_TITLE = "|cffa335eeSpArc|r — HUD Edit Mode (Drag elements with LMB  •  Arrows: 1px  •  Shift+Arrows: 10px  •  RMB: Reset element)",
+    EM_RESET_ALL_BTN = "Reset All Positions",
+    EM_DONE_BTN = "Lock & Save",
+    EM_MOVER_ARC = "Rotation Arc",
+    EM_MOVER_SAVES = "Left Wing (Saves)",
+    EM_MOVER_CDS = "Right Wing (CDs)",
+    EM_MOVER_EMERG = "Emergency Save",
+    EM_MOVER_CASTBAR = "Player Castbar",
+    EM_MOVER_RESBAR = "Secondary Resource",
+    EM_MOVER_CROSSHAIR = "Camera Crosshair",
 
     CK_SAVES_WING = "Show Left Defensive Saves Wing (defined by TRACK_SAVES in .MD)",
     CK_CDS_WING = "Show Right Offensive Cooldowns Wing (defined by TRACK_CDS in .MD)",
@@ -340,6 +361,7 @@ local STRINGS = {
     MOD_ENABLE = "Включить",
     MOD_ENABLE_SAVES = "Включить левое крыло сейвов",
     MOD_ENABLE_CDS = "Включить правое крыло бурстов/КД",
+    TOP_EDIT_MODE = "Редактировать HUD",
     TOP_TEST_HUD = "Тест HUD: %s",
     TOP_FIX_CURSOR = "Сброс курсора",
 
@@ -554,13 +576,33 @@ local STRINGS = {
     SL_PRIMARY_SCALE = "Масштаб главной иконки #1",
     SL_QUEUE_SCALE = "Масштаб очереди (#2..#6)",
     SL_QUEUE_LEN = "Кол-во иконок в дуге (3..6)",
+    SL_ARC_OFFSET_X = "Смещение дуги по X (px)",
     SL_ARC_OFFSET_Y = "Смещение дуги по Y (px)",
     SL_PRIMARY_BORDER = "Толщина обводки главной иконки #1 (px)",
     SL_ARC_ALPHA = "Прозрачность дуги ротации (%)",
     SL_CB_WIDTH = "Ширина кастбара (px)",
+    SL_CB_OFFSET_X = "Смещение кастбара по X (px)",
     SL_CB_OFFSET_Y = "Смещение кастбара по Y (px)",
     SL_EMERG_HP = "Порог ХП экстренного сейва (%)",
+    SL_EMERG_X = "Экстренный сейв по X (px)",
+    SL_EMERG_Y = "Экстренный сейв по Y (px)",
     SL_WINGS_Y = "Высота крыльев сейвов/КД по Y (px)",
+    SL_SAVES_X = "Левое крыло по X (px)",
+    SL_SAVES_Y = "Левое крыло по Y (px)",
+    SL_CDS_X = "Правое крыло по X (px)",
+    SL_CDS_Y = "Правое крыло по Y (px)",
+    SL_CAM_CROSS_X = "Смещение прицела по X (px)",
+
+    EM_BAR_TITLE = "|cffa335eeSpArc|r — Редактирование интерфейса (ЛКМ: Перетащить  •  Стрелки: 1px  •  Shift+Стрелки: 10px  •  ПКМ: Сброс)",
+    EM_RESET_ALL_BTN = "Сбросить все позиции",
+    EM_DONE_BTN = "Закрепить (Готово)",
+    EM_MOVER_ARC = "Дуга ротации",
+    EM_MOVER_SAVES = "Левое крыло (Сейвы)",
+    EM_MOVER_CDS = "Правое крыло (Бурсты/КД)",
+    EM_MOVER_EMERG = "Экстренный сейв",
+    EM_MOVER_CASTBAR = "Кастбар игрока",
+    EM_MOVER_RESBAR = "Панель ресурса",
+    EM_MOVER_CROSSHAIR = "Прицел камеры",
 
     CK_SAVES_WING = "Показывать левое крыло сейвов (строка TRACK_SAVES в .MD псевдокоде)",
     CK_CDS_WING = "Показывать правое крыло бурстов и КД (строка TRACK_CDS в .MD псевдокоде)",
@@ -606,6 +648,19 @@ function SpArc:L(key)
   local lang = SpArc:GetActiveLang()
   local tbl = STRINGS[lang] or STRINGS.EN
   return tbl[key] or STRINGS.EN[key] or key
+end
+
+function SpArc:RegisterStrings(enTbl, ruTbl)
+  if type(enTbl) == "table" then
+    for k, v in pairs(enTbl) do
+      STRINGS.EN[k] = v
+    end
+  end
+  if type(ruTbl) == "table" then
+    for k, v in pairs(ruTbl) do
+      STRINGS.RU[k] = v
+    end
+  end
 end
 
 SpArc.AIPromptHeader_EN =

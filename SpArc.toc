@@ -26,4 +26,5 @@ Telemetry.lua
 MacroGen.lua
 Nameplates.lua
 CombatText.lua
+EditMode.lua
 SpArc.lua

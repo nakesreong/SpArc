@@ -1889,7 +1889,7 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
   end)
   -- Live Metro Tile Preview Box on the right side of geoBox
   local prevPanel = CreateFrame("Frame", nil, geoBox, "BackdropTemplate")
-  prevPanel:SetPoint("TOPLEFT", geoBox, "TOPLEFT", 432, -10)
+  prevPanel:SetPoint("TOPLEFT", geoBox, "TOPLEFT", 536, -10)
   prevPanel:SetPoint("BOTTOMRIGHT", geoBox, "BOTTOMRIGHT", -12, 10)
   SetBackdropFlat(prevPanel, 0.04, 0.04, 0.06, 0.96, 0.22, 0.22, 0.30, 1.0)
   local prevTitle = prevPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -1926,7 +1926,7 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
   end)
   ui.m10CyclePrevBtn = cycleBtn
   -- Group 2: Dynamic Aura / DoT Color Rules (Auto-synced from .MD + Custom rules)
-  local rulesBox = RegisterGroupBox(page, "M10_GRP_AURAS", 0, -262, 640, 262)
+  local rulesBox = RegisterGroupBox(page, "M10_GRP_AURAS", 0, -262, 640, 354)
   local cAutoMD = CreateElvCheck(rulesBox, "CK_NP_AUTO_MD", "npAutoAurasFromMD", 14, -8, false, false, function(checked)
     if checked and SpArc.SyncNameplateAurasFromActiveMD then
       SpArc:SyncNameplateAurasFromActiveMD(nil, false)
@@ -1934,12 +1934,12 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
     SpArc:RefreshAllNameplates()
     if SpArc.RefreshNameplatesPage then SpArc:RefreshNameplatesPage(ui) end
   end)
-  cAutoMD:SetWidth(330)
-  local cDistFade = CreateElvCheck(rulesBox, "CK_NP_DIST_FADE", "npDistanceFade", 350, -8, false, false, function()
+  cAutoMD:SetWidth(420)
+  local cDistFade = CreateElvCheck(rulesBox, "CK_NP_DIST_FADE", "npDistanceFade", 448, -8, false, false, function()
     SpArc:RefreshAllNameplates()
     if SpArc.RefreshNameplatesPage then SpArc:RefreshNameplatesPage(ui) end
   end)
-  cDistFade:SetWidth(275)
+  cDistFade:SetWidth(340)
   -- Add New Rule Bar
   local newIDBg = CreateFrame("Frame", nil, rulesBox, "BackdropTemplate")
   newIDBg:SetPoint("TOPLEFT", rulesBox, "TOPLEFT", 14, -34)
@@ -2030,13 +2030,13 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
   rulesScroll:SetPoint("TOPLEFT", 4, -4)
   rulesScroll:SetPoint("BOTTOMRIGHT", -26, 4)
   local rulesContent = CreateFrame("Frame", nil, rulesScroll)
-  rulesContent:SetSize(576, 400)
+  rulesContent:SetSize(752, 480)
   rulesScroll:SetScrollChild(rulesContent)
   ui.m10RulesContent = rulesContent
   ui.m10RuleRows = {}
   for idx = 1, 20 do
     local row = CreateFrame("Frame", nil, rulesContent, "BackdropTemplate")
-    row:SetSize(576, 30)
+    row:SetSize(752, 30)
     row:SetPoint("TOPLEFT", rulesContent, "TOPLEFT", 0, -(idx - 1) * 32)
     SetBackdropFlat(row, 0.08, 0.08, 0.11, 0.94, 0.18, 0.18, 0.25, 1.0)
     -- Enable toggle button
@@ -2052,7 +2052,7 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
     row.chk = chk
     -- Editable IDs Box
     local idBoxBg = CreateFrame("Frame", nil, row, "BackdropTemplate")
-    idBoxBg:SetSize(134, 22)
+    idBoxBg:SetSize(160, 22)
     idBoxBg:SetPoint("LEFT", chk, "RIGHT", 8, 0)
     SetBackdropFlat(idBoxBg, 0.03, 0.03, 0.05, 1.0, 0.26, 0.26, 0.36, 1.0)
     local idEdit = CreateFrame("EditBox", nil, idBoxBg)
@@ -2067,7 +2067,7 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
     local descTxt = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     ApplyCyrFont(descTxt, 11)
     descTxt:SetPoint("LEFT", idBoxBg, "RIGHT", 8, 0)
-    descTxt:SetWidth(265)
+    descTxt:SetWidth(415)
     descTxt:SetJustifyH("LEFT")
     descTxt:SetWordWrap(false)
     row.descTxt = descTxt

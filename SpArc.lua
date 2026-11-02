@@ -140,7 +140,7 @@ local function OpenControlCenter(initialTab)
 
   if not controlFrame then
     controlFrame = CreateFrame("Frame", "SpArcControlCenter", UIParent, "BackdropTemplate")
-    controlFrame:SetSize(880, 662)
+    controlFrame:SetSize(1080, 760)
     controlFrame:SetPoint("CENTER")
     controlFrame:SetFrameStrata("DIALOG")
     controlFrame:SetMovable(true)
@@ -226,7 +226,17 @@ local function OpenControlCenter(initialTab)
     end)
     ui.testHudTopBtn = testHudTopBtn
 
-    subTitle:SetPoint("RIGHT", testHudTopBtn, "LEFT", -10, 0)
+    local editModeTopBtn = CreateElvButton(topBar, 152, 26, "")
+    editModeTopBtn:SetPoint("RIGHT", testHudTopBtn, "LEFT", -6, 0)
+    editModeTopBtn:SetScript("OnClick", function()
+      if SpArc.ToggleEditMode then
+        SpArc:ToggleEditMode()
+      end
+      controlFrame:RefreshUI()
+    end)
+    ui.editModeTopBtn = editModeTopBtn
+
+    subTitle:SetPoint("RIGHT", editModeTopBtn, "LEFT", -10, 0)
     subTitle:SetJustifyH("LEFT")
     subTitle:SetWordWrap(false)
 
@@ -252,7 +262,7 @@ local function OpenControlCenter(initialTab)
     local sidebar = CreateFrame("Frame", nil, controlFrame, "BackdropTemplate")
     sidebar:SetPoint("TOPLEFT", controlFrame, "TOPLEFT", 1, -50)
     sidebar:SetPoint("BOTTOMLEFT", controlFrame, "BOTTOMLEFT", 1, 40)
-    sidebar:SetWidth(204)
+    sidebar:SetWidth(224)
     SetBackdropFlat(sidebar, 0.04, 0.04, 0.06, 0.98, 0.18, 0.18, 0.24, 1.0)
 
     local navKeys = { "NAV_1", "NAV_2", "NAV_3", "NAV_4", "NAV_5", "NAV_6", "NAV_7", "NAV_8", "NAV_9", "NAV_10", "NAV_11" }
@@ -293,8 +303,8 @@ local function OpenControlCenter(initialTab)
 
     for i = 1, #navKeys do
       local page = CreateFrame("Frame", nil, controlFrame)
-      page:SetPoint("TOPLEFT", controlFrame, "TOPLEFT", 220, -64)
-      page:SetPoint("BOTTOMRIGHT", controlFrame, "BOTTOMRIGHT", -16, 50)
+      page:SetPoint("TOPLEFT", controlFrame, "TOPLEFT", 242, -64)
+      page:SetPoint("BOTTOMRIGHT", controlFrame, "BOTTOMRIGHT", -18, 52)
       page:Hide()
       pages[i] = page
     end
@@ -327,8 +337,8 @@ local function OpenControlCenter(initialTab)
       { idx = 10, nKey = "NAV_10", y = -229, divAfter = -263 },
       { idx = 11, nKey = "NAV_11", y = -270, divAfter = -304 },
       { idx = 9,  nKey = "NAV_9",  y = -311, divAfter = -345 },
-      { idx = 7,  nKey = "NAV_7",  y = -443, divBefore = -436, divAfter = -477 },
-      { idx = 8,  nKey = "NAV_8",  y = -484 },
+      { idx = 7,  nKey = "NAV_7",  y = -515, divBefore = -506, divAfter = -550 },
+      { idx = 8,  nKey = "NAV_8",  y = -558 },
     }
 
     for _, item in ipairs(sidebarLayout) do
@@ -336,7 +346,7 @@ local function OpenControlCenter(initialTab)
         CreateSideDivider(item.divBefore)
       end
       local pageIdx = item.idx
-      local btn = CreateElvButton(sidebar, 184, 28, SpArc:L(item.nKey))
+      local btn = CreateElvButton(sidebar, 204, 28, SpArc:L(item.nKey))
       btn:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 10, item.y)
       btn.fs:ClearAllPoints()
       btn.fs:SetPoint("LEFT", btn, "LEFT", 12, 0)
@@ -352,11 +362,12 @@ local function OpenControlCenter(initialTab)
     -- Sidebar Divider & Bottom Minimap Checkbox
     local sideDiv = sidebar:CreateTexture(nil, "ARTWORK")
     sideDiv:SetHeight(1)
-    sideDiv:SetPoint("BOTTOMLEFT", sidebar, "BOTTOMLEFT", 12, 51)
-    sideDiv:SetPoint("BOTTOMRIGHT", sidebar, "BOTTOMRIGHT", -12, 51)
+    sideDiv:SetPoint("BOTTOMLEFT", sidebar, "BOTTOMLEFT", 12, 58)
+    sideDiv:SetPoint("BOTTOMRIGHT", sidebar, "BOTTOMRIGHT", -12, 58)
     sideDiv:SetColorTexture(0.24, 0.24, 0.34, 1)
 
     local function RegisterGroupBox(parent, titleKey, x, y, w, h)
+      if w == 640 then w = 816 end
       local c, b = CreateElvGroupBox(parent, titleKey, x, y, w, h)
       groupBoxes[#groupBoxes + 1] = c
       return b
@@ -364,7 +375,7 @@ local function OpenControlCenter(initialTab)
 
     local function CreateElvCheck(parent, labelKey, dbKey, x, y, isMasterEnable, isTestToggle, onAfterClick)
       local btn = CreateFrame("Button", nil, parent)
-      btn:SetSize(560, 24)
+      btn:SetSize(740, 24)
       btn:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
 
       local box = CreateFrame("Frame", nil, btn, "BackdropTemplate")
@@ -431,15 +442,25 @@ local function OpenControlCenter(initialTab)
       return btn
     end
 
-    local mmCheck = CreateElvCheck(sidebar, "CK_MINIMAP", "showMinimapButton", 12, -528, false, false, function()
+    local mmCheck = CreateElvCheck(sidebar, "CK_MINIMAP", "showMinimapButton", 12, -620, false, false, function()
       if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
     end)
-    mmCheck:SetWidth(180)
-    mmCheck.txt:SetWidth(155)
+    mmCheck:SetWidth(200)
+    mmCheck.txt:SetWidth(175)
     mmCheck.txt:SetWordWrap(true)
 
     local function CreateElvSlider(parent, labelKey, dbKey, minV, maxV, stepV, x, y, width, onAfterChange)
       local sWidth = width or 280
+      if width == nil or width == 280 then
+        sWidth = 365
+        if x == 336 then x = 424 end
+      elseif width == 190 then
+        sWidth = 244
+        if x == 224 then x = 286 elseif x == 432 then x = 556 end
+      elseif width == 195 then
+        sWidth = 240
+        if x == 224 then x = 276 end
+      end
       local holder = CreateFrame("Frame", nil, parent)
       holder:SetSize(sWidth, 56)
       holder:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
@@ -643,7 +664,7 @@ local function OpenControlCenter(initialTab)
 
       local listBoxFrame = CreateFrame("Frame", nil, p1, "BackdropTemplate")
       listBoxFrame:SetPoint("TOPLEFT", 0, -60)
-      listBoxFrame:SetSize(330, 468)
+      listBoxFrame:SetSize(400, 568)
       SetBackdropFlat(listBoxFrame, 0.07, 0.07, 0.10, 0.95, 0.20, 0.20, 0.27, 1.0)
 
       local listScroll = CreateFrame("ScrollFrame", "SpArcPresetListScroll", listBoxFrame, "UIPanelScrollFrameTemplate")
@@ -651,12 +672,12 @@ local function OpenControlCenter(initialTab)
       listScroll:SetPoint("BOTTOMRIGHT", -26, 4)
 
       ui.listContent = CreateFrame("Frame", nil, listScroll)
-      ui.listContent:SetSize(296, 1500)
+      ui.listContent:SetSize(366, 1500)
       listScroll:SetScrollChild(ui.listContent)
 
       ui.rowButtons = {}
       for idx = 1, 65 do
-        local rBtn = CreateElvButton(ui.listContent, 294, 24, "")
+        local rBtn = CreateElvButton(ui.listContent, 364, 24, "")
         rBtn:SetPoint("TOPLEFT", 0, -(idx - 1) * 26)
         rBtn.fs:ClearAllPoints()
         rBtn.fs:SetPoint("LEFT", rBtn, "LEFT", 8, 0)
@@ -674,7 +695,7 @@ local function OpenControlCenter(initialTab)
       end
 
       local detailsBox = CreateFrame("Frame", nil, p1, "BackdropTemplate")
-      detailsBox:SetPoint("TOPLEFT", 342, -60)
+      detailsBox:SetPoint("TOPLEFT", 412, -60)
       detailsBox:SetPoint("BOTTOMRIGHT", 0, 0)
       SetBackdropFlat(detailsBox, 0.08, 0.08, 0.11, 0.95, 0.20, 0.20, 0.27, 1.0)
 
@@ -686,14 +707,14 @@ local function OpenControlCenter(initialTab)
       ui.detailsText:SetJustifyV("TOP")
       ui.detailsText:SetSpacing(3)
 
-      local cBossRot = CreateElvCheck(detailsBox, "CK_BOSS_ROT", "enableBossRotation", 14, -278, false, false)
-      cBossRot:SetWidth(272)
+      local cBossRot = CreateElvCheck(detailsBox, "CK_BOSS_ROT", "enableBossRotation", 14, -340, false, false)
+      cBossRot:SetWidth(376)
       cBossRot.txt:SetFont(cBossRot.txt:GetFont(), 11, "OUTLINE")
-      local cPvPRot = CreateElvCheck(detailsBox, "CK_PVP_ROT", "enablePvPRotation", 14, -304, false, false)
-      cPvPRot:SetWidth(272)
+      local cPvPRot = CreateElvCheck(detailsBox, "CK_PVP_ROT", "enablePvPRotation", 14, -368, false, false)
+      cPvPRot:SetWidth(376)
       cPvPRot.txt:SetFont(cPvPRot.txt:GetFont(), 11, "OUTLINE")
 
-      ui.activateBtn = CreateElvButton(detailsBox, 270, 26, "")
+      ui.activateBtn = CreateElvButton(detailsBox, 350, 26, "")
       ui.activateBtn:SetPoint("BOTTOM", 0, 110)
       ui.activateBtn:SetScript("OnClick", function()
         if selectedPresetForEdit and db.presets[selectedPresetForEdit] then
@@ -706,21 +727,21 @@ local function OpenControlCenter(initialTab)
         end
       end)
 
-      ui.openMdBtn = CreateElvButton(detailsBox, 270, 26, "")
+      ui.openMdBtn = CreateElvButton(detailsBox, 350, 26, "")
       ui.openMdBtn:SetPoint("BOTTOM", 0, 78)
       ui.openMdBtn:SetScript("OnClick", function()
         showingAIPrompt = false
         SelectTab(2)
       end)
 
-      ui.testModeBtn1 = CreateElvButton(detailsBox, 270, 26, "")
+      ui.testModeBtn1 = CreateElvButton(detailsBox, 350, 26, "")
       ui.testModeBtn1:SetPoint("BOTTOM", 0, 46)
       ui.testModeBtn1:SetScript("OnClick", function()
         SpArc.testMode = not SpArc.testMode
         controlFrame:RefreshUI()
       end)
 
-      ui.delPresetBtn2 = CreateElvButton(detailsBox, 270, 26, "")
+      ui.delPresetBtn2 = CreateElvButton(detailsBox, 350, 26, "")
       ui.delPresetBtn2:SetPoint("BOTTOM", 0, 14)
       ui.delPresetBtn2:SetScript("OnClick", DeleteSelectedPresetNow)
     end
@@ -763,7 +784,7 @@ local function OpenControlCenter(initialTab)
       ui.editBox:SetMultiLine(true)
       ui.editBox:SetFontObject("ChatFontNormal")
       ApplyCyrFont(ui.editBox, 12)
-      ui.editBox:SetWidth(590)
+      ui.editBox:SetWidth(760)
       ui.editBox:SetAutoFocus(false)
       ui.editBox:SetScript("OnEscapePressed", function() ui.editBox:ClearFocus() end)
       mdScroll:SetScrollChild(ui.editBox)
@@ -878,7 +899,8 @@ local function OpenControlCenter(initialTab)
       local m3GeoBox = RegisterGroupBox(p3, "M3_GRP_GEO", 0, -56, 640, 152)
       CreateElvSlider(m3GeoBox, "SL_ARC_RADIUS", "arcRadius", 50, 320, 5, 18, -14, 280)
       CreateElvSlider(m3GeoBox, "SL_ARC_SPREAD", "arcSpreadDeg", -180, 180, 5, 336, -14, 280)
-      CreateElvSlider(m3GeoBox, "SL_ARC_OFFSET_Y", "arcOffsetY", minArcY, maxArcY, 2, 18, -76, 280)
+      CreateElvSlider(m3GeoBox, "SL_ARC_OFFSET_X", "arcOffsetX", -600, 600, 2, 18, -76, 280)
+      CreateElvSlider(m3GeoBox, "SL_ARC_OFFSET_Y", "arcOffsetY", minArcY, maxArcY, 2, 336, -76, 280)
 
       local m3IconsBox = RegisterGroupBox(p3, "M3_GRP_ICONS", 0, -220, 640, 212)
       CreateElvSlider(m3IconsBox, "SL_PRIMARY_SCALE", "primaryScale", 1.0, 2.0, 0.05, 18, -14, 280)
@@ -902,13 +924,21 @@ local function OpenControlCenter(initialTab)
       local cCDsMaster = CreateElvCheck(p4, "MOD_ENABLE_CDS", "showCDsWing", 310, -24, true, false)
       cCDsMaster:SetWidth(310)
 
-      local m4PosBox = RegisterGroupBox(p4, "M4_GRP_POS", 0, -58, 640, 130)
-      CreateElvSlider(m4PosBox, "SL_WINGS_Y", "wingsOffsetY", minHalfY, maxHalfY, 5, 18, -16, 280)
-      CreateElvCheck(m4PosBox, "CK_ALWAYS_CDS", "alwaysShowCDs", 18, -76, false, false)
+      local m4PosBox = RegisterGroupBox(p4, "M4_GRP_POS", 0, -58, 640, 178)
+      CreateElvSlider(m4PosBox, "SL_SAVES_X", "savesOffsetX", -700, 700, 2, 18, -14, 280)
+      CreateElvSlider(m4PosBox, "SL_CDS_X", "cdsOffsetX", -700, 700, 2, 336, -14, 280)
+      CreateElvSlider(m4PosBox, "SL_WINGS_Y", "wingsOffsetY", minHalfY, maxHalfY, 2, 18, -76, 280, function(val)
+        db.visual.savesOffsetY = val
+        db.visual.cdsOffsetY = val
+        SpArc:ApplyVisualLayout()
+      end)
+      CreateElvCheck(m4PosBox, "CK_ALWAYS_CDS", "alwaysShowCDs", 18, -132, false, false)
 
-      local m4EmergBox = RegisterGroupBox(p4, "M4_GRP_EMERG", 0, -204, 640, 130)
-      CreateElvCheck(m4EmergBox, "CK_EMERG_SAVE", "showEmergencySave", 18, -14, false, false)
-      CreateElvSlider(m4EmergBox, "SL_EMERG_HP", "emergencyHP", 15, 50, 5, 18, -46, 280)
+      local m4EmergBox = RegisterGroupBox(p4, "M4_GRP_EMERG", 0, -252, 640, 192)
+      CreateElvCheck(m4EmergBox, "CK_EMERG_SAVE", "showEmergencySave", 18, -12, false, false)
+      CreateElvSlider(m4EmergBox, "SL_EMERG_HP", "emergencyHP", 15, 50, 5, 18, -44, 280)
+      CreateElvSlider(m4EmergBox, "SL_EMERG_X", "emergencyOffsetX", -600, 600, 2, 336, -44, 280)
+      CreateElvSlider(m4EmergBox, "SL_EMERG_Y", "emergencyOffsetY", minHalfY, maxHalfY, 2, 18, -106, 280)
 
       local p5 = pages[5]
       ui.m5Title = p5:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -918,14 +948,15 @@ local function OpenControlCenter(initialTab)
 
       CreateElvCheck(p5, "MOD_ENABLE", "showCastbar", 0, -24, true, false)
 
-      local m5SizeBox = RegisterGroupBox(p5, "M5_GRP_SIZE", 0, -56, 640, 96)
+      local m5SizeBox = RegisterGroupBox(p5, "M5_GRP_SIZE", 0, -56, 640, 152)
       CreateElvSlider(m5SizeBox, "SL_CB_WIDTH", "castbarWidth", 180, 420, 4, 18, -14, 280)
-      CreateElvSlider(m5SizeBox, "SL_CB_OFFSET_Y", "castbarOffsetY", minHalfY, maxHalfY, 5, 336, -14, 280)
+      CreateElvSlider(m5SizeBox, "SL_CB_OFFSET_X", "castbarOffsetX", -600, 600, 2, 336, -14, 280)
+      CreateElvSlider(m5SizeBox, "SL_CB_OFFSET_Y", "castbarOffsetY", minHalfY, maxHalfY, 2, 18, -76, 280)
 
-      local m5ClipBox = RegisterGroupBox(p5, "M5_GRP_CLIP", 0, -162, 640, 64)
+      local m5ClipBox = RegisterGroupBox(p5, "M5_GRP_CLIP", 0, -220, 640, 64)
       CreateElvCheck(m5ClipBox, "CK_INTERRUPT", "showInterruptAlert", 18, -10, false, false)
 
-      local m5ResBox = RegisterGroupBox(p5, "M5_GRP_RES", 0, -238, 640, 276)
+      local m5ResBox = RegisterGroupBox(p5, "M5_GRP_RES", 0, -296, 640, 276)
       CreateElvCheck(m5ResBox, "CK_RES_ENABLE", "showResourceBar", 18, -10, true, false)
       CreateElvCheck(m5ResBox, "CK_RES_ALWAYS", "alwaysShowResourceBar", 18, -36, false, false)
       CreateElvSlider(m5ResBox, "SL_RES_WIDTH", "resourceBarWidth", 140, 420, 4, 18, -68, 280)
@@ -1117,15 +1148,16 @@ local function OpenControlCenter(initialTab)
         print(SpArc:L("MSG_CURSOR_FIXED"))
       end)
 
-      local m6CrossBox = RegisterGroupBox(p6, "M6_GRP_CROSS", 0, -252, 640, 135)
+      local m6CrossBox = RegisterGroupBox(p6, "M6_GRP_CROSS", 0, -252, 640, 192)
       CreateElvCheck(m6CrossBox, "CK_CAM_CROSSHAIR", "showCameraCrosshair", 16, -12, false, false, function()
         if SpArc.ApplyCameraCrosshairLayout then SpArc:ApplyCameraCrosshairLayout() end
         if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
       end)
-      CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_Y", "camCrosshairOffsetY", -200, 250, 2, 16, -46, 280)
-      CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_SCALE", "camCrosshairScale", 0.50, 2.50, 0.05, 336, -46, 280)
+      CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_X", "camCrosshairOffsetX", -400, 400, 2, 16, -46, 280)
+      CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_Y", "camCrosshairOffsetY", -200, 250, 2, 336, -46, 280)
+      CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_SCALE", "camCrosshairScale", 0.50, 2.50, 0.05, 16, -108, 280)
 
-      local m6ClickBox = RegisterGroupBox(p6, "M6_GRP_CLICK", 0, -402, 640, 105)
+      local m6ClickBox = RegisterGroupBox(p6, "M6_GRP_CLICK", 0, -458, 640, 105)
       CreateElvCheck(m6ClickBox, "CK_CAM_CLICKCAST", "enableCamClickCast", 16, -12, false, false, function()
         if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
         SpArc:ScanActionSlotsAndSpells(true)
@@ -1164,7 +1196,7 @@ local function OpenControlCenter(initialTab)
       ui.telEditBox:SetMultiLine(true)
       ui.telEditBox:SetFontObject("ChatFontNormal")
       ApplyCyrFont(ui.telEditBox, 11)
-      ui.telEditBox:SetWidth(590)
+      ui.telEditBox:SetWidth(760)
       ui.telEditBox:SetAutoFocus(false)
       ui.telEditBox:SetScript("OnEscapePressed", function() ui.telEditBox:ClearFocus() end)
       telScroll:SetScrollChild(ui.telEditBox)
@@ -1270,11 +1302,11 @@ local function OpenControlCenter(initialTab)
       ui.m8NewProfBtn:SetPoint("LEFT", newProfBg, "RIGHT", 10, 0)
       ui.m8NewProfBtn:SetScript("OnClick", CreateNewNamedProfileNow)
 
-      local m8ListBox = RegisterGroupBox(p8, "M8_GRP_LIST", 0, -174, 640, 344)
+      local m8ListBox = RegisterGroupBox(p8, "M8_GRP_LIST", 0, -174, 640, 440)
 
       local profListFrame = CreateFrame("Frame", nil, m8ListBox, "BackdropTemplate")
       profListFrame:SetPoint("TOPLEFT", 14, -14)
-      profListFrame:SetSize(270, 316)
+      profListFrame:SetSize(330, 412)
       SetBackdropFlat(profListFrame, 0.05, 0.05, 0.07, 0.96, 0.20, 0.20, 0.27, 1.0)
 
       local profScroll = CreateFrame("ScrollFrame", "SpArcProfileListScroll", profListFrame, "UIPanelScrollFrameTemplate")
@@ -1282,12 +1314,12 @@ local function OpenControlCenter(initialTab)
       profScroll:SetPoint("BOTTOMRIGHT", -26, 4)
 
       ui.profListContent = CreateFrame("Frame", nil, profScroll)
-      ui.profListContent:SetSize(236, 600)
+      ui.profListContent:SetSize(296, 600)
       profScroll:SetScrollChild(ui.profListContent)
 
       ui.profRowButtons = {}
       for idx = 1, 24 do
-        local prBtn = CreateElvButton(ui.profListContent, 234, 26, "")
+        local prBtn = CreateElvButton(ui.profListContent, 294, 26, "")
         prBtn:SetPoint("TOPLEFT", 0, -(idx - 1) * 28)
         prBtn.fs:ClearAllPoints()
         prBtn.fs:SetPoint("LEFT", prBtn, "LEFT", 8, 0)
@@ -1305,7 +1337,7 @@ local function OpenControlCenter(initialTab)
       end
 
       local profDetailsBox = CreateFrame("Frame", nil, m8ListBox, "BackdropTemplate")
-      profDetailsBox:SetPoint("TOPLEFT", 296, -14)
+      profDetailsBox:SetPoint("TOPLEFT", 358, -14)
       profDetailsBox:SetPoint("BOTTOMRIGHT", -14, 14)
       SetBackdropFlat(profDetailsBox, 0.06, 0.06, 0.09, 0.96, 0.20, 0.20, 0.27, 1.0)
 
@@ -1443,6 +1475,10 @@ local function OpenControlCenter(initialTab)
       ui.fixCursorTopBtn:SetText(SpArc:L("TOP_FIX_CURSOR"))
       ui.testHudTopBtn:SetText(string.format(SpArc:L("TOP_TEST_HUD"), SpArc.testMode and SpArc:L("MSG_ON") or SpArc:L("MSG_OFF")))
       ui.testHudTopBtn:SetSelected(SpArc.testMode and true or false)
+      if ui.editModeTopBtn then
+        ui.editModeTopBtn:SetText(SpArc:L("TOP_EDIT_MODE"))
+        ui.editModeTopBtn:SetSelected(SpArc.editModeActive and true or false)
+      end
 
       for i = 1, #navKeys do
         local nb = ui.navButtons[i]
@@ -2009,6 +2045,10 @@ _G.SlashCmdList["SPARC"] = function(msg)
       if controlFrame and controlFrame.RefreshUI then
         controlFrame:RefreshUI()
       end
+    end
+  elseif cmd == "editmode" or cmd == "move" or cmd == "movers" then
+    if SpArc.ToggleEditMode then
+      SpArc:ToggleEditMode()
     end
   elseif cmd == "fixcursor" or cmd == "cursor" then
     if SpArc.FlushHardwareCursor then

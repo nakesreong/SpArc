@@ -251,6 +251,7 @@ function SpArc:ApplyVisualLayout()
   local halfRad = math.rad(absDeg / 2)
   local midCos = 0.5 * (1.0 + math.cos(halfRad))
   local blend = math.min(1.0, absDeg / 90.0)
+  local offsetX = tonumber(v.arcOffsetX) or 0
   local offsetY = tonumber(v.arcOffsetY) or 0
   local count = math.max(3, math.min(MAX_ARC_SLOTS, tonumber(v.queueLength) or 5))
   local pScale = tonumber(v.primaryScale) or 1.50
@@ -280,7 +281,7 @@ function SpArc:ApplyVisualLayout()
     local frac = (count > 1) and ((posIdx - 1) / (count - 1)) or 0.5
     local u = (frac - 0.5) * 2
     local theta = u * halfRad
-    local x = ((1.0 - blend) * u + blend * math.sin(theta)) * radius
+    local x = offsetX + ((1.0 - blend) * u + blend * math.sin(theta)) * radius
     local y = (0.78 * radius + offsetY) + sign * (math.cos(theta) - midCos) * radius
     arcAnchors[i]:SetFrameLevel(slotLevel)
     arcSlots[i]:SetFrameLevel(slotLevel + 1)
@@ -315,25 +316,41 @@ function SpArc:ApplyVisualLayout()
   end
 
   local wingsY = tonumber(v.wingsOffsetY) or -75
+  local savesCenterX = tonumber(v.savesOffsetX) or -246
+  local savesCenterY = tonumber(v.savesOffsetY) or wingsY
+  local cdsCenterX = tonumber(v.cdsOffsetX) or 246
+  local cdsCenterY = tonumber(v.cdsOffsetY) or wingsY
   for i = 1, 4 do
-    local sx = -315 + (i - 1) * 46
+    local sx = (savesCenterX - 69) + (i - 1) * 46
     savesBoxes[i]:ClearAllPoints()
-    savesBoxes[i]:SetPoint("CENTER", UIParent, "CENTER", sx, wingsY)
-    local cx = 177 + (i - 1) * 46
+    savesBoxes[i]:SetPoint("CENTER", UIParent, "CENTER", sx, savesCenterY)
+    local cx = (cdsCenterX - 69) + (i - 1) * 46
     cdsBoxes[i]:ClearAllPoints()
-    cdsBoxes[i]:SetPoint("CENTER", UIParent, "CENTER", cx, wingsY)
+    cdsBoxes[i]:SetPoint("CENTER", UIParent, "CENTER", cx, cdsCenterY)
   end
 
+  local emX = tonumber(v.emergencyOffsetX) or 0
+  local emY = tonumber(v.emergencyOffsetY) or -35
+  emAnchor:ClearAllPoints()
+  emAnchor:SetPoint("CENTER", UIParent, "CENTER", emX, emY)
+
   local cbW = tonumber(v.castbarWidth) or 276
+  local cbX = tonumber(v.castbarOffsetX) or 0
   local cbY = tonumber(v.castbarOffsetY) or -135
   castbarFrame:SetSize(cbW, 26)
   castbarFrame:ClearAllPoints()
-  castbarFrame:SetPoint("CENTER", UIParent, "CENTER", 0, cbY)
+  castbarFrame:SetPoint("CENTER", UIParent, "CENTER", cbX, cbY)
   if emLabel then
     emLabel:SetText(SpArc:L("HUD_SAVE_ALERT"))
   end
   if SpArc.ApplyResourceBarLayout then
     SpArc:ApplyResourceBarLayout()
+  end
+  if SpArc.ApplyCrosshairGeometry then
+    SpArc:ApplyCrosshairGeometry()
+  end
+  if SpArc.SyncEditModeMovers then
+    SpArc:SyncEditModeMovers()
   end
 end
 

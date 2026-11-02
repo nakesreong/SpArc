@@ -662,26 +662,31 @@ local UpdateCrosshairVisual
 local function ApplyCrosshairGeometry()
   local db = SpArc:EnsureDB()
   local v = (db and db.visual) or SpArc.DEFAULT_VISUAL or {}
+  local offsetX = tonumber(v.camCrosshairOffsetX) or 0
   local offsetY = tonumber(v.camCrosshairOffsetY)
   if offsetY == nil then offsetY = 20 end
   local scale = tonumber(v.camCrosshairScale) or 1.00
   if scale < 0.4 then scale = 0.4 elseif scale > 3.0 then scale = 3.0 end
 
   crosshairFrame:ClearAllPoints()
-  crosshairFrame:SetPoint("CENTER", UIParent, "CENTER", 0, offsetY)
+  crosshairFrame:SetPoint("CENTER", UIParent, "CENTER", offsetX, offsetY)
   crosshairVisual:SetScale(scale)
   SyncCursorCenteredYPos(false)
 end
+SpArc.ApplyCrosshairGeometry = ApplyCrosshairGeometry
 
 function SpArc:ApplyCameraCrosshairLayout()
   ApplyCrosshairGeometry()
   if UpdateCrosshairVisual then
     UpdateCrosshairVisual()
   end
+  if SpArc.SyncEditModeMovers then
+    SpArc:SyncEditModeMovers()
+  end
 end
 
 UpdateCrosshairVisual = function()
-  local showPreview = SpArc.previewCrosshairInConfig or SpArc.testMode
+  local showPreview = SpArc.previewCrosshairInConfig or SpArc.testMode or SpArc.editModeActive
   local mouselooking = IsMouselooking and IsMouselooking()
   if not SpArc:IsCameraCrosshairEnabled() or (not mouselooking and not showPreview) then
     if crosshairFrame:IsShown() then
@@ -739,6 +744,9 @@ end
 local UI_PANEL_SLOTS = { "left", "center", "right", "doublewide", "fullscreen" }
 
 local function IsAnyWatchedFrameVisible()
+  if SpArc.editModeActive or SpArc.msbtZonesUnlocked then
+    return true
+  end
   if GetUIPanel then
     for i = 1, #UI_PANEL_SLOTS do
       local ok, panel = pcall(GetUIPanel, UI_PANEL_SLOTS[i])

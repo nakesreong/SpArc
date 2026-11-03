@@ -30,11 +30,11 @@ end
 
 local STRINGS = {
   EN = {
-    WINDOW_TITLE = "|cffa335eeSpArc v%s|r — Semicircle FSM Rotation & Cooldown HUD (.MD & AI)",
-    WINDOW_SUBTITLE = "Authors: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r  •  SpellID + Bartender4 Keybind Resolver",
+    WINDOW_TITLE = "|cffa335eeSpArc v%s|r — Hybrid Assisted Combat (#1) + .MD Forecast (#2..#5) HUD",
+    WINDOW_SUBTITLE = "Authors: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r  •  Blizzard Helper Synergy + .MD Lookahead",
     LANG_BTN = "Lang: EN",
 
-    TAB_1 = "1. Presets (6)",
+    TAB_1 = "1. Presets (7)",
     TAB_2 = "2. .MD Editor & AI",
     TAB_3 = "3. Visual & HUD",
     TAB_4 = "4. Telemetry / Debug",
@@ -340,11 +340,11 @@ local STRINGS = {
   },
 
   RU = {
-    WINDOW_TITLE = "|cffa335eeSpArc v%s|r — Визуализатор FSM-ротаций (.MD Псевдокод, ИИ & Телеметрия)",
-    WINDOW_SUBTITLE = "Авторы: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r  •  SpellID + Bartender4 Keybind Resolver",
+    WINDOW_TITLE = "|cffa335eeSpArc v%s|r — Синергия с Помощником WoW (#1) и Прогноз .MD (#2..#5)",
+    WINDOW_SUBTITLE = "Авторы: |cffffd100Gemini (Tiger) & Anya (5cr3am1ng5oul)|r  •  Blizzard Assisted Combat + .MD Lookahead",
     LANG_BTN = "Язык: RU",
 
-    TAB_1 = "1. Пресеты (6)",
+    TAB_1 = "1. Пресеты (7)",
     TAB_2 = "2. Импорт .MD и ИИ",
     TAB_3 = "3. Визуал и HUD",
     TAB_4 = "4. Телеметрия / Дебаг",
@@ -670,12 +670,12 @@ function SpArc:RegisterStrings(enTbl, ruTbl)
 end
 
 SpArc.AIPromptHeader_EN =
-  "Ask Gemini or ChatGPT to convert any Icy Veins / Wowhead rotation guide "
-  .. "into SpArc .MD pseudocode and paste it straight into this editor!"
+  "Hybrid Synergy: Slot #1 uses live Blizzard Assisted Combat (+ .MD Interrupts), "
+  .. "while Slots #2..#5 forecast your next bound abilities from this .MD priority & cooldowns!"
 
 SpArc.AIPromptHeader_RU =
-  "Попросите своего Gemini или ChatGPT написать вам ротацию с Icy Veins / Wowhead "
-  .. "на псевдокоде в формате SpArc .MD и засуньте её сюды!"
+  "Гибридная синергия: Слот #1 ведёт нативный помощник WoW (+ кики из .MD), "
+  .. "а слоты #2..#5 прогнозируют очередь по приоритетам и КД вашего .MD!"
 
 SpArc.AIPromptTemplate_EN = [[Hello Gemini / ChatGPT / Claude!
 Please look up the latest rotation guide on Icy Veins or Wowhead for World of Warcraft: Midnight (12.x) and compile a ready-to-import rotation profile for the SpArc addon strictly in the SpArc .MD pseudocode format described below.
@@ -683,14 +683,17 @@ Please look up the latest rotation guide on Icy Veins or Wowhead for World of Wa
 ====================================================================
 1. TARGET CHARACTER & CONTENT
 ====================================================================
-• Class & Spec: [INSERT CLASS & SPEC, e.g., Frost Mage / Spellslinger]
-• Hero Talents / Build: [OPTIONAL, e.g., Spellslinger / Frostfire / Default Icy Veins]
+• Class & Spec: [INSERT CLASS & SPEC, e.g., Enhancement Shaman / Stormbringer]
+• Hero Talents / Build: [OPTIONAL, e.g., Stormbringer / Totemic / Default Icy Veins]
 • Content Mode: [PvE Universal ST + AoE / Raid Boss / PvP Arena]
 
 ====================================================================
-2. HOW THE SPARC .MD COMPILER WORKS (STRICT SYNTAX RULES)
+2. HOW SPARC'S HYBRID SYNERGY ENGINE & .MD COMPILER WORK
 ====================================================================
-SpArc compiles a Markdown (.MD) document into a 5-step lookahead Finite State Machine (FSM).
+SpArc operates in hybrid synergy with Blizzard's native Assisted Combat (12.x):
+• Slot #1 (Primary Icon): Driven live by `C_AssistedCombat.GetNextCastSpell()` (which has privileged C++ access to secret resources/stacks/procs in Midnight), overridden only by Priority 0 Interrupts (`INTERRUPT:true`) from your `.MD`.
+• Slots #2..#5 (4-Step Forecast Queue): Simulated by SpArc's Finite State Machine (FSM) using your `.MD` priority rules and Cooldown Lookahead across abilities that are actually bound on the player's action bars. When all rotational spells are on cooldown, the engine fast-forwards virtual time (`Cooldown Lookahead`) to the soonest rotational cooldown so the 5-slot queue never goes empty.
+
 Output ONLY a single raw code block following these exact 6 sections:
 
 SECTION A — HEADER METADATA:
@@ -704,7 +707,7 @@ SECTION B — ## SPELL_BOOK:
 Every spell used anywhere in the profile (rotation, saves, cooldowns, emergency, misc/buffs) MUST be declared here, one per line:
 SPELL <KEY> = ID:<id1,id2> | NAME:"Russian Name","English Name" | CD:<sec> | ICON:<FileDataID> [| optional flags]
 • Supported optional flags (separated by ` | `):
-  - `CD:<seconds>` : Base cooldown in seconds (`0` if none).
+  - `CD:<seconds>` : Base cooldown in seconds (`0` if none). Always provide accurate base cooldowns so Cooldown Lookahead can sort upcoming abilities!
   - `CHARGES:<N>` : Max charges for multi-charge abilities (e.g., `CHARGES:2`).
   - `GAIN:<N>` : Primary resource generated on cast (0..100 scale; for Combo Point classes 1 CP = 20).
   - `COST:<N> | SPENDER:true` : Primary resource cost (for 4+ CP spenders use `COST:80 | SPENDER:true`).
@@ -712,7 +715,7 @@ SPELL <KEY> = ID:<id1,id2> | NAME:"Russian Name","English Name" | CD:<sec> | ICO
   - `AURA_ID:<id1,id2> | AURA_DUR:<sec> | AURA_UNIT:<target|player>` : WeakAuras-style aura metadata! Any DoT, debuff, stackable aura, or player buff is queried uniformly via `target.aura(KEY).rem`, `target.aura(KEY).stacks`, `player.aura(KEY).rem`, `player.aura(KEY).stacks` (or standalone `AURA <KEY> = ID:<id1,id2> | AURA_UNIT:target | NAME:"..."`).
   - `STACKS:+N` / `STACKS:-N | CONSUMES_STACKS:true` : Generates or consumes target aura stacks in lookahead simulation.
   - `PROC_ONLY:true` : Only castable when glowing (`IsSpellOverlayed`) or active as a temporary spell override.
-  - `OVERRIDE_OF:<BASE_KEY>` : For combo/transformation spells that replace another spell.
+  - `OVERRIDE_OF:<BASE_KEY>` : For combo/transformation spells that replace another spell on the action bar.
   - `GRANTS:<PROC_KEY>` : Casting this spell guarantees a proc of `<PROC_KEY>`.
   - `EXECUTE:true` : Execute ability (usable below 20% target HP or on proc).
   - `LOCK_CHANNEL:true` / `FILLER_INTERRUPTIBLE:true` : Channel protection or interrupt policy.
@@ -748,7 +751,7 @@ Use `IF <condition> THEN` / `ELSE IF <condition> THEN` / `ELSE` / `END IF` with 
   - `player.in_combat` / `NOT player.in_combat` — player is currently in combat.
   - `target.can_pick_pocket` — stealthed, humanoid/undead/demon NPC target in 10yd range not yet pick-pocketed.
   - `CHARGES(KEY) >= N` — current charge count.
-• Always end with an unconditional `ELSE` -> `RETURN CAST(<FILLER_KEY>)` and `END IF`.]]
+• Always end with an unconditional `ELSE` -> `RETURN CAST(<CORE_BOUND_FILLER_KEY>)` and `END IF` (use a core bound rotational ability, never an unlearned spell!).]]
 
 SpArc.AIPromptTemplate = [[Привет, Gemini / ChatGPT / Claude!
 Сходи, пожалуйста, на Icy Veins или Wowhead, изучи актуальный гайд по ротации для World of Warcraft: Midnight (12.x) и напиши мне готовый профиль ротации для аддона SpArc строго на языке псевдокода SpArc .MD по правилам ниже.
@@ -756,20 +759,23 @@ SpArc.AIPromptTemplate = [[Привет, Gemini / ChatGPT / Claude!
 ====================================================================
 1. ПАРАМЕТРЫ ПЕРСОНАЖА И КОНТЕНТА
 ====================================================================
-• Класс и спек: [УКАЖИ КЛАСС И СПЕК, например: Друид Сила зверя / Разбойник Ликвидация / Воин Оружие / Маг Льда / Жрец Тьмы]
-• Героические таланты / билд: [ПО ЖЕЛАНИЮ]
+• Класс и спек: [УКАЖИ КЛАСС И СПЕК, например: Шаман Совершенствование / Друид Сила зверя / Разбойник Ликвидация / Воин Оружие / Маг Льда / Жрец Тьмы]
+• Героические таланты / билд: [ПО ЖЕЛАНИЮ, например: Вестник шторма (Stormbringer) / Тотемист (Totemic)]
 • Тип контента: [Универсальный СТ + АоЕ (с авто-определением числа врагов рядом и подхватом бурста)]
 
 ====================================================================
-2. ПРАВИЛА КОМПИЛЯТОРА SPARC .MD (СТРОГАЯ СПЕЦИФИКАЦИЯ)
+2. ГИБРИДНАЯ АРХИТЕКТУРА SPARC И СПЕЦИФИКАЦИЯ КОМПИЛЯТОРА .MD
 ====================================================================
-Аддон SpArc напрямую компилирует текстовый .MD-профиль в конечный автомат (FSM) и просчитывает очередь ротации на 5 шагов вперёд.
+Аддон SpArc в Midnight (12.x) работает в гибридной синергии с нативным боевым помощником игры (Blizzard Assisted Combat):
+• Слот #1 (Главная иконка): Всегда синхронизирован вживую с `C_AssistedCombat.GetNextCastSpell()`, который внутри движка WoW видит точные ресурсы, стаки и проки без ограничений `Secret Value`, уступая место только Приоритету 0 — сбитию каста (`INTERRUPT:true`) из вашего `.MD`.
+• Слоты #2..#5 (Прогноз очереди на 4 шага вперёд): Рассчитываются конечным автоматом (FSM) SpArc по приоритетам вашего `.MD`-профиля среди способностей, которые реально выставлены на панели и имеют назначенный бинд клавиши. Если все активные кнопки ушли на перезарядку, движок автоматически прокручивает виртуальное время (`Cooldown Lookahead`) к ближайшему откату из `ROTATION_QUEUE`, чтобы очередь из 5 иконок никогда не пустела.
+
 Выведи В ОТВЕТЕ ТОЛЬКО ОДИН кодовый блок без лишнего текста, строго соблюдая структуру из 6 секций:
 
 СЕКЦИЯ А — МЕТАДАННЫЕ ПРОФИЛЯ (ШАПКА):
 # PROFILE: <Название пресета>
 # CLASS: <WARRIOR | PALADIN | HUNTER | ROGUE | PRIEST | DEATHKNIGHT | SHAMAN | MAGE | WARLOCK | MONK | DRUID | DEMONHUNTER | EVOKER>
-# SPEC: <Английское название спека, например: Feral, Frost, Shadow, Assassination, Arms>
+# SPEC: <Английское название спека, например: Enhancement, Feral, Frost, Shadow, Assassination, Arms>
 # MODE: <PVE | BOSS | PVP>
 
 СЕКЦИЯ Б — ## SPELL_BOOK (КНИГА ЗАКЛИНАНИЙ И АУР):
@@ -777,15 +783,15 @@ SpArc.AIPromptTemplate = [[Привет, Gemini / ChatGPT / Claude!
 SPELL <КЛЮЧ_КАПСОМ> = ID:<id1,id2> | NAME:"Русское имя","English Name" | CD:<сек> | ICON:<FileDataID> [| доп. флаги]
 AURA <КЛЮЧ_КАПСОМ> = ID:<id1,id2> | AURA_UNIT:<target|player> | AURA_DUR:<сек> | NAME:"Русское имя","English Name"
 • Доступные флаги поведения (разделяются через ` | `):
-  - `CD:<секунды>` — базовое время восстановления (`0`, если без КД).
-  - `CHARGES:<N>` — максимум зарядов, если у спелла 2+ заряда.
+  - `CD:<секунды>` — базовое время восстановления (`0`, если без КД). Обязательно указывай реальные КД способностей, чтобы механизм Cooldown Lookahead точно сортировал будущие откаты в слотах #2..#5!
+  - `CHARGES:<N>` — максимум зарядов, если у спелла 2+ заряда (например, `CHARGES:2` у Удара бури).
   - `GAIN:<N>` — сколько ресурса генерирует каст (0..100; для комбо-поинтов 1 КП = 20).
   - `COST:<N> | SPENDER:true` — сколько ресурса тратит спелл (для финишеров от 4+ КП ставь `COST:80 | SPENDER:true`).
   - `BURST:<секунды>` — помечает способность как бурст-окно длительностью `<секунды>` (включает `player.in_burst`).
   - `AURA_ID:<id1,id2> | AURA_DUR:<секунды> | AURA_UNIT:<target|player>` — единая система аур (как в WeakAuras)! В игре доты, дебаффы со стаками и баффы — это всё ауры с ID с Wowhead, временем (`rem`) и стаками (`stacks`). Если ID ауры совпадает с ID спелла, достаточно `AURA_DUR:<сек>`.
   - `STACKS:+N` / `STACKS:-N | CONSUMES_STACKS:true` — генерация и трата стаков ауры на цели в симуляции очереди.
   - `PROC_ONLY:true` — спелл доступен ТОЛЬКО при свечении прока (`IsSpellOverlayed`) или активной подмене `OVERRIDE_OF`.
-  - `OVERRIDE_OF:<БАЗОВЫЙ_КЛЮЧ>` — для комбо-заклинаний, заменяющих базовую кнопку.
+  - `OVERRIDE_OF:<БАЗОВЫЙ_КЛЮЧ>` — для комбо-заклинаний, заменяющих базовую кнопку на панели (например, `TEMPEST` заменяет `LIGHTNING_BOLT`, а `PRIMORDIAL_STORM` заменяет `SUNDERING`).
   - `GRANTS:<КЛЮЧ_ПРОКА>` — каст гарантированно даёт прок `<КЛЮЧ_ПРОКА>`.
   - `EXECUTE:true` — экзекут-способность (активна при ХП цели < 20% или по проку).
   - `LOCK_CHANNEL:true` / `FILLER_INTERRUPTIBLE:true` — защита канала или разрешение прерывать потоковый филлер.
@@ -821,7 +827,7 @@ END IF
   - `player.in_combat` / `NOT player.in_combat` — находится ли персонаж в бою.
   - `target.can_pick_pocket` — игрок в инвизе, цель — гуманоид/нежить/демон в радиусе 10м с ещё не обчищенными карманами.
   - `CHARGES(KEY) >= N` — проверка числа зарядов.
-• В самом конце ОБЯЗАТЕЛЬНО должна быть ветка `ELSE` -> `RETURN CAST(<КЛЮЧ_ФИЛЛЕРА>)` и закрывающий `END IF`.]]
+• В самом конце ОБЯЗАТЕЛЬНО должна быть ветка `ELSE` -> `RETURN CAST(<КЛЮЧ_БАЗОВОЙ_КНОПКИ>)` и закрывающий `END IF` (ставь туда реальную базовую кнопку ротации, которая гарантированно вынесена на панель, например `STORMSTRIKE`, `MIND_FLAY`, `FROSTBOLT`, `SHRED`).]]
 
 function SpArc:GetAIPromptHeader()
   if SpArc:IsRU() then
@@ -844,6 +850,7 @@ local EN_PRESET_TITLES = {
   WARRIOR_02_ARGS_BOSS = "4. Warrior: Arms (ST / AoE)",
   DRUID_01_FERAL_PVE   = "5. Druid: Feral (ST / AoE)",
   DRUID_02_BALANCE_PVE = "6. Druid: Balance (Moonkin — ST / AoE)",
+  SHAMAN_01_ENH_PVE    = "7. Shaman: Enhancement (ST / AoE)",
 }
 
 function SpArc:GetPresetDisplayTitle(pr)
@@ -857,10 +864,10 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 36
+SpArc.PROFILE_SCHEMA_VERSION = 37
 
 ---------------------------------------------------------------------------------------
---         6 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID)           --
+--      7 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID, SHAMAN)      --
 ---------------------------------------------------------------------------------------
 SpArc.BuiltInPresetOrder = {}
 SpArc.BuiltInPresets = {}
@@ -891,7 +898,7 @@ SPELL SILENCE = ID:15487 | NAME:"Безмолвие","Silence" | CD:45 | INTERRU
 SPELL PSYCHIC_HORROR = ID:64044,8122 | NAME:"Глубинный ужас","Ментальный крик","Psychic Horror","Psychic Scream" | CD:45 | PVP:true | ICON:237568
 SPELL TENTACLE_SLAM = ID:1227280,205385,457042,1234796 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Мощный удар щупальцем","Темное сокрушение","Shadow Crash","Tentacle Slam" | CD:15 | CHARGES:2 | HASTED_CD:true | ONCE_PER_QUEUE:true | GAIN:15 | ICON:136201
 SPELL VAMPIRIC_TOUCH = ID:34914 | AURA_ID:34914 | AURA_DUR:21 | NAME:"Прикосновение вампира","Vampiric Touch" | CD:0 | CHARGES:1 | GAIN:6 | ICON:135978
-AURA SHADOW_WORD_PAIN = ID:589 | AURA_UNIT:target | AURA_DUR:16 | NAME:"Слово Тьмы: Боль","Shadow Word: Pain" | ICON:136207
+SPELL SHADOW_WORD_PAIN = ID:589 | AURA_ID:589 | AURA_UNIT:target | AURA_DUR:16 | NAME:"Слово Тьмы: Боль","Shadow Word: Pain" | CD:0 | GAIN:4 | ICON:136207
 SPELL VOID_ERUPTION = ID:228260,391109,194249 | AURA_ID:194249,391109 | AURA_UNIT:player | AURA_DUR:20 | BURST:20 | BOSS:true | NAME:"Облик Бездны","Извержение Бездны","Темное вознесение","Voidform","Void Eruption","Dark Ascension" | CD:120 | ICON:537079
 SPELL POWER_INFUSION = ID:10060 | AURA_ID:10060 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | BOSS:true | NAME:"Придание сил","Power Infusion" | CD:120 | ICON:135939
 SPELL VOID_BOLT = ID:1242173,205448 | NAME:"Залп Бездны","Стрела Бездны","Void Volley","Void Bolt" | CD:6 | GAIN:10 | OVERRIDE_OF:VOID_ERUPTION | PROC_ONLY:true | ICON:1386548
@@ -937,6 +944,8 @@ ELSE IF target.aura(VAMPIRIC_TOUCH).rem <= 1 AND READY(TENTACLE_SLAM) THEN
     RETURN CAST(TENTACLE_SLAM)
 ELSE IF target.aura(VAMPIRIC_TOUCH).rem <= 1 AND NOT READY(TENTACLE_SLAM) THEN
     RETURN CAST(VAMPIRIC_TOUCH)
+ELSE IF target.aura(SHADOW_WORD_PAIN).rem <= 1 AND READY(SHADOW_WORD_PAIN) THEN
+    RETURN CAST(SHADOW_WORD_PAIN)
 ELSE IF BOSS AND READY(VOID_ERUPTION) THEN
     RETURN CAST(VOID_ERUPTION)
 ELSE IF BOSS AND READY(POWER_INFUSION) THEN
@@ -1344,6 +1353,97 @@ ELSE IF enemies >= 2 AND READY(STARFIRE) THEN
     RETURN CAST(STARFIRE)
 ELSE
     RETURN CAST(WRATH)
+END IF
+]])
+
+-- ====================================================================================
+-- #7: SHAMAN — Enhancement (Ниоч: Stormbringer / Totemic — Midnight 12.x ST + AoE)
+-- ====================================================================================
+RegisterPreset("SHAMAN_01_ENH_PVE", "SHAMAN", "7. Шаман: Совершенствование (Энх — СТ / АоЕ)", "PVE", [[
+# PROFILE: 7. Шаман: Совершенствование (Энх — СТ / АоЕ)
+# CLASS: SHAMAN
+# SPEC: Enhancement
+# MODE: PVE
+
+## SPELL_BOOK
+SPELL WIND_SHEAR = ID:57994 | NAME:"Пронизывающий ветер","Wind Shear" | CD:12 | INTERRUPT:true | ICON:136018
+SPELL CAPACITOR_TOTEM = ID:192058,51514 | NAME:"Тотем конденсации","Сглаз","Capacitor Totem","Hex" | CD:60 | PVP:true | ICON:136013
+SPELL LIGHTNING_SHIELD = ID:192106 | AURA_ID:192106 | AURA_UNIT:player | AURA_DUR:3600 | NAME:"Щит молний","Lightning Shield" | CD:0 | ICON:136051
+SPELL DOOM_WINDS = ID:384352,114051 | AURA_ID:384352,466772,114051 | AURA_UNIT:player | AURA_DUR:8 | BURST:8 | BOSS:true | NAME:"Ветра рока","Перерождение","Doom Winds","Ascendance" | CD:60 | ICON:136022
+SPELL FERAL_SPIRIT = ID:51533 | AURA_ID:333957,51533 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | BOSS:true | NAME:"Дух дикого волка","Feral Spirit" | CD:90 | ICON:237577
+SPELL SUNDERING = ID:197214 | AURA_ID:1218125 | AURA_UNIT:player | AURA_DUR:15 | GRANTS:PRIMORDIAL_STORM | NAME:"Раскол","Sundering" | CD:30 | ICON:136025
+SPELL PRIMORDIAL_STORM = ID:1218090,375982 | NAME:"Первозданная буря","Первозданная волна","Primordial Storm","Primordial Wave" | CD:0 | PROC_ONLY:true | OVERRIDE_OF:SUNDERING | ICON:462328
+SPELL TEMPEST = ID:452201,454009 | NAME:"Буря","Tempest" | CD:0 | PROC_ONLY:true | OVERRIDE_OF:LIGHTNING_BOLT | ICON:136048
+SPELL VOLTAIC_BLAZE = ID:470057,1259101,188389 | AURA_ID:188389 | AURA_UNIT:target | AURA_DUR:18 | NAME:"Гальваническое пламя","Огненный шок","Voltaic Blaze","Flame Shock" | CD:10 | HASTED_CD:true | ICON:135813
+SPELL STORMSTRIKE = ID:17364,1249148,115356 | NAME:"Удар бури","Удар ветра","Stormstrike","Windstrike" | CD:7.5 | CHARGES:2 | HASTED_CD:true | ICON:132314
+SPELL LAVA_LASH = ID:60103 | AURA_ID:334168 | AURA_UNIT:target | AURA_DUR:20 | NAME:"Вскипание лавы","Lava Lash" | CD:12 | HASTED_CD:true | ICON:236289
+SPELL CRASH_LIGHTNING = ID:187874 | AURA_ID:187878,333964 | AURA_UNIT:player | AURA_DUR:12 | NAME:"Сокрушающая молния","Crash Lightning" | CD:9 | HASTED_CD:true | ICON:136026
+SPELL CHAIN_LIGHTNING = ID:188443 | NAME:"Цепная молния","Chain Lightning" | CD:0 | ICON:136015
+SPELL LIGHTNING_BOLT = ID:188196 | NAME:"Молния","Lightning Bolt" | CD:0 | FILLER_INTERRUPTIBLE:true | ICON:136048
+SPELL ASTRAL_SHIFT = ID:108271 | AURA_ID:108271 | AURA_UNIT:player | AURA_DUR:12 | NAME:"Астральный сдвиг","Astral Shift" | CD:90 | ICON:538565
+SPELL HEALING_SURGE = ID:8004 | NAME:"Исцеляющий всплеск","Healing Surge" | CD:0 | ICON:136044
+SPELL HEALING_STREAM_TOTEM = ID:5394 | NAME:"Тотем исцеляющего потока","Healing Stream Totem" | CD:30 | ICON:135127
+SPELL EARTH_ELEMENTAL = ID:198103,204336 | NAME:"Элементаль земли","Тотем заземления","Earth Elemental","Grounding Totem" | CD:180 | ICON:136024
+AURA MAELSTROM_WEAPON = ID:344179 | AURA_UNIT:player | AURA_DUR:30 | NAME:"Оружие Водоворота","Maelstrom Weapon"
+AURA HOT_HAND = ID:215785 | AURA_UNIT:player | AURA_DUR:8 | NAME:"Горячая рука","Hot Hand"
+
+## CHANNEL_POLICY
+INTERRUPT_CHANNEL_ON_HIGHER_PRIORITY: NONE
+PROTECT_CHANNEL: NONE
+
+## TRACKERS
+TRACK_SAVES: ASTRAL_SHIFT, HEALING_SURGE, HEALING_STREAM_TOTEM, EARTH_ELEMENTAL
+TRACK_CDS: DOOM_WINDS, FERAL_SPIRIT, SUNDERING, VOLTAIC_BLAZE, WIND_SHEAR
+TRACK_DOTS: VOLTAIC_BLAZE, LAVA_LASH
+
+## EMERGENCY_SAVE
+IF player.hp_percent <= 35 AND READY(ASTRAL_SHIFT) THEN
+    RETURN EMERGENCY(ASTRAL_SHIFT)
+ELSE IF player.hp_percent <= 45 AND READY(HEALING_STREAM_TOTEM) THEN
+    RETURN EMERGENCY(HEALING_STREAM_TOTEM)
+ELSE IF player.hp_percent <= 30 AND READY(HEALING_SURGE) THEN
+    RETURN EMERGENCY(HEALING_SURGE)
+END IF
+
+## ROTATION_QUEUE
+IF target.casting_interruptible AND READY(WIND_SHEAR) THEN
+    RETURN CAST(WIND_SHEAR)
+ELSE IF PVP AND target.casting_interruptible AND READY(CAPACITOR_TOTEM) THEN
+    RETURN CAST(CAPACITOR_TOTEM)
+ELSE IF NOT player.aura(LIGHTNING_SHIELD) AND READY(LIGHTNING_SHIELD) THEN
+    RETURN CAST(LIGHTNING_SHIELD)
+ELSE IF PROC(PRIMORDIAL_STORM) AND READY(PRIMORDIAL_STORM) THEN
+    RETURN CAST(PRIMORDIAL_STORM)
+ELSE IF target.aura(VOLTAIC_BLAZE).rem <= 2 AND READY(VOLTAIC_BLAZE) THEN
+    RETURN CAST(VOLTAIC_BLAZE)
+ELSE IF BOSS AND READY(DOOM_WINDS) THEN
+    RETURN CAST(DOOM_WINDS)
+ELSE IF BOSS AND READY(FERAL_SPIRIT) THEN
+    RETURN CAST(FERAL_SPIRIT)
+ELSE IF READY(SUNDERING) THEN
+    RETURN CAST(SUNDERING)
+ELSE IF PROC(TEMPEST) AND player.aura(MAELSTROM_WEAPON).stacks >= 8 AND READY(TEMPEST) THEN
+    RETURN CAST(TEMPEST)
+ELSE IF enemies >= 2 AND READY(CRASH_LIGHTNING) THEN
+    RETURN CAST(CRASH_LIGHTNING)
+ELSE IF PROC(STORMSTRIKE) AND READY(STORMSTRIKE) THEN
+    RETURN CAST(STORMSTRIKE)
+ELSE IF player.aura(HOT_HAND).rem > 0 AND READY(LAVA_LASH) THEN
+    RETURN CAST(LAVA_LASH)
+ELSE IF enemies >= 2 AND player.aura(MAELSTROM_WEAPON).stacks >= 8 AND READY(CHAIN_LIGHTNING) THEN
+    RETURN CAST(CHAIN_LIGHTNING)
+ELSE IF player.aura(MAELSTROM_WEAPON).stacks >= 8 AND READY(LIGHTNING_BOLT) THEN
+    RETURN CAST(LIGHTNING_BOLT)
+ELSE IF READY(STORMSTRIKE) THEN
+    RETURN CAST(STORMSTRIKE)
+ELSE IF READY(LAVA_LASH) THEN
+    RETURN CAST(LAVA_LASH)
+ELSE IF READY(VOLTAIC_BLAZE) THEN
+    RETURN CAST(VOLTAIC_BLAZE)
+ELSE IF READY(CRASH_LIGHTNING) THEN
+    RETURN CAST(CRASH_LIGHTNING)
+ELSE
+    RETURN CAST(STORMSTRIKE)
 END IF
 ]])
 

@@ -485,6 +485,8 @@ local function InferProfileDefaultPresetID(profName, profObj)
       return "WARRIOR_02_ARGS_BOSS"
     elseif profName:find("Калиратри", 1, true) or profName:find("Морвара", 1, true) then
       return "MAGE_04_FROST_PVE"
+    elseif profName:find("Ниоч", 1, true) then
+      return "SHAMAN_01_ENH_PVE"
     end
   end
   return "PRIEST_01_SHADOW_PVE"
@@ -697,6 +699,7 @@ function SpArc:EnsureDB(forceReinit)
       ["Морвара - Свежеватель Душ"]      = "MAGE_04_FROST_PVE",
       ["Улак - Свежеватель Душ"]         = "ROGUE_01_ASSA_PVE",
       ["Моржовый - Свежеватель Душ"]     = "WARRIOR_02_ARGS_BOSS",
+      ["Ниоч - Свежеватель Душ"]         = "SHAMAN_01_ENH_PVE",
     }
     for pName, pObj in pairs(db.profiles or {}) do
       if not pObj.activePresetID or not db.presets[pObj.activePresetID] then

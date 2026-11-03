@@ -104,6 +104,10 @@ local SPEC_ID_TO_PRESETS = {
   [103] = { PVE = "DRUID_01_FERAL_PVE",    BOSS = "DRUID_01_FERAL_PVE",    PVP = "DRUID_01_FERAL_PVE" },
   [104] = { PVE = "DRUID_01_FERAL_PVE",    BOSS = "DRUID_01_FERAL_PVE",    PVP = "DRUID_01_FERAL_PVE" },
   [105] = { PVE = "DRUID_02_BALANCE_PVE",  BOSS = "DRUID_02_BALANCE_PVE",  PVP = "DRUID_02_BALANCE_PVE" },
+  -- SHAMAN (Enhancement)
+  [262] = { PVE = "SHAMAN_01_ENH_PVE",     BOSS = "SHAMAN_01_ENH_PVE",     PVP = "SHAMAN_01_ENH_PVE" },
+  [263] = { PVE = "SHAMAN_01_ENH_PVE",     BOSS = "SHAMAN_01_ENH_PVE",     PVP = "SHAMAN_01_ENH_PVE" },
+  [264] = { PVE = "SHAMAN_01_ENH_PVE",     BOSS = "SHAMAN_01_ENH_PVE",     PVP = "SHAMAN_01_ENH_PVE" },
 }
 
 local PRESET_SPEC_IDS = {
@@ -113,6 +117,7 @@ local PRESET_SPEC_IDS = {
   WARRIOR_02_ARGS_BOSS = 71,
   DRUID_01_FERAL_PVE   = 103,
   DRUID_02_BALANCE_PVE = 102,
+  SHAMAN_01_ENH_PVE    = 263,
 }
 
 local lastValidSpecID = nil
@@ -669,6 +674,29 @@ function SpArc:BuildRotationQueue(maxSlots)
   if anyDoTDef and allDoTsActive then
     simHasDoTs = true
   end
+  if auraMap["MAELSTROM_WEAPON"] then
+    local mwSpenderSuggested = (assistedKey == "LIGHTNING_BOLT" or assistedKey == "TEMPEST" or assistedKey == "CHAIN_LIGHTNING" or assistedKey == "ELEMENTAL_BLAST")
+      or (states["LIGHTNING_BOLT"] and states["LIGHTNING_BOLT"].isProc)
+      or (states["CHAIN_LIGHTNING"] and states["CHAIN_LIGHTNING"].isProc)
+    if mwSpenderSuggested then
+      if (simAuraStacks.player["MAELSTROM_WEAPON"] or 0) < 10 then
+        simAuraStacks.player["MAELSTROM_WEAPON"] = 10
+        simAuraStacks.player["344179"] = 10
+      end
+      if (simAuraRem.player["MAELSTROM_WEAPON"] or 0) <= 0 then
+        simAuraRem.player["MAELSTROM_WEAPON"] = 15
+        simAuraRem.player["344179"] = 15
+      end
+    elseif assistedKey then
+      if (simAuraStacks.player["MAELSTROM_WEAPON"] or 0) >= 8 then
+        simAuraStacks.player["MAELSTROM_WEAPON"] = 5
+        simAuraStacks.player["344179"] = 5
+      elseif (simAuraRem.player["MAELSTROM_WEAPON"] or 0) > 0 and (simAuraStacks.player["MAELSTROM_WEAPON"] or 0) <= 1 then
+        simAuraStacks.player["MAELSTROM_WEAPON"] = 4
+        simAuraStacks.player["344179"] = 4
+      end
+    end
+  end
   local simStacks = simAuraStacks.target["FREEZING"] or 0
   local simBurst = (SpArc.IsPlayerInBurst and SpArc:IsPlayerInBurst(states, parsed, now)) or false
 
@@ -737,6 +765,16 @@ function SpArc:BuildRotationQueue(maxSlots)
       end
       if states[spKey] and states[spKey].isOutOfRange then
         return false
+      end
+    end
+    if stepIdx and stepIdx >= 2 then
+      if qCount >= 2 and queue[qCount] and queue[qCount - 1] and queue[qCount].key == spKey and queue[qCount - 1].key == spKey then
+        return false
+      end
+      if auraMap["MAELSTROM_WEAPON"] and (spKey == "TEMPEST" or spKey == "LIGHTNING_BOLT" or spKey == "CHAIN_LIGHTNING" or spKey == "ELEMENTAL_BLAST") then
+        if (simAuraStacks.player["MAELSTROM_WEAPON"] or 0) < 8 then
+          return false
+        end
       end
     end
     -- Never suggest a 2nd charge of a burst or boss cooldown while its burst window/buff is already active!
@@ -951,8 +989,10 @@ function SpArc:BuildRotationQueue(maxSlots)
       -- Cooldown Lookahead Fast-Forward: if all bound rotational rules in .MD are currently on cooldown,
       -- advance virtual time to the soonest rotational cooldown so Slots #2..#N show the upcoming priority order
       if not pickedKey then
+        local prevKey = (qCount > 0 and queue[qCount] and queue[qCount].key) or nil
         for _ = 1, 3 do
-          local minWait = nil
+          local minWaitDiff = nil
+          local minWaitAny = nil
           for _, rule in ipairs(parsed.rules) do
             local sp = rule.spell
             local spD = SPELL_DEFS[sp]
@@ -961,11 +1001,15 @@ function SpArc:BuildRotationQueue(maxSlots)
               and not spD.procOnly and not spD.isInterrupt and not spD.isBossSkill
               and not (spD.burstDuration and spD.burstDuration > 0) and (spD.baseCD or 0) < 30
               and cdRem > 0.05 and cdRem <= 18.0 then
-              if not minWait or cdRem < minWait then
-                minWait = cdRem
+              if not minWaitAny or cdRem < minWaitAny then
+                minWaitAny = cdRem
+              end
+              if sp ~= prevKey and (not minWaitDiff or cdRem < minWaitDiff) then
+                minWaitDiff = cdRem
               end
             end
           end
+          local minWait = (minWaitDiff and (not minWaitAny or minWaitDiff <= minWaitAny + 3.5)) and minWaitDiff or minWaitAny
           if not minWait then
             break
           end
@@ -973,11 +1017,23 @@ function SpArc:BuildRotationQueue(maxSlots)
           RefreshSimReady(2)
           for _, rule in ipairs(parsed.rules) do
             local sp = rule.spell
-            if simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, step) then
+            if sp ~= prevKey and simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, step) then
               if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
                 pickedKey = sp
                 pickedRule = rule
                 break
+              end
+            end
+          end
+          if not pickedKey then
+            for _, rule in ipairs(parsed.rules) do
+              local sp = rule.spell
+              if simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, step) then
+                if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
+                  pickedKey = sp
+                  pickedRule = rule
+                  break
+                end
               end
             end
           end
@@ -1143,6 +1199,9 @@ function SpArc:BuildRotationQueue(maxSlots)
             if curMW > 0 then
               SetSimAuraStacks("player", "MAELSTROM_WEAPON", math.max(0, curMW - 10))
             end
+          elseif auraMap["MAELSTROM_WEAPON"] and (pickedKey == "STORMSTRIKE" or pickedKey == "WINDSTRIKE" or pickedKey == "LAVA_LASH" or pickedKey == "CRASH_LIGHTNING" or pickedKey == "VOLTAIC_BLAZE" or pickedKey == "SUNDERING" or pickedKey == "ICE_STRIKE") then
+            local curMW = simAuraStacks.player["MAELSTROM_WEAPON"] or 0
+            SetSimAuraStacks("player", "MAELSTROM_WEAPON", math.min(10, curMW + 2), 30.0)
           end
           if def.procOnly or def.isSpender or def.isExecute then
             simCD[pickedKey] = 9999

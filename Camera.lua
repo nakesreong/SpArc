@@ -1031,16 +1031,12 @@ local UNSHIFT_INTERACT_MACRO = BASE_INTERACT_MACRO .. "\n" .. UNSHIFT_SAFE_LINE
 
 local holdBtn = CreateFrame("Button", "SpArcCamHoldButton", UIParent, "SecureActionButtonTemplate")
 holdBtn:RegisterForClicks("AnyDown", "AnyUp")
-holdBtn:SetAttribute("type", "macro")
-holdBtn:SetAttribute("macrotext", "")
 holdBtn:HookScript("PostClick", function(_, _, down)
   _G.SpArc_CameraHoldKey(down and "down" or "up")
 end)
 
 local toggleBtn = CreateFrame("Button", "SpArcCamToggleButton", UIParent, "SecureActionButtonTemplate")
 toggleBtn:RegisterForClicks("AnyDown")
-toggleBtn:SetAttribute("type", "macro")
-toggleBtn:SetAttribute("macrotext", "")
 toggleBtn:HookScript("PostClick", function()
   _G.SpArc_CameraToggleKey("down")
 end)
@@ -1061,57 +1057,19 @@ function SpArc:ClearPendingAutoUnshift()
 end
 
 local function IsInCosmeticCombatForm()
-  if not SpArc:IsAutoUnshiftEnabled() then
-    return false
-  end
-  if InCombatLockdown and SafeBool(InCombatLockdown) then
-    return false
-  end
-  if _G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player") then
-    return false
-  end
-  if _G.IsFlying and SafeBool(_G.IsFlying) then
-    return false
-  end
-  if _G.IsStealthed and SafeBool(_G.IsStealthed) then
-    return false
-  end
-  if _G.IsMounted and SafeBool(_G.IsMounted) then
-    return false
-  end
-  if UnitExists and SafeBool(UnitExists, "target")
-    and UnitCanAttack and SafeBool(UnitCanAttack, "player", "target")
-    and not (UnitIsDeadOrGhost and SafeBool(UnitIsDeadOrGhost, "target")) then
-    return false
-  end
-
-  if _G.GetShapeshiftForm then
-    local okS, sForm = pcall(_G.GetShapeshiftForm)
-    if okS and not SpArc.IsSecret(sForm) and type(sForm) == "number" and sForm > 0 then
-      return true
-    end
-  end
-
-  if _G.GetShapeshiftFormID then
-    local okF, formID = pcall(_G.GetShapeshiftFormID)
-    if okF and not SpArc.IsSecret(formID) and type(formID) == "number" and formID > 0 then
-      return true
-    end
-  end
-
   return false
 end
 
 local function UpdateAutoUnshiftBindings(force)
   if InCombatLockdown and InCombatLockdown() then return end
-  local enabled = SpArc:IsAutoUnshiftEnabled()
-  if not force and enabled == lastAutoUnshiftAttr then return end
-  lastAutoUnshiftAttr = enabled
-  local holdMacro = enabled and UNSHIFT_SAFE_LINE or ""
-  local intMacro = enabled and UNSHIFT_INTERACT_MACRO or BASE_INTERACT_MACRO
-  holdBtn:SetAttribute("macrotext", holdMacro)
-  toggleBtn:SetAttribute("macrotext", holdMacro)
-  interactBtn:SetAttribute("macrotext", intMacro)
+  if not force and lastAutoUnshiftAttr == true then return end
+  lastAutoUnshiftAttr = true
+  holdBtn:SetAttribute("type", nil)
+  holdBtn:SetAttribute("macrotext", nil)
+  toggleBtn:SetAttribute("type", nil)
+  toggleBtn:SetAttribute("macrotext", nil)
+  interactBtn:SetAttribute("type", "macro")
+  interactBtn:SetAttribute("macrotext", BASE_INTERACT_MACRO)
 end
 
 local lastInteractMode = nil

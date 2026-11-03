@@ -618,7 +618,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     -- proves a spell is castable right now (never wipe underlying timers, and never let execute
     -- <20% HP overlays bypass an active execute cooldown like Shadow Word: Death)
     local sinceLastCast = now - (st.lastCastAt[defKey] or 0)
-    local allowProcCDReset = (not def.isExecute) and hasSpellOverlayProc and (sinceLastCast > 1.2)
+    local allowProcCDReset = (not def.isExecute) and hasSpellOverlayProc and (sinceLastCast > 0.35)
     local allowAssistCDReset = (assistedKey == defKey) and (sinceLastCast > 1.4)
     if isOnCD and (allowProcCDReset or allowAssistCDReset) then
       isOnCD = false

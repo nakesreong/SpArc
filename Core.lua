@@ -78,6 +78,65 @@ end
 SpArc.EnableAssistedCombatEngine()
 
 ---------------------------------------------------------------------------------------
+--  POST-ELVUI CHAT RECOVERY BRIDGE (Restores LeftChatPanel & ChatFrame1 when ElvUI is off)
+---------------------------------------------------------------------------------------
+local function IsElvUIActiveOrEnabled()
+  if _G.ElvUI then return true end
+  if _G.C_AddOns then
+    if _G.C_AddOns.IsAddOnLoaded and _G.C_AddOns.IsAddOnLoaded("ElvUI") then
+      return true
+    end
+    if _G.C_AddOns.GetAddOnEnableState then
+      local ok, state = pcall(_G.C_AddOns.GetAddOnEnableState, "ElvUI")
+      if ok and type(state) == "number" and state > 0 then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+function SpArc:EnsureChatVisibleWithoutElvUI()
+  if IsElvUIActiveOrEnabled() then return end
+  if _G.InCombatLockdown and _G.InCombatLockdown() then return end
+
+  local lcp = _G.LeftChatPanel
+  if not lcp and _G.CreateFrame and _G.UIParent then
+    lcp = _G.CreateFrame("Frame", "LeftChatPanel", _G.UIParent)
+    lcp:SetSize(430, 185)
+    lcp:SetPoint("BOTTOMLEFT", _G.UIParent, "BOTTOMLEFT", 18, 28)
+    lcp._sparcFallback = true
+  elseif lcp and lcp._sparcFallback and lcp:GetNumPoints() == 0 and _G.UIParent then
+    lcp:SetPoint("BOTTOMLEFT", _G.UIParent, "BOTTOMLEFT", 18, 28)
+  end
+
+  local cf1 = _G.ChatFrame1
+  if cf1 then
+    if cf1:GetNumPoints() == 0 then
+      pcall(cf1.ClearAllPoints, cf1)
+      pcall(cf1.SetPoint, cf1, "BOTTOMLEFT", lcp or _G.UIParent, "BOTTOMLEFT", 5, 5)
+    end
+    local w, h = cf1:GetSize()
+    if not w or w < 120 or not h or h < 60 then
+      pcall(cf1.SetSize, cf1, 420, 175)
+    end
+    if _G.UIParent and cf1:GetParent() ~= _G.UIParent then
+      pcall(cf1.SetParent, cf1, _G.UIParent)
+    end
+    pcall(cf1.Show, cf1)
+    pcall(cf1.SetAlpha, cf1, 1.0)
+  end
+  if _G.GeneralDockManager then
+    pcall(_G.GeneralDockManager.Show, _G.GeneralDockManager)
+  end
+  if _G.ChatFrame1Tab then
+    pcall(_G.ChatFrame1Tab.Show, _G.ChatFrame1Tab)
+  end
+end
+
+SpArc:EnsureChatVisibleWithoutElvUI()
+
+---------------------------------------------------------------------------------------
 --         DYNAMIC SPELL TABLE (POPULATED STRICTLY FROM ACTIVE .MD PSEUDOCODE)       --
 ---------------------------------------------------------------------------------------
 SpArc.SPELL_DEFS = {}

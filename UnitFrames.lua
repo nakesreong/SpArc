@@ -265,25 +265,37 @@ local function GetUnitBarColor(unit, colorMode, isDemo, demoIsHostile)
   if not unit or not SafeBool(UnitExists, unit) then
     return COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
   end
+  local canAttack = SafeBool(UnitCanAttack, "player", unit)
   if SafeBool(UnitIsPlayer, unit) then
+    if canAttack and unit ~= "player" and colorMode == "REACTION" then
+      return COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
+    end
     local okC, _, classFile = pcall(UnitClass, unit)
     if okC and not IsSecret(classFile) and type(classFile) == "string" and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile] then
       local c = RAID_CLASS_COLORS[classFile]
       return c.r, c.g, c.b
     end
+    if canAttack then
+      return COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
+    end
+    return COLOR_FRIENDLY_GREEN.r, COLOR_FRIENDLY_GREEN.g, COLOR_FRIENDLY_GREEN.b
   end
-  local okR, reaction = pcall(UnitReaction, "player", unit)
-  local reactNum = (okR and not IsSecret(reaction) and type(reaction) == "number" and reaction) or nil
-  local canAttack = SafeBool(UnitCanAttack, "player", unit)
+  if not canAttack then
+    return COLOR_FRIENDLY_GREEN.r, COLOR_FRIENDLY_GREEN.g, COLOR_FRIENDLY_GREEN.b
+  end
+  local okR, reaction = pcall(UnitReaction, unit, "player")
+  if not okR or reaction == nil or IsSecret(reaction) then
+    okR, reaction = pcall(UnitReaction, "player", unit)
+  end
+  local reactNum = (okR and not IsSecret(reaction) and type(reaction) == "number" and reaction) or 4
   local isHostile = SafeBool(UnitIsEnemy, "player", unit)
   local inCombat = SafeBool(UnitAffectingCombat, unit)
+  local playerInCombat = (InCombatLockdown and InCombatLockdown()) or SafeBool(UnitAffectingCombat, "player")
 
-  if (reactNum and reactNum <= 3) or isHostile or (canAttack and inCombat) then
+  if reactNum <= 3 or isHostile or (inCombat and (playerInCombat or SafeBool(UnitIsUnit, unit .. "target", "player"))) then
     return COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
-  elseif reactNum == 4 or canAttack then
-    return COLOR_NEUTRAL_YELLOW.r, COLOR_NEUTRAL_YELLOW.g, COLOR_NEUTRAL_YELLOW.b
   else
-    return COLOR_FRIENDLY_GREEN.r, COLOR_FRIENDLY_GREEN.g, COLOR_FRIENDLY_GREEN.b
+    return COLOR_NEUTRAL_YELLOW.r, COLOR_NEUTRAL_YELLOW.g, COLOR_NEUTRAL_YELLOW.b
   end
 end
 

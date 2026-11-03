@@ -667,8 +667,14 @@ emWatcher:SetScript("OnEvent", function(_, event, arg1)
       SpArc:SetEditMode(false)
     end
   elseif event == "ADDON_LOADED" and arg1 == "Blizzard_EditMode" then
+    if SpArc.EnsureChatVisibleWithoutElvUI then
+      SpArc:EnsureChatVisibleWithoutElvUI()
+    end
     TryHookBlizzardEditMode()
   elseif event == "PLAYER_ENTERING_WORLD" then
+    if SpArc.EnsureChatVisibleWithoutElvUI then
+      SpArc:EnsureChatVisibleWithoutElvUI()
+    end
     TryHookBlizzardEditMode()
   end
 end)

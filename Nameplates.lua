@@ -895,6 +895,7 @@ function SpArc:SyncExternalNameplateAddons()
     local vis = (db and db.visual) or SpArc.DEFAULT_VISUAL
     if vis.npShowFriendlyPlayers ~= false then
       pcall(C_CVar.SetCVar, "nameplateShowFriends", "1")
+      pcall(C_CVar.SetCVar, "nameplateShowFriendlyNPCs", "1")
       pcall(C_CVar.SetCVar, "nameplateShowOnlyNameForFriendlyPlayerUnits", "0")
     end
     pcall(C_CVar.SetCVar, "nameplateMinScale", "1")
@@ -1178,13 +1179,22 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
   local isPlayer = SafeBool(UnitIsPlayer, unit)
   local canAttack = SafeBool(UnitCanAttack, "player", unit)
   local isHostileEnemy = SafeBool(UnitIsEnemy, "player", unit)
-  local isEnemy = isHostileEnemy or canAttack
-  local isFriend = SafeBool(UnitIsFriend, "player", unit) and not canAttack
-  local okR, reaction = pcall(UnitReaction, "player", unit)
-  local reactNum = (okR and not IsSecret(reaction) and type(reaction) == "number" and reaction)
-    or (isHostileEnemy and 2)
-    or (canAttack and 4)
-    or 5
+  local isEnemy = canAttack
+  local isFriend = not canAttack
+  local okR, reaction = pcall(UnitReaction, unit, "player")
+  if not okR or reaction == nil or IsSecret(reaction) then
+    okR, reaction = pcall(UnitReaction, "player", unit)
+  end
+  local reactNum
+  if okR and not IsSecret(reaction) and type(reaction) == "number" then
+    reactNum = reaction
+  elseif not canAttack then
+    reactNum = 5
+  elseif isHostileEnemy then
+    reactNum = 2
+  else
+    reactNum = 4
+  end
   local tgtMetro = GetMetroForUnitToken("target")
   local isTarget = (tgtMetro ~= nil and tgtMetro == metro) or SafeBool(UnitIsUnit, unit, "target")
   if isTarget then
@@ -1208,12 +1218,8 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
         metro.cachedClassFile = classFile
       end
     end
-    if canAttack or reactNum <= 3 then
+    if canAttack then
       metro.plateCategory = "ENEMY_PLAYER"
-      metro.isQuestNPC = false
-      return true
-    elseif reactNum == 4 then
-      metro.plateCategory = "NEUTRAL_PLAYER"
       metro.isQuestNPC = false
       return true
     else
@@ -1225,43 +1231,67 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
       return true
     end
   end
-  -- NPC Logic
+  -- NPC 3-Tier Logic (strictly divided by canAttack & hostility):
+  --   1. FRIENDLY_NPC (`not canAttack`): Cannot be attacked even if you want to -> Green (#2ECC52)
+  --   2. NEUTRAL_NPC  (`canAttack` & neutral out-of-combat): Can be attacked, won't attack on sight -> Yellow (#EBC729)
+  --   3. ENEMY_NPC    (`canAttack` & hostile/aggressive): Will attack on sight or actively aggroed -> Red (#D92626)
   metro.classFile = nil
   metro.cachedClassFile = nil
   local isQuest = IsUnitQuestRelated(unit, cleanGUID)
   metro.isQuestNPC = isQuest
-  local inCombat = SafeBool(UnitAffectingCombat, unit)
-  -- 1. Aggressive / Hostile NPC (reaction <= 3) or any attackable NPC actively in combat
-  if reactNum <= 3 or isHostileEnemy or (canAttack and inCombat) then
-    metro.plateCategory = "ENEMY_NPC"
-    return true
-  end
-  -- 2. Neutral (yellow) NPC (reaction == 4, not yet in combat: peaceful caterpillars, quest critters, dummies)
-  if reactNum == 4 and (canAttack or isQuest or isTarget) then
-    metro.plateCategory = "NEUTRAL_NPC"
-    return true
-  end
-  -- 3. Friendly NPC (reaction >= 5: quest givers, companions in combat, targeted allies)
-  if isQuest or (isFriend and (inCombat or isTarget)) then
+  if not canAttack then
     metro.plateCategory = "FRIENDLY_NPC"
     return true
   end
-  -- Non-quest Friendly out-of-combat town NPCs are hidden to keep cities clean
-  return false
+  local inCombat = SafeBool(UnitAffectingCombat, unit)
+  local playerInCombat = (InCombatLockdown and InCombatLockdown()) or SafeBool(UnitAffectingCombat, "player")
+  local mobAggroed = isHostileEnemy or (reactNum <= 3) or (inCombat and (playerInCombat or SafeBool(UnitIsUnit, unit .. "target", "player")))
+  if mobAggroed then
+    metro.plateCategory = "ENEMY_NPC"
+    return true
+  else
+    metro.plateCategory = "NEUTRAL_NPC"
+    return true
+  end
 end
 UpdateMetroHealthAndColor = function(metro, now)
   local unit = metro and metro.unit
   if not unit then return end
   now = now or GetTime()
   -- Keep reaction & combat state fresh on every color tick so neutral mobs turn red the instant they aggro
-  local okR, reaction = pcall(UnitReaction, "player", unit)
+  local okR, reaction = pcall(UnitReaction, unit, "player")
+  if not okR or reaction == nil or IsSecret(reaction) then
+    okR, reaction = pcall(UnitReaction, "player", unit)
+  end
   if okR and not IsSecret(reaction) and type(reaction) == "number" then
     metro.reaction = reaction
   end
-  local reactNum = metro.reaction or 4
-  local inCombat = SafeBool(UnitAffectingCombat, unit)
   local canAttack = SafeBool(UnitCanAttack, "player", unit)
   local isHostileEnemy = SafeBool(UnitIsEnemy, "player", unit)
+  local inCombat = SafeBool(UnitAffectingCombat, unit)
+  local reactNum = metro.reaction or (not canAttack and 5) or (isHostileEnemy and 2) or 4
+  metro.isEnemy = canAttack
+  metro.isFriend = not canAttack
+  if metro.isPlayer then
+    if not metro.cachedClassFile then
+      local okC, _, classFile = pcall(UnitClass, unit)
+      if okC and classFile then
+        metro.classFile = classFile
+        if not IsSecret(classFile) and type(classFile) == "string" then
+          metro.cachedClassFile = classFile
+        end
+      end
+    end
+    metro.plateCategory = canAttack and "ENEMY_PLAYER" or "FRIENDLY_PLAYER"
+  else
+    if not canAttack then
+      metro.plateCategory = "FRIENDLY_NPC"
+    else
+      local playerInCombat = (InCombatLockdown and InCombatLockdown()) or SafeBool(UnitAffectingCombat, "player")
+      local mobAggroed = isHostileEnemy or (reactNum <= 3) or (inCombat and (playerInCombat or SafeBool(UnitIsUnit, unit .. "target", "player")))
+      metro.plateCategory = mobAggroed and "ENEMY_NPC" or "NEUTRAL_NPC"
+    end
+  end
 
   -- 1. Health Values (Secret-Safe C++ StatusBar pass-through)
   local ok1, hp = pcall(UnitHealth, unit)
@@ -1282,13 +1312,23 @@ UpdateMetroHealthAndColor = function(metro, now)
   else
     metro.hpText:SetText("")
   end
-  -- 2. Color Evaluation:
-  --    • Active Tracked DoTs (.MD) -> Custom DoT Rule Color
-  --    • Friendly (Players & NPCs) -> Green (#2ECC52)
-  --    • Neutral out-of-combat (reaction == 4, not in combat) -> Yellow (#EBC729)
-  --    • Aggressive (Hostile Players, Hostile Mobs <= 3, or Mobs in Combat) -> Red (#D92626)
+  -- 2. 5-Category Color Evaluation:
+  --    • Friendly Player (`isPlayer and not canAttack`) -> Class Color (RAID_CLASS_COLORS)
+  --    • Hostile Player  (`isPlayer and canAttack`)     -> Active .MD DoT Color or Red (#D92626)
+  --    • Friendly NPC    (`not isPlayer and not canAttack`) -> Always Green (#2ECC52)
+  --    • Neutral NPC     (`not isPlayer and canAttack` & peaceful) -> Active .MD DoT Color or Yellow (#EBC729)
+  --    • Hostile NPC     (`not isPlayer and canAttack` & aggressive) -> Active .MD DoT Color or Red (#D92626)
   local r, g, b = COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
-  if metro.plateCategory == "FRIENDLY_PLAYER" or metro.plateCategory == "FRIENDLY_NPC" or (metro.isFriend and not canAttack) then
+  if metro.plateCategory == "FRIENDLY_PLAYER" then
+    metro.hasActiveDoT = false
+    local cf = (not IsSecret(metro.classFile) and metro.classFile) or metro.cachedClassFile
+    local cc = cf and not IsSecret(cf) and ((C_ClassColor and C_ClassColor.GetClassColor and C_ClassColor.GetClassColor(cf)) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[cf]))
+    if cc and cc.r and cc.g and cc.b then
+      r, g, b = cc.r, cc.g, cc.b
+    else
+      r, g, b = COLOR_FRIENDLY_GREEN.r, COLOR_FRIENDLY_GREEN.g, COLOR_FRIENDLY_GREEN.b
+    end
+  elseif metro.plateCategory == "FRIENDLY_NPC" or not canAttack then
     metro.hasActiveDoT = false
     r, g, b = COLOR_FRIENDLY_GREEN.r, COLOR_FRIENDLY_GREEN.g, COLOR_FRIENDLY_GREEN.b
   else
@@ -1298,23 +1338,10 @@ UpdateMetroHealthAndColor = function(metro, now)
       r, g, b = auraR, auraG, auraB
     elseif not metro.isPlayer and UnitIsTapDenied and SafeBool(UnitIsTapDenied, unit) then
       r, g, b = COLOR_TAPPED_GREY.r, COLOR_TAPPED_GREY.g, COLOR_TAPPED_GREY.b
-    elseif metro.isPlayer then
-      if canAttack or reactNum <= 3 or inCombat then
-        r, g, b = COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
-      elseif reactNum == 4 then
-        r, g, b = COLOR_NEUTRAL_YELLOW.r, COLOR_NEUTRAL_YELLOW.g, COLOR_NEUTRAL_YELLOW.b
-      else
-        r, g, b = COLOR_FRIENDLY_GREEN.r, COLOR_FRIENDLY_GREEN.g, COLOR_FRIENDLY_GREEN.b
-      end
+    elseif metro.plateCategory == "ENEMY_PLAYER" or metro.plateCategory == "ENEMY_NPC" then
+      r, g, b = COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
     else
-      -- NPC: Red ONLY if aggressive (reactNum <= 3 / UnitIsEnemy) OR actively in combat!
-      if inCombat or reactNum <= 3 or isHostileEnemy then
-        r, g, b = COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
-      elseif reactNum == 4 then
-        r, g, b = COLOR_NEUTRAL_YELLOW.r, COLOR_NEUTRAL_YELLOW.g, COLOR_NEUTRAL_YELLOW.b
-      else
-        r, g, b = COLOR_FRIENDLY_GREEN.r, COLOR_FRIENDLY_GREEN.g, COLOR_FRIENDLY_GREEN.b
-      end
+      r, g, b = COLOR_NEUTRAL_YELLOW.r, COLOR_NEUTRAL_YELLOW.g, COLOR_NEUTRAL_YELLOW.b
     end
   end
   metro.healthBar:SetStatusBarColor(r, g, b, 1.0)
@@ -1452,11 +1479,11 @@ FullUpdateMetroPlate = function(metro)
     metro.targetBorder:Hide()
     metro:SetFrameStrata("MEDIUM")
   end
-  -- Hostile Player Left Class Icon Square
+  -- Player Left Class Icon Square (for both Friendly & Hostile Players)
   local db = SpArc:EnsureDB()
   local showClassIcon = (not db or not db.visual or db.visual.npShowHostileClassIcon ~= false)
   local cf = (not IsSecret(metro.classFile) and metro.classFile) or metro.cachedClassFile
-  if showClassIcon and metro.plateCategory == "ENEMY_PLAYER" and cf and not IsSecret(cf) and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[cf] then
+  if showClassIcon and metro.isPlayer and cf and not IsSecret(cf) and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[cf] then
     local coords = CLASS_ICON_TCOORDS[cf]
     metro.classBox.icon:SetTexCoord(coords[1] + 0.02, coords[2] - 0.02, coords[3] + 0.02, coords[4] - 0.02)
     metro.classBox:Show()

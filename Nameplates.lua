@@ -1685,8 +1685,8 @@ npDriver:RegisterEvent("PLAYER_TARGET_CHANGED")
 npDriver:RegisterEvent("PLAYER_REGEN_DISABLED")
 npDriver:RegisterEvent("PLAYER_REGEN_ENABLED")
 npDriver:RegisterEvent("QUEST_LOG_UPDATE")
-npDriver:RegisterEvent("UNIT_QUEST_LOG_CHANGED")
-npDriver:RegisterEvent("SOFT_INTERACT_CHANGED")
+pcall(npDriver.RegisterEvent, npDriver, "UNIT_QUEST_LOG_CHANGED")
+pcall(npDriver.RegisterEvent, npDriver, "PLAYER_SOFT_INTERACT_CHANGED")
 npDriver:RegisterEvent("UNIT_HEALTH")
 npDriver:RegisterEvent("UNIT_MAXHEALTH")
 npDriver:RegisterEvent("UNIT_AURA")
@@ -1701,9 +1701,9 @@ npDriver:SetScript("OnEvent", function(_, event, arg1)
     SpArc:RefreshAllNameplates()
     return
   end
-  if event == "QUEST_LOG_UPDATE" or event == "UNIT_QUEST_LOG_CHANGED" or event == "SOFT_INTERACT_CHANGED" then
+  if event == "QUEST_LOG_UPDATE" or event == "UNIT_QUEST_LOG_CHANGED" or event == "PLAYER_SOFT_INTERACT_CHANGED" then
     local now = GetTime()
-    if event ~= "SOFT_INTERACT_CHANGED" and npDriver._lastQuestRefreshAt and (now - npDriver._lastQuestRefreshAt) < 0.35 then
+    if event ~= "PLAYER_SOFT_INTERACT_CHANGED" and npDriver._lastQuestRefreshAt and (now - npDriver._lastQuestRefreshAt) < 0.35 then
       return
     end
     npDriver._lastQuestRefreshAt = now

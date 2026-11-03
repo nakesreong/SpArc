@@ -42,28 +42,7 @@ function SpArc:GetPlayerGCDDuration()
   return math.max(0.75, math.min(1.5, 1.5 / mult))
 end
 
-function SpArc:TriggerGCD(now)
-  now = now or GetTime()
-  if C_Spell and C_Spell.GetSpellCooldown then
-    local ok, cd = pcall(C_Spell.GetSpellCooldown, 61304)
-    if ok and type(cd) == "table" and not IsSecret(cd.startTime) and not IsSecret(cd.duration) then
-      if type(cd.startTime) == "number" and cd.startTime > 0 and type(cd.duration) == "number" and cd.duration >= 0.25 and cd.duration <= 2.0 then
-        if (cd.startTime + cd.duration) > now then
-          st.gcdStartTime = cd.startTime
-          st.gcdDuration = cd.duration
-          return
-        end
-      end
-    end
-  end
-  if (now - (st.gcdStartTime or 0)) > 0.12 then
-    st.gcdStartTime = now
-    st.gcdDuration = SpArc:GetPlayerGCDDuration()
-  end
-end
-
-function SpArc:GetActiveGCD(now)
-  now = now or GetTime()
+local function ReadLiveGCD(now)
   if C_Spell and C_Spell.GetSpellCooldown then
     local ok, cd = pcall(C_Spell.GetSpellCooldown, 61304)
     if ok and type(cd) == "table" and not IsSecret(cd.startTime) and not IsSecret(cd.duration) then
@@ -75,6 +54,26 @@ function SpArc:GetActiveGCD(now)
         end
       end
     end
+  end
+  return nil, nil
+end
+
+function SpArc:TriggerGCD(now)
+  now = now or GetTime()
+  if ReadLiveGCD(now) then
+    return
+  end
+  if (now - (st.gcdStartTime or 0)) > 0.12 then
+    st.gcdStartTime = now
+    st.gcdDuration = SpArc:GetPlayerGCDDuration()
+  end
+end
+
+function SpArc:GetActiveGCD(now)
+  now = now or GetTime()
+  local liveS, liveD = ReadLiveGCD(now)
+  if liveS and liveD then
+    return liveS, liveD
   end
   local s = st.gcdStartTime or 0
   local d = st.gcdDuration or 0
@@ -126,6 +125,32 @@ function SpArc:GetTargetHPPercent()
   return nil
 end
 
+local function ResolveUnitCastTuple(isChannel, uEv, now, name, texture, startTimeMS, endTimeMS, notInterruptible, spellID)
+  local isInt = false
+  local rawNotInt = notInterruptible
+  if not IsSecret(notInterruptible) and type(notInterruptible) == "boolean" then
+    isInt = not notInterruptible
+    rawNotInt = notInterruptible
+  elseif uEv and uEv.active and uEv.interruptible ~= nil then
+    isInt = uEv.interruptible
+    rawNotInt = not isInt
+  elseif _G.C_CurveUtil and _G.C_CurveUtil.EvaluateColorValueFromBoolean and notInterruptible ~= nil then
+    local okEv, evVal = pcall(_G.C_CurveUtil.EvaluateColorValueFromBoolean, notInterruptible, 1, 0)
+    if okEv and not IsSecret(evVal) and type(evVal) == "number" then
+      isInt = (evVal < 0.5)
+      rawNotInt = not isInt
+    end
+  end
+  local sSec = (not IsSecret(startTimeMS) and type(startTimeMS) == "number" and (startTimeMS / 1000.0)) or (uEv and uEv.startTime) or now
+  local eSec = (not IsSecret(endTimeMS) and type(endTimeMS) == "number" and (endTimeMS / 1000.0)) or (uEv and uEv.endTime) or (sSec + (isChannel and 3.0 or 2.0))
+  local durSec = math.max(0.1, eSec - sSec)
+  local remSec = math.max(0, eSec - now)
+  local cleanName = (not IsSecret(name) and type(name) == "string" and name) or (uEv and uEv.name) or (isChannel and "Channel" or "Cast")
+  local cleanIcon = (not IsSecret(texture) and texture) or (uEv and uEv.icon) or 136243
+  local cleanID = (not IsSecret(spellID) and type(spellID) == "number" and spellID) or (uEv and uEv.spellID) or nil
+  return true, isInt, isChannel, cleanName, cleanIcon, remSec, durSec, cleanID, rawNotInt
+end
+
 -- Returns: isCasting, isInterruptible, isChannel, spellName, spellIcon, remSec, durSec, spellID, rawNotInterruptible
 function SpArc:GetUnitCastInterruptState(unit, now)
   unit = unit or "target"
@@ -146,29 +171,7 @@ function SpArc:GetUnitCastInterruptState(unit, now)
   if _G.UnitCastingInfo then
     local ok, name, _, texture, startTimeMS, endTimeMS, _, _, notInterruptible, spellID = pcall(_G.UnitCastingInfo, unit)
     if ok and name ~= nil then
-      local isInt = false
-      local rawNotInt = notInterruptible
-      if not IsSecret(notInterruptible) and type(notInterruptible) == "boolean" then
-        isInt = not notInterruptible
-        rawNotInt = notInterruptible
-      elseif uEv and uEv.active and uEv.interruptible ~= nil then
-        isInt = uEv.interruptible
-        rawNotInt = not isInt
-      elseif _G.C_CurveUtil and _G.C_CurveUtil.EvaluateColorValueFromBoolean and notInterruptible ~= nil then
-        local okEv, evVal = pcall(_G.C_CurveUtil.EvaluateColorValueFromBoolean, notInterruptible, 1, 0)
-        if okEv and not IsSecret(evVal) and type(evVal) == "number" then
-          isInt = (evVal < 0.5)
-          rawNotInt = not isInt
-        end
-      end
-      local sSec = (not IsSecret(startTimeMS) and type(startTimeMS) == "number" and (startTimeMS / 1000.0)) or (uEv and uEv.startTime) or now
-      local eSec = (not IsSecret(endTimeMS) and type(endTimeMS) == "number" and (endTimeMS / 1000.0)) or (uEv and uEv.endTime) or (sSec + 2.0)
-      local durSec = math.max(0.1, eSec - sSec)
-      local remSec = math.max(0, eSec - now)
-      local cleanName = (not IsSecret(name) and type(name) == "string" and name) or (uEv and uEv.name) or "Cast"
-      local cleanIcon = (not IsSecret(texture) and texture) or (uEv and uEv.icon) or 136243
-      local cleanID = (not IsSecret(spellID) and type(spellID) == "number" and spellID) or (uEv and uEv.spellID) or nil
-      return true, isInt, false, cleanName, cleanIcon, remSec, durSec, cleanID, rawNotInt
+      return ResolveUnitCastTuple(false, uEv, now, name, texture, startTimeMS, endTimeMS, notInterruptible, spellID)
     end
   end
 
@@ -176,29 +179,7 @@ function SpArc:GetUnitCastInterruptState(unit, now)
   if _G.UnitChannelInfo then
     local ok, name, _, texture, startTimeMS, endTimeMS, _, notInterruptible, spellID = pcall(_G.UnitChannelInfo, unit)
     if ok and name ~= nil then
-      local isInt = false
-      local rawNotInt = notInterruptible
-      if not IsSecret(notInterruptible) and type(notInterruptible) == "boolean" then
-        isInt = not notInterruptible
-        rawNotInt = notInterruptible
-      elseif uEv and uEv.active and uEv.interruptible ~= nil then
-        isInt = uEv.interruptible
-        rawNotInt = not isInt
-      elseif _G.C_CurveUtil and _G.C_CurveUtil.EvaluateColorValueFromBoolean and notInterruptible ~= nil then
-        local okEv, evVal = pcall(_G.C_CurveUtil.EvaluateColorValueFromBoolean, notInterruptible, 1, 0)
-        if okEv and not IsSecret(evVal) and type(evVal) == "number" then
-          isInt = (evVal < 0.5)
-          rawNotInt = not isInt
-        end
-      end
-      local sSec = (not IsSecret(startTimeMS) and type(startTimeMS) == "number" and (startTimeMS / 1000.0)) or (uEv and uEv.startTime) or now
-      local eSec = (not IsSecret(endTimeMS) and type(endTimeMS) == "number" and (endTimeMS / 1000.0)) or (uEv and uEv.endTime) or (sSec + 3.0)
-      local durSec = math.max(0.1, eSec - sSec)
-      local remSec = math.max(0, eSec - now)
-      local cleanName = (not IsSecret(name) and type(name) == "string" and name) or (uEv and uEv.name) or "Channel"
-      local cleanIcon = (not IsSecret(texture) and texture) or (uEv and uEv.icon) or 136243
-      local cleanID = (not IsSecret(spellID) and type(spellID) == "number" and spellID) or (uEv and uEv.spellID) or nil
-      return true, isInt, true, cleanName, cleanIcon, remSec, durSec, cleanID, rawNotInt
+      return ResolveUnitCastTuple(true, uEv, now, name, texture, startTimeMS, endTimeMS, notInterruptible, spellID)
     end
   end
 
@@ -216,6 +197,66 @@ end
 local function FormatSecretOrVal(v)
   if IsSecret(v) then return "SECRET" end
   return tostring(v)
+end
+
+local function FindMatchingOverrideID(baseID, candidateIDs)
+  if not (baseID and candidateIDs and C_Spell and C_Spell.GetOverrideSpell) then
+    return nil
+  end
+  local okO, over = pcall(C_Spell.GetOverrideSpell, baseID)
+  if okO and not IsSecret(over) and type(over) == "number" and over > 0 and over ~= baseID then
+    for _, myID in ipairs(candidateIDs) do
+      if over == myID then
+        return over
+      end
+    end
+  end
+  return nil
+end
+
+local function EvaluateSpenderPowerUsability(defKey, def, isProc, hasSpellOverlayProc, assistedKey, gotCleanUsable, isUsable, usableSource)
+  if not UnitPower then
+    return gotCleanUsable, isUsable, isProc, usableSource
+  end
+  if defKey == "DEVOURING_PLAGUE" or SPELL_DEFS["DEVOURING_PLAGUE"] then
+    local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 50
+    local okP, rawP = pcall(UnitPower, "player", 13)
+    if okP and not IsSecret(rawP) and type(rawP) == "number" then
+      if rawP < (cost - 5) and not isProc and assistedKey ~= defKey then
+        return true, false, isProc, "UnitPower(" .. tostring(rawP) .. "<" .. tostring(cost - 5) .. ")"
+      elseif rawP >= cost and not gotCleanUsable then
+        return true, true, isProc, "UnitPower(" .. tostring(rawP) .. ">=" .. tostring(cost) .. ")"
+      end
+    end
+    return gotCleanUsable, isUsable, isProc, usableSource
+  end
+
+  local isAstral = (defKey == "STARSURGE" or defKey == "STARFALL" or SPELL_DEFS["STARSURGE"] ~= nil or SPELL_DEFS["STARFALL"] ~= nil)
+  local powerType = isAstral and 8 or 4
+  local defaultCost = isAstral and 40 or 80
+  local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or defaultCost
+  local minRaw = isAstral and (cost - 5) or math.max(1, math.floor(cost / 20))
+  local freeOverlayAllowed = isAstral and (hasSpellOverlayProc or isProc) or (hasSpellOverlayProc and defKey == "FEROCIOUS_BITE")
+  local tagName = isAstral and "AstralPower" or "ComboPoints"
+  local trackedTag = isAstral and "TrackedAP" or "TrackedCP"
+
+  local okP, rawP = pcall(UnitPower, "player", powerType)
+  if okP and not IsSecret(rawP) and type(rawP) == "number" then
+    if rawP < minRaw then
+      if freeOverlayAllowed then
+        local procTag = isAstral and ("ProcOverlayFreeAstral(" .. tostring(rawP) .. "AP)") or ("ProcOverlayFreeSpender(" .. tostring(rawP) .. "CP)")
+        return true, true, true, procTag
+      end
+      return true, false, false, tagName .. "(" .. tostring(rawP) .. "<" .. tostring(isAstral and cost or minRaw) .. ")"
+    end
+    return true, true, isProc, tagName .. "(" .. tostring(rawP) .. ">=" .. tostring(isAstral and cost or minRaw) .. ")"
+  end
+
+  local trackedVal = st.trackedInsanity or 0
+  if trackedVal >= cost or isProc or (isAstral and hasSpellOverlayProc) or assistedKey == defKey then
+    return true, true, isProc, trackedTag .. "(" .. tostring(trackedVal) .. ">=" .. tostring(cost) .. ")"
+  end
+  return true, false, isProc, trackedTag .. "(" .. tostring(trackedVal) .. "<" .. tostring(cost) .. ")"
 end
 
 function SpArc:EvaluateSpellState(defKey, assistedKey)
@@ -271,27 +312,22 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   end
   local hasSpellOverlayProc = isProc
   local overrideActive = false
-  if C_Spell and C_Spell.GetOverrideSpell and def.ids and #def.ids > 1 then
+  if def.ids and #def.ids > 1 then
     for i = 2, #def.ids do
-      local baseID = def.ids[i]
-      local okO, over = pcall(C_Spell.GetOverrideSpell, baseID)
-      if okO and not IsSecret(over) and type(over) == "number" and over > 0 and over ~= baseID then
-        for _, myID in ipairs(def.ids) do
-          if over == myID then
-            isVoidBlastOverride = true
-            spellID = over
-            overlayRaw = "override(" .. tostring(over) .. ")"
-            if not hasSpellOverlayProc and _G.C_SpellActivationOverlay and _G.C_SpellActivationOverlay.IsSpellOverlayed then
-              local okS2, overS2 = pcall(_G.C_SpellActivationOverlay.IsSpellOverlayed, over)
-              if okS2 and not IsSecret(overS2) and overS2 then
-                hasSpellOverlayProc = true
-                isProc = true
-                overlayRaw = "sao(" .. tostring(over) .. ")"
-              end
-            end
-            break
+      local over = FindMatchingOverrideID(def.ids[i], def.ids)
+      if over then
+        isVoidBlastOverride = true
+        spellID = over
+        overlayRaw = "override(" .. tostring(over) .. ")"
+        if not hasSpellOverlayProc and _G.C_SpellActivationOverlay and _G.C_SpellActivationOverlay.IsSpellOverlayed then
+          local okS2, overS2 = pcall(_G.C_SpellActivationOverlay.IsSpellOverlayed, over)
+          if okS2 and not IsSecret(overS2) and overS2 then
+            hasSpellOverlayProc = true
+            isProc = true
+            overlayRaw = "sao(" .. tostring(over) .. ")"
           end
         end
+        break
       end
     end
   end
@@ -301,35 +337,23 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   end
   if def.overrideOf and SPELL_DEFS[def.overrideOf] then
     local baseDef = SPELL_DEFS[def.overrideOf]
-    if C_Spell and C_Spell.GetOverrideSpell then
-      for _, baseID in ipairs(baseDef.ids or {}) do
-        local okO, over = pcall(C_Spell.GetOverrideSpell, baseID)
-        if okO and not IsSecret(over) and type(over) == "number" and over > 0 and over ~= baseID then
-          for _, myID in ipairs(def.ids or {}) do
-            if over == myID then
-              overrideActive = true
-              isProc = true
-              spellID = over
-              overlayRaw = "override(" .. tostring(over) .. ")"
-              break
-            end
-          end
-        end
-        if overrideActive then break end
+    for _, baseID in ipairs(baseDef.ids or {}) do
+      local over = FindMatchingOverrideID(baseID, def.ids)
+      if over then
+        overrideActive = true
+        isProc = true
+        spellID = over
+        overlayRaw = "override(" .. tostring(over) .. ")"
+        break
       end
-      if not overrideActive and baseDef.liveSpellID then
-        local okO, over = pcall(C_Spell.GetOverrideSpell, baseDef.liveSpellID)
-        if okO and not IsSecret(over) and type(over) == "number" and over > 0 then
-          for _, myID in ipairs(def.ids or {}) do
-            if over == myID then
-              overrideActive = true
-              isProc = true
-              spellID = over
-              overlayRaw = "override(" .. tostring(over) .. ")"
-              break
-            end
-          end
-        end
+    end
+    if not overrideActive and baseDef.liveSpellID then
+      local over = FindMatchingOverrideID(baseDef.liveSpellID, def.ids)
+      if over then
+        overrideActive = true
+        isProc = true
+        spellID = over
+        overlayRaw = "override(" .. tostring(over) .. ")"
       end
     end
     if def.inheritedBaseSlot and not overrideActive and not hasSpellOverlayProc then
@@ -746,82 +770,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     end
 
     if def.isSpender and not blockedBySpellBookState and UnitPower then
-      if defKey == "DEVOURING_PLAGUE" or SPELL_DEFS["DEVOURING_PLAGUE"] then
-        local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 50
-        local okP, rawP = pcall(UnitPower, "player", 13)
-        if okP and not IsSecret(rawP) and type(rawP) == "number" then
-          if rawP < (cost - 5) and not isProc and assistedKey ~= defKey then
-            isUsable = false
-            gotCleanUsable = true
-            usableSource = "UnitPower(" .. tostring(rawP) .. "<" .. tostring(cost - 5) .. ")"
-          elseif rawP >= cost and not gotCleanUsable then
-            isUsable = true
-            gotCleanUsable = true
-            usableSource = "UnitPower(" .. tostring(rawP) .. ">=" .. tostring(cost) .. ")"
-          end
-        end
-      elseif defKey == "STARSURGE" or defKey == "STARFALL" or SPELL_DEFS["STARSURGE"] or SPELL_DEFS["STARFALL"] then
-        local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 40
-        local okAP, rawAP = pcall(UnitPower, "player", 8)
-        if okAP and not IsSecret(rawAP) and type(rawAP) == "number" then
-          if rawAP < (cost - 5) then
-            if hasSpellOverlayProc or isProc then
-              isUsable = true
-              isProc = true
-              gotCleanUsable = true
-              usableSource = "ProcOverlayFreeAstral(" .. tostring(rawAP) .. "AP)"
-            else
-              isUsable = false
-              isProc = false
-              gotCleanUsable = true
-              usableSource = "AstralPower(" .. tostring(rawAP) .. "<" .. tostring(cost) .. ")"
-            end
-          else
-            isUsable = true
-            gotCleanUsable = true
-            usableSource = "AstralPower(" .. tostring(rawAP) .. ">=" .. tostring(cost) .. ")"
-          end
-        elseif (st.trackedInsanity or 0) >= cost or hasSpellOverlayProc or isProc or assistedKey == defKey then
-          isUsable = true
-          gotCleanUsable = true
-          usableSource = "TrackedAP(" .. tostring(st.trackedInsanity or 0) .. ">=" .. tostring(cost) .. ")"
-        else
-          isUsable = false
-          gotCleanUsable = true
-          usableSource = "TrackedAP(" .. tostring(st.trackedInsanity or 0) .. "<" .. tostring(cost) .. ")"
-        end
-      else
-        local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 80
-        local minCP = math.max(1, math.floor(cost / 20))
-        local okCP, rawCP = pcall(UnitPower, "player", 4)
-        if okCP and not IsSecret(rawCP) and type(rawCP) == "number" then
-          if rawCP < minCP then
-            if hasSpellOverlayProc and defKey == "FEROCIOUS_BITE" then
-              isUsable = true
-              isProc = true
-              gotCleanUsable = true
-              usableSource = "ProcOverlayFreeSpender(" .. tostring(rawCP) .. "CP)"
-            else
-              isUsable = false
-              isProc = false
-              gotCleanUsable = true
-              usableSource = "ComboPoints(" .. tostring(rawCP) .. "<" .. tostring(minCP) .. ")"
-            end
-          else
-            isUsable = true
-            gotCleanUsable = true
-            usableSource = "ComboPoints(" .. tostring(rawCP) .. ">=" .. tostring(minCP) .. ")"
-          end
-        elseif (st.trackedInsanity or 0) >= cost or isProc or assistedKey == defKey then
-          isUsable = true
-          gotCleanUsable = true
-          usableSource = "TrackedCP(" .. tostring(st.trackedInsanity or 0) .. ">=" .. tostring(cost) .. ")"
-        else
-          isUsable = false
-          gotCleanUsable = true
-          usableSource = "TrackedCP(" .. tostring(st.trackedInsanity or 0) .. "<" .. tostring(cost) .. ")"
-        end
-      end
+      gotCleanUsable, isUsable, isProc, usableSource = EvaluateSpenderPowerUsability(defKey, def, isProc, hasSpellOverlayProc, assistedKey, gotCleanUsable, isUsable, usableSource)
     end
 
     if not gotCleanUsable then
@@ -1366,6 +1315,8 @@ local AOE_ASSIST_HINTS = {
   SWIPE            = 2,
   PRIMAL_WRATH     = 2,
   STARFALL         = 2,
+  CRASH_LIGHTNING  = 2,
+  CHAIN_LIGHTNING  = 3,
 }
 
 local function IsUnitDummyOrInCombat(unit)
@@ -1700,13 +1651,24 @@ local NO_RANGE_CHECK_SPELLS = {
   FRENZIED_REGENERATION = true,
   REGROWTH             = true,
   MOONKIN_FORM         = true,
-  SHADOWFORM           = true,
   BEAR_FORM            = true,
   CELESTIAL_ALIGNMENT  = true,
   SOLAR_ECLIPSE        = true,
   FORCE_OF_NATURE      = true,
   STARFALL             = true,
   WARRIOR_OF_ELUNE     = true,
+  LIGHTNING_SHIELD     = true,
+  ASTRAL_SHIFT         = true,
+  HEALING_SURGE        = true,
+  HEALING_STREAM_TOTEM = true,
+  EARTH_ELEMENTAL      = true,
+  GROUNDING_TOTEM      = true,
+  DOOM_WINDS           = true,
+  FERAL_SPIRIT         = true,
+  ASCENDANCE           = true,
+  THUNDERSTORM         = true,
+  SPIRIT_WALK          = true,
+  TOTEMIC_PROJECTION   = true,
 }
 
 local CLASS_RANGE_FALLBACK_SPELLS = {
@@ -1715,6 +1677,7 @@ local CLASS_RANGE_FALLBACK_SPELLS = {
   MAGE    = { 116, 30455, 133, 30451 },
   PRIEST  = { 8092, 589, 34914, 15407 },
   DRUID   = { 5221, 1822, 22568, 1079, 8921, 93402, 190984, 194153, 78674 },
+  SHAMAN  = { 17364, 60103, 188196, 188389 },
 }
 
 local function CheckBT4ButtonOutOfRange(btBtn)
@@ -1819,18 +1782,6 @@ function SpArc:IsSpellOutOfRange(defKey, def, spellID, slot, slotMatchesDef)
           if okFR and not IsSecret(inFR) and inFR ~= nil then
             return (inFR == false or inFR == 0)
           end
-        end
-      end
-    end
-  end
-
-  for otherKey, otherDef in pairs(SPELL_DEFS or EMPTY_TABLE) do
-    if not NO_RANGE_CHECK_SPELLS[otherKey] and otherDef.slot then
-      local pSlot = (otherDef.slot >= 73 and otherDef.slot <= 120) and (((otherDef.slot - 73) % 12) + 1) or otherDef.slot
-      if pSlot > 12 then
-        local btRes = CheckBT4ButtonOutOfRange(_G["BT4Button" .. pSlot])
-        if btRes ~= nil then
-          return btRes
         end
       end
     end

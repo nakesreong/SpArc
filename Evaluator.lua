@@ -135,16 +135,6 @@ function SpArc:GetPlayerSpecID()
       end
     end
   end
-  if _G.GetSpecialization and _G.GetSpecializationInfo then
-    local okS, specIdx = pcall(_G.GetSpecialization)
-    if okS and not IsSecret(specIdx) and type(specIdx) == "number" and specIdx > 0 and specIdx < 5 then
-      local okI, specID = pcall(_G.GetSpecializationInfo, specIdx)
-      if okI and not IsSecret(specID) and type(specID) == "number" and specID > 0 then
-        lastValidSpecID = specID
-        return specID
-      end
-    end
-  end
   return lastValidSpecID
 end
 
@@ -259,224 +249,199 @@ local function GetSimAura(simCtx, u, k)
   return rem or 0, stacks or 0
 end
 
-local function EvalAtomicClause(c, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx)
-  if c == "" or c == "ALWAYS" then
-    return true
-  elseif c == "NOT target.has_dots" then
-    return not simHasDoTs
-  elseif c == "target.has_dots" then
-    return simHasDoTs and true or false
-  elseif c == "player.in_burst" or c == "BURST" then
-    return simBurst and true or false
-  elseif c == "NOT player.in_burst" or c == "NOT BURST" then
-    return not simBurst
-  elseif c == "player.stealthed" or c == "STEALTH" then
-    return (simCtx and simCtx.stealthed) and true or false
-  elseif c == "NOT player.stealthed" or c == "NOT STEALTH" then
-    return not (simCtx and simCtx.stealthed)
-  elseif c == "player.in_combat" or c == "COMBAT" then
-    return (simCtx and simCtx.inCombat) and true or false
-  elseif c == "NOT player.in_combat" or c == "NOT COMBAT" then
-    return not (simCtx and simCtx.inCombat)
-  elseif c == "target.can_pick_pocket" or c == "PICK_POCKET_READY" then
-    return (simCtx and simCtx.canPickPocket) and true or false
-  elseif c == "NOT target.can_pick_pocket" then
-    return not (simCtx and simCtx.canPickPocket)
-  elseif c == "AOE" then
-    return ((simCtx and simCtx.enemies) or 1) >= 3
-  elseif c == "NOT AOE" then
-    return ((simCtx and simCtx.enemies) or 1) < 3
-  elseif c == "CLEAVE" then
-    return ((simCtx and simCtx.enemies) or 1) >= 2
-  elseif c == "SINGLE_TARGET" then
-    return ((simCtx and simCtx.enemies) or 1) <= 1
-  elseif c == "BOSS" or c == "player.boss_mode" or c == "BURST_MODE" then
-    return (simCtx and simCtx.bossMode) and true or false
-  elseif c == "NOT BOSS" or c == "NOT player.boss_mode" or c == "NOT BURST_MODE" then
-    return not (simCtx and simCtx.bossMode)
-  elseif c == "PVP" or c == "player.pvp_mode" or c == "PVP_MODE" then
-    return (simCtx and simCtx.pvpMode) and true or false
-  elseif c == "NOT PVP" or c == "NOT player.pvp_mode" or c == "NOT PVP_MODE" then
-    return not (simCtx and simCtx.pvpMode)
-  elseif c == "target.casting_interruptible" or c == "target.interruptible" or c == "INTERRUPTIBLE" then
-    return (simCtx and simCtx.targetCastingInterruptible) and true or false
-  elseif c == "NOT target.casting_interruptible" or c == "NOT target.interruptible" or c == "NOT INTERRUPTIBLE" then
-    return not (simCtx and simCtx.targetCastingInterruptible)
-  elseif c == "target.casting_uninterruptible" or c == "UNINTERRUPTIBLE" then
-    return (simCtx and simCtx.targetIsCasting and not simCtx.targetCastingInterruptible) and true or false
-  elseif c == "target.is_casting" or c == "target.casting" then
-    return (simCtx and simCtx.targetIsCasting) and true or false
-  elseif c == "NOT target.is_casting" or c == "NOT target.casting" then
-    return not (simCtx and simCtx.targetIsCasting)
+local STATIC_CLAUSES = {
+  [""]                               = { op = "ALWAYS" },
+  ["ALWAYS"]                         = { op = "ALWAYS" },
+  ["target.has_dots"]                = { op = "HAS_DOTS", inv = false },
+  ["NOT target.has_dots"]            = { op = "HAS_DOTS", inv = true },
+  ["player.in_burst"]                = { op = "BURST", inv = false },
+  ["BURST"]                          = { op = "BURST", inv = false },
+  ["NOT player.in_burst"]            = { op = "BURST", inv = true },
+  ["NOT BURST"]                      = { op = "BURST", inv = true },
+  ["player.stealthed"]               = { op = "CTX_BOOL", field = "stealthed", inv = false },
+  ["STEALTH"]                        = { op = "CTX_BOOL", field = "stealthed", inv = false },
+  ["NOT player.stealthed"]           = { op = "CTX_BOOL", field = "stealthed", inv = true },
+  ["NOT STEALTH"]                    = { op = "CTX_BOOL", field = "stealthed", inv = true },
+  ["player.in_combat"]               = { op = "CTX_BOOL", field = "inCombat", inv = false },
+  ["COMBAT"]                         = { op = "CTX_BOOL", field = "inCombat", inv = false },
+  ["NOT player.in_combat"]           = { op = "CTX_BOOL", field = "inCombat", inv = true },
+  ["NOT COMBAT"]                     = { op = "CTX_BOOL", field = "inCombat", inv = true },
+  ["target.can_pick_pocket"]         = { op = "CTX_BOOL", field = "canPickPocket", inv = false },
+  ["PICK_POCKET_READY"]              = { op = "CTX_BOOL", field = "canPickPocket", inv = false },
+  ["NOT target.can_pick_pocket"]     = { op = "CTX_BOOL", field = "canPickPocket", inv = true },
+  ["AOE"]                            = { op = "CTX_NUM", field = "enemies", cmp = ">=", val = 3, def = 1 },
+  ["NOT AOE"]                        = { op = "CTX_NUM", field = "enemies", cmp = "<",  val = 3, def = 1 },
+  ["CLEAVE"]                         = { op = "CTX_NUM", field = "enemies", cmp = ">=", val = 2, def = 1 },
+  ["SINGLE_TARGET"]                  = { op = "CTX_NUM", field = "enemies", cmp = "<=", val = 1, def = 1 },
+  ["BOSS"]                           = { op = "CTX_BOOL", field = "bossMode", inv = false },
+  ["player.boss_mode"]               = { op = "CTX_BOOL", field = "bossMode", inv = false },
+  ["BURST_MODE"]                     = { op = "CTX_BOOL", field = "bossMode", inv = false },
+  ["NOT BOSS"]                       = { op = "CTX_BOOL", field = "bossMode", inv = true },
+  ["NOT player.boss_mode"]           = { op = "CTX_BOOL", field = "bossMode", inv = true },
+  ["NOT BURST_MODE"]                 = { op = "CTX_BOOL", field = "bossMode", inv = true },
+  ["PVP"]                            = { op = "CTX_BOOL", field = "pvpMode", inv = false },
+  ["player.pvp_mode"]                = { op = "CTX_BOOL", field = "pvpMode", inv = false },
+  ["PVP_MODE"]                       = { op = "CTX_BOOL", field = "pvpMode", inv = false },
+  ["NOT PVP"]                        = { op = "CTX_BOOL", field = "pvpMode", inv = true },
+  ["NOT player.pvp_mode"]            = { op = "CTX_BOOL", field = "pvpMode", inv = true },
+  ["NOT PVP_MODE"]                   = { op = "CTX_BOOL", field = "pvpMode", inv = true },
+  ["target.casting_interruptible"]   = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = false },
+  ["target.interruptible"]           = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = false },
+  ["INTERRUPTIBLE"]                  = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = false },
+  ["NOT target.casting_interruptible"] = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = true },
+  ["NOT target.interruptible"]       = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = true },
+  ["NOT INTERRUPTIBLE"]              = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = true },
+  ["target.casting_uninterruptible"] = { op = "UNINTERRUPTIBLE" },
+  ["UNINTERRUPTIBLE"]                = { op = "UNINTERRUPTIBLE" },
+  ["target.is_casting"]              = { op = "CTX_BOOL", field = "targetIsCasting", inv = false },
+  ["target.casting"]                 = { op = "CTX_BOOL", field = "targetIsCasting", inv = false },
+  ["NOT target.is_casting"]          = { op = "CTX_BOOL", field = "targetIsCasting", inv = true },
+  ["NOT target.casting"]             = { op = "CTX_BOOL", field = "targetIsCasting", inv = true },
+}
+
+local CTX_NUM_FIELDS = {
+  ["enemies"]                = { field = "enemies",     def = 1 },
+  ["enemies_around"]         = { field = "enemies",     def = 1 },
+  ["active_enemies"]         = { field = "enemies",     def = 1 },
+  ["player.enemies"]         = { field = "enemies",     def = 1 },
+  ["target.enemies"]         = { field = "enemies",     def = 1 },
+  ["player.combo_points"]    = { field = "comboPoints", def = 0 },
+  ["COMBO_POINTS"]           = { field = "comboPoints", def = 0 },
+  ["cp"]                     = { field = "comboPoints", def = 0 },
+  ["player.energy"]          = { field = "energy",      def = 100 },
+  ["ENERGY"]                 = { field = "energy",      def = 100 },
+  ["energy"]                 = { field = "energy",      def = 100 },
+  ["player.astral_power"]    = { field = "insanity",    def = 0 },
+  ["player.insanity"]        = { field = "insanity",    def = 0 },
+  ["player.power"]           = { field = "insanity",    def = 0 },
+  ["ASTRAL_POWER"]           = { field = "insanity",    def = 0 },
+  ["INSANITY"]               = { field = "insanity",    def = 0 },
+  ["player.hp_percent"]      = { field = "playerHP",    def = 100 },
+  ["target.hp_percent"]      = { field = "targetHP",    def = 100 },
+  ["target.freezing_stacks"] = { field = "STACKS",      def = 0 },
+  ["target.debuff_stacks"]   = { field = "STACKS",      def = 0 },
+  ["target.shatter_stacks"]  = { field = "STACKS",      def = 0 },
+  ["STACKS"]                 = { field = "STACKS",      def = 0 },
+}
+
+local function CompileAtomicClause(c)
+  local staticDef = STATIC_CLAUSES[c]
+  if staticDef then
+    return staticDef
   end
 
-  -- WeakAuras-style unified Aura conditions:
-  --   target.aura(KEY_OR_ID).rem <= 1.0  /  player.aura(KEY_OR_ID).rem > 0
-  --   target.aura(KEY_OR_ID).stacks >= 4 /  player.aura(KEY_OR_ID).stacks >= 2
   local aUnit, aKey, aProp, aOp, aVal = c:match("^([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)%.([a-zA-Z_]+)%s*([><=]+)%s*([%d%.]+)$")
   if aUnit and aKey and aProp and aOp and aVal then
-    local u = (aUnit:lower() == "player") and "player" or "target"
-    local k = aKey:upper()
-    local prop = aProp:lower()
-    local curR, curS = GetSimAura(simCtx, u, k)
-    if prop == "stacks" or prop == "stack" or prop == "applications" then
-      return CompareNum(curS, aOp, tonumber(aVal) or 0)
-    else
-      return CompareNum(curR, aOp, tonumber(aVal) or 0)
-    end
+    local propLow = aProp:lower()
+    return {
+      op = "AURA_PROP",
+      u = (aUnit:lower() == "player") and "player" or "target",
+      k = aKey:upper(),
+      isStacks = (propLow == "stacks" or propLow == "stack" or propLow == "applications"),
+      cmp = aOp,
+      val = tonumber(aVal) or 0,
+    }
   end
 
-  -- Boolean shorthand: target.aura(KEY) / NOT target.aura(KEY) / player.aura(KEY) / NOT player.aura(KEY)
-  local bUnit, bKey = c:match("^([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)$")
+  local invAura, bUnit, bKey = c:match("^(NOT%s+)?([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)$")
   if bUnit and bKey then
-    local u = (bUnit:lower() == "player") and "player" or "target"
-    local k = bKey:upper()
-    local curR = GetSimAura(simCtx, u, k)
-    return curR > 0
-  end
-
-  local nbUnit, nbKey = c:match("^NOT%s+([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)$")
-  if nbUnit and nbKey then
-    local u = (nbUnit:lower() == "player") and "player" or "target"
-    local k = nbKey:upper()
-    local curR = GetSimAura(simCtx, u, k)
-    return curR <= 0
-  end
-
-  -- Legacy aliases mapped onto unified Aura tables for custom profile compatibility
-  local activeSp = c:match("^ACTIVE%(([A-Z0-9_]+)%)$")
-  if activeSp then
-    local rP = (simCtx and simCtx.auraRem and simCtx.auraRem.player and simCtx.auraRem.player[activeSp]) or 0
-    local rT = (simCtx and simCtx.auraRem and simCtx.auraRem.target and simCtx.auraRem.target[activeSp]) or 0
-    return (rP > 0 or rT > 0 or (simActive and simActive[activeSp])) and true or false
-  end
-
-  local notActiveSp = c:match("^NOT%s+ACTIVE%(([A-Z0-9_]+)%)$")
-  if notActiveSp then
-    local rP = (simCtx and simCtx.auraRem and simCtx.auraRem.player and simCtx.auraRem.player[notActiveSp]) or 0
-    local rT = (simCtx and simCtx.auraRem and simCtx.auraRem.target and simCtx.auraRem.target[notActiveSp]) or 0
-    return not (rP > 0 or rT > 0 or (simActive and simActive[notActiveSp]))
-  end
-
-  local buffSp = c:match("^BUFF%(([A-Z0-9_]+)%)$")
-  if buffSp then
-    local rP = (simCtx and simCtx.auraRem and simCtx.auraRem.player and simCtx.auraRem.player[buffSp]) or 0
-    return rP > 0
-  end
-
-  local notBuffSp = c:match("^NOT%s+BUFF%(([A-Z0-9_]+)%)$")
-  if notBuffSp then
-    local rP = (simCtx and simCtx.auraRem and simCtx.auraRem.player and simCtx.auraRem.player[notBuffSp]) or 0
-    return rP <= 0
-  end
-
-  local dotSp = c:match("^DOT%(([A-Z0-9_]+)%)$")
-  if dotSp then
-    local rT = (simCtx and simCtx.auraRem and simCtx.auraRem.target and simCtx.auraRem.target[dotSp]) or 0
-    return rT > 1.0
-  end
-
-  local notDotSp = c:match("^NOT%s+DOT%(([A-Z0-9_]+)%)$")
-  if notDotSp then
-    local rT = (simCtx and simCtx.auraRem and simCtx.auraRem.target and simCtx.auraRem.target[notDotSp]) or 0
-    return rT <= 1.0
-  end
-
-  local readySp = c:match("^READY%(([A-Z0-9_]+)%)$")
-  if readySp then
-    return simReady[readySp] and true or false
-  end
-
-  local notReadySp = c:match("^NOT%s+READY%(([A-Z0-9_]+)%)$")
-  if notReadySp then
-    return not simReady[notReadySp]
-  end
-
-  local usableSp = c:match("^USABLE%(([A-Z0-9_]+)%)$")
-  if usableSp then
-    return (simReady[usableSp] and simUsable[usableSp]) and true or false
-  end
-
-  local procSp = c:match("^PROC%(([A-Z0-9_]+)%)$")
-  if procSp then
-    local pKey = (procSp == "VOID_BLAST") and "MIND_BLAST" or procSp
-    return simProcs[pKey] and true or false
-  end
-
-  local notProcSp = c:match("^NOT%s+PROC%(([A-Z0-9_]+)%)$")
-  if notProcSp then
-    local pKey = (notProcSp == "VOID_BLAST") and "MIND_BLAST" or notProcSp
-    return not simProcs[pKey]
+    return {
+      op = "AURA_BOOL",
+      u = (bUnit:lower() == "player") and "player" or "target",
+      k = bKey:upper(),
+      inv = (invAura ~= nil and invAura ~= ""),
+    }
   end
 
   local chSp, chOp, chVal = c:match("^CHARGES%(([A-Z0-9_]+)%)%s*([><=]+)%s*(%d+)$")
   if chSp and chOp and chVal then
-    local curCh = (simCharges and simCharges[chSp]) or 0
-    return CompareNum(curCh, chOp, tonumber(chVal) or 0)
+    return {
+      op = "CHARGES",
+      k = chSp,
+      cmp = chOp,
+      val = tonumber(chVal) or 0,
+    }
   end
 
-  local enOp, enVal = c:match("^enemies%s*([><=]+)%s*(%d+)$")
-  if not enOp then enOp, enVal = c:match("^enemies_around%s*([><=]+)%s*(%d+)$") end
-  if not enOp then enOp, enVal = c:match("^active_enemies%s*([><=]+)%s*(%d+)$") end
-  if not enOp then enOp, enVal = c:match("^player%.enemies%s*([><=]+)%s*(%d+)$") end
-  if not enOp then enOp, enVal = c:match("^target%.enemies%s*([><=]+)%s*(%d+)$") end
-  if enOp and enVal then
-    local curEnemies = (simCtx and simCtx.enemies) or 1
-    return CompareNum(curEnemies, enOp, tonumber(enVal) or 0)
+  local invFn, fnName, fnArg = c:match("^(NOT%s+)?([A-Z]+)%(([A-Z0-9_]+)%)$")
+  if fnName and fnArg then
+    local isInv = (invFn ~= nil and invFn ~= "")
+    if fnName == "PROC" and fnArg == "VOID_BLAST" then
+      fnArg = "MIND_BLAST"
+    end
+    return {
+      op = fnName,
+      k = fnArg,
+      inv = isInv,
+    }
   end
 
-  local cpOp, cpVal = c:match("^player%.combo_points%s*([><=]+)%s*(%d+)$")
-  if not cpOp then cpOp, cpVal = c:match("^COMBO_POINTS%s*([><=]+)%s*(%d+)$") end
-  if not cpOp then cpOp, cpVal = c:match("^cp%s*([><=]+)%s*(%d+)$") end
-  if cpOp and cpVal then
-    local curCP = (simCtx and simCtx.comboPoints) or 0
-    return CompareNum(curCP, cpOp, tonumber(cpVal) or 0)
+  local lhs, numOp, numVal = c:match("^([A-Za-z0-9_%.]+)%s*([><=]+)%s*([%d%.]+)$")
+  if lhs and numOp and numVal then
+    local meta = CTX_NUM_FIELDS[lhs]
+    if meta then
+      return {
+        op = (meta.field == "STACKS") and "STACKS" or "CTX_NUM",
+        field = meta.field,
+        def = meta.def,
+        cmp = numOp,
+        val = tonumber(numVal) or 0,
+      }
+    end
   end
 
-  local eOp, eVal = c:match("^player%.energy%s*([><=]+)%s*(%d+)$")
-  if not eOp then eOp, eVal = c:match("^ENERGY%s*([><=]+)%s*(%d+)$") end
-  if not eOp then eOp, eVal = c:match("^energy%s*([><=]+)%s*(%d+)$") end
-  if eOp and eVal then
-    local curE = (simCtx and simCtx.energy) or 100
-    return CompareNum(curE, eOp, tonumber(eVal) or 0)
-  end
+  return STATIC_CLAUSES["ALWAYS"]
+end
 
-  local apOp, apVal = c:match("^player%.astral_power%s*([><=]+)%s*(%d+)$")
-  if not apOp then apOp, apVal = c:match("^player%.insanity%s*([><=]+)%s*(%d+)$") end
-  if not apOp then apOp, apVal = c:match("^player%.power%s*([><=]+)%s*(%d+)$") end
-  if not apOp then apOp, apVal = c:match("^ASTRAL_POWER%s*([><=]+)%s*(%d+)$") end
-  if not apOp then apOp, apVal = c:match("^INSANITY%s*([><=]+)%s*(%d+)$") end
-  if apOp and apVal then
-    local curAP = (simCtx and simCtx.insanity) or 0
-    return CompareNum(curAP, apOp, tonumber(apVal) or 0)
+local function EvalAtomicClause(cl, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx)
+  local op = cl.op
+  if op == "ALWAYS" then
+    return true
+  elseif op == "AURA_PROP" then
+    local curR, curS = GetSimAura(simCtx, cl.u, cl.k)
+    return CompareNum(cl.isStacks and curS or curR, cl.cmp, cl.val)
+  elseif op == "AURA_BOOL" then
+    local curR = GetSimAura(simCtx, cl.u, cl.k)
+    return cl.inv and (curR <= 0) or (curR > 0)
+  elseif op == "READY" then
+    local r = simReady[cl.k] and true or false
+    return cl.inv and (not r) or r
+  elseif op == "USABLE" then
+    local u = (simReady[cl.k] and simUsable[cl.k]) and true or false
+    return cl.inv and (not u) or u
+  elseif op == "PROC" then
+    local p = simProcs[cl.k] and true or false
+    return cl.inv and (not p) or p
+  elseif op == "CHARGES" then
+    return CompareNum((simCharges and simCharges[cl.k]) or 0, cl.cmp, cl.val)
+  elseif op == "CTX_NUM" then
+    local cur = (simCtx and simCtx[cl.field]) or cl.def
+    return CompareNum(cur, cl.cmp, cl.val)
+  elseif op == "CTX_BOOL" then
+    local b = (simCtx and simCtx[cl.field]) and true or false
+    return cl.inv and (not b) or b
+  elseif op == "BURST" then
+    local b = simBurst and true or false
+    return cl.inv and (not b) or b
+  elseif op == "HAS_DOTS" then
+    local d = simHasDoTs and true or false
+    return cl.inv and (not d) or d
+  elseif op == "ACTIVE" then
+    local rP = (simCtx and simCtx.auraRem and simCtx.auraRem.player and simCtx.auraRem.player[cl.k]) or 0
+    local rT = (simCtx and simCtx.auraRem and simCtx.auraRem.target and simCtx.auraRem.target[cl.k]) or 0
+    local act = (rP > 0 or rT > 0 or (simActive and simActive[cl.k])) and true or false
+    return cl.inv and (not act) or act
+  elseif op == "BUFF" then
+    local rP = (simCtx and simCtx.auraRem and simCtx.auraRem.player and simCtx.auraRem.player[cl.k]) or 0
+    return cl.inv and (rP <= 0) or (rP > 0)
+  elseif op == "DOT" then
+    local rT = (simCtx and simCtx.auraRem and simCtx.auraRem.target and simCtx.auraRem.target[cl.k]) or 0
+    return cl.inv and (rT <= 1.0) or (rT > 1.0)
+  elseif op == "UNINTERRUPTIBLE" then
+    return (simCtx and simCtx.targetIsCasting and not simCtx.targetCastingInterruptible) and true or false
+  elseif op == "STACKS" then
+    return CompareNum(simStacks or 0, cl.cmp, cl.val)
   end
-
-  local pHpOp, pHpVal = c:match("^player%.hp_percent%s*([><=]+)%s*(%d+)$")
-  if pHpOp and pHpVal then
-    local curPHP = (simCtx and simCtx.playerHP) or 100
-    return CompareNum(curPHP, pHpOp, tonumber(pHpVal) or 0)
-  end
-
-  local tHpOp, tHpVal = c:match("^target%.hp_percent%s*([><=]+)%s*(%d+)$")
-  if tHpOp and tHpVal then
-    local curTHP = (simCtx and simCtx.targetHP) or 100
-    return CompareNum(curTHP, tHpOp, tonumber(tHpVal) or 0)
-  end
-
-  local stOp, stVal = c:match("^target%.freezing_stacks%s*([><=]+)%s*(%d+)$")
-  if not stOp then
-    stOp, stVal = c:match("^target%.debuff_stacks%s*([><=]+)%s*(%d+)$")
-  end
-  if not stOp then
-    stOp, stVal = c:match("^target%.shatter_stacks%s*([><=]+)%s*(%d+)$")
-  end
-  if not stOp then
-    stOp, stVal = c:match("^STACKS%s*([><=]+)%s*(%d+)$")
-  end
-  if stOp and stVal then
-    return CompareNum(simStacks or 0, stOp, tonumber(stVal) or 0)
-  end
-
   return true
 end
 
@@ -495,7 +460,7 @@ local function GetCompiledConditionBranches(condStr)
     for rawClause in andNorm:gmatch("([^\1]+)") do
       local c = rawClause:gsub("^%s+", ""):gsub("%s+$", "")
       if c ~= "" then
-        clauses[#clauses + 1] = c
+        clauses[#clauses + 1] = CompileAtomicClause(c)
       end
     end
     if #clauses > 0 then
@@ -882,6 +847,66 @@ function SpArc:BuildRotationQueue(maxSlots)
     end
   end
 
+  local function SetSimAuraState(u, aKey, newSt, newRem)
+    if newSt ~= nil then
+      simAuraStacks[u][aKey] = newSt
+    end
+    if newRem ~= nil then
+      simAuraRem[u][aKey] = newRem
+    elseif newSt ~= nil and newSt <= 0 then
+      simAuraRem[u][aKey] = 0
+    end
+    local aDef = auraMap[aKey] or SPELL_DEFS[aKey]
+    local aIDs = aDef and (aDef.auraIDs or aDef.debuffIDs or aDef.ids)
+    if aIDs then
+      for _, aID in ipairs(aIDs) do
+        local idStr = tostring(aID)
+        if newSt ~= nil then
+          simAuraStacks[u][idStr] = newSt
+        end
+        if newRem ~= nil then
+          simAuraRem[u][idStr] = newRem
+        elseif newSt ~= nil and newSt <= 0 then
+          simAuraRem[u][idStr] = 0
+        end
+        for otherKey, otherDef in pairs(auraMap) do
+          local oIDs = otherDef.auraIDs or otherDef.debuffIDs or otherDef.ids
+          if oIDs then
+            for _, oID in ipairs(oIDs) do
+              if oID == aID then
+                if newSt ~= nil then
+                  simAuraStacks[u][otherKey] = newSt
+                end
+                if newRem ~= nil then
+                  simAuraRem[u][otherKey] = newRem
+                elseif newSt ~= nil and newSt <= 0 then
+                  simAuraRem[u][otherKey] = 0
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  local function PickMatchingRule(stepIdx, onlyInterrupt, skipKey, noResMode)
+    for _, rule in ipairs(parsed.rules) do
+      local sp = rule.spell
+      if sp ~= skipKey and simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, stepIdx) then
+        local d = SPELL_DEFS[sp]
+        local intOk = (not onlyInterrupt) or (d and d.isInterrupt)
+        local resOk = (noResMode == "any")
+          or (noResMode == "exclude" and not simNoResource[sp])
+          or (noResMode == "only" and simNoResource[sp])
+        if intOk and resOk and SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
+          return sp, rule
+        end
+      end
+    end
+    return nil, nil
+  end
+
   for step = 1, maxSlots do
     RefreshSimReady(step)
 
@@ -893,17 +918,7 @@ function SpArc:BuildRotationQueue(maxSlots)
     if step == 1 then
       -- Priority 0: Interrupts from .MD if target is actively casting an interruptible spell
       if simCtx.targetCastingInterruptible then
-        for _, rule in ipairs(parsed.rules) do
-          local sp = rule.spell
-          local d = SPELL_DEFS[sp]
-          if d and d.isInterrupt and simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, 1) and not simNoResource[sp] then
-            if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
-              pickedKey = sp
-              pickedRule = rule
-              break
-            end
-          end
-        end
+        pickedKey, pickedRule = PickMatchingRule(1, true, nil, "exclude")
       end
 
       -- Primary Slot #1: Always follow Blizzard Assisted Combat (C_AssistedCombat.GetNextCastSpell) when active
@@ -960,29 +975,13 @@ function SpArc:BuildRotationQueue(maxSlots)
 
     if not handledDynamicSlot1 then
       if not pickedKey then
-        for _, rule in ipairs(parsed.rules) do
-          local sp = rule.spell
-          if simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, step) and not (step == 1 and simNoResource[sp]) then
-            if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
-              pickedKey = sp
-              pickedRule = rule
-              break
-            end
-          end
-        end
+        pickedKey, pickedRule = PickMatchingRule(step, false, nil, step == 1 and "exclude" or "any")
       end
 
       if not pickedKey and step == 1 then
-        for _, rule in ipairs(parsed.rules) do
-          local sp = rule.spell
-          if simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, step) and simNoResource[sp] then
-            if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
-              pickedKey = sp
-              pickedRule = rule
-              pickedIsNoResource = true
-              break
-            end
-          end
+        pickedKey, pickedRule = PickMatchingRule(1, false, nil, "only")
+        if pickedKey then
+          pickedIsNoResource = true
         end
       end
 
@@ -1015,27 +1014,9 @@ function SpArc:BuildRotationQueue(maxSlots)
           end
           AdvanceSimTime(minWait + 0.01)
           RefreshSimReady(2)
-          for _, rule in ipairs(parsed.rules) do
-            local sp = rule.spell
-            if sp ~= prevKey and simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, step) then
-              if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
-                pickedKey = sp
-                pickedRule = rule
-                break
-              end
-            end
-          end
+          pickedKey, pickedRule = PickMatchingRule(step, false, prevKey, "any")
           if not pickedKey then
-            for _, rule in ipairs(parsed.rules) do
-              local sp = rule.spell
-              if simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, step) then
-                if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
-                  pickedKey = sp
-                  pickedRule = rule
-                  break
-                end
-              end
-            end
+            pickedKey, pickedRule = PickMatchingRule(step, false, nil, "any")
           end
           if pickedKey then
             break
@@ -1077,27 +1058,7 @@ function SpArc:BuildRotationQueue(maxSlots)
           local aDur = (def.auraDuration and def.auraDuration > 0) and def.auraDuration or ((def.appliesDoTs and 21.0) or ((def.burstDuration and def.burstDuration > 0) and def.burstDuration) or 0)
           if aDur > 0 then
             local u = def.auraUnit or ((def.burstDuration and def.burstDuration > 0 and not def.appliesDoTs) and "player" or "target")
-            simAuraRem[u][pickedKey] = aDur
-            if (simAuraStacks[u][pickedKey] or 0) < 1 then simAuraStacks[u][pickedKey] = 1 end
-            local aIDs = def.auraIDs or def.debuffIDs or def.ids
-            if aIDs then
-              for _, aID in ipairs(aIDs) do
-                local idStr = tostring(aID)
-                simAuraRem[u][idStr] = aDur
-                if (simAuraStacks[u][idStr] or 0) < 1 then simAuraStacks[u][idStr] = 1 end
-                for otherKey, otherDef in pairs(auraMap) do
-                  local oIDs = otherDef.auraIDs or otherDef.debuffIDs or otherDef.ids
-                  if oIDs then
-                    for _, oID in ipairs(oIDs) do
-                      if oID == aID then
-                        simAuraRem[u][otherKey] = aDur
-                        if (simAuraStacks[u][otherKey] or 0) < 1 then simAuraStacks[u][otherKey] = 1 end
-                      end
-                    end
-                  end
-                end
-              end
-            end
+            SetSimAuraState(u, pickedKey, math.max(1, simAuraStacks[u][pickedKey] or 1), aDur)
           else
             simAuraRem.player[pickedKey] = 10.0
           end
@@ -1127,56 +1088,20 @@ function SpArc:BuildRotationQueue(maxSlots)
             simReady[def.grantsProc] = true
             simUsable[def.grantsProc] = true
           end
-          local function SetSimAuraStacks(u, aKey, newSt, newRem)
-            simAuraStacks[u][aKey] = newSt
-            if newRem ~= nil then
-              simAuraRem[u][aKey] = newRem
-            elseif newSt <= 0 then
-              simAuraRem[u][aKey] = 0
-            end
-            local aDef = auraMap[aKey] or SPELL_DEFS[aKey]
-            local aIDs = aDef and (aDef.auraIDs or aDef.debuffIDs or aDef.ids)
-            if aIDs then
-              for _, aID in ipairs(aIDs) do
-                local idStr = tostring(aID)
-                simAuraStacks[u][idStr] = newSt
-                if newRem ~= nil then
-                  simAuraRem[u][idStr] = newRem
-                elseif newSt <= 0 then
-                  simAuraRem[u][idStr] = 0
-                end
-                for otherKey, otherDef in pairs(auraMap) do
-                  local oIDs = otherDef.auraIDs or otherDef.debuffIDs or otherDef.ids
-                  if oIDs then
-                    for _, oID in ipairs(oIDs) do
-                      if oID == aID then
-                        simAuraStacks[u][otherKey] = newSt
-                        if newRem ~= nil then
-                          simAuraRem[u][otherKey] = newRem
-                        elseif newSt <= 0 then
-                          simAuraRem[u][otherKey] = 0
-                        end
-                      end
-                    end
-                  end
-                end
-              end
-            end
-          end
           if def.consumesStacks and not pickedWasProc then
             local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
             local tKey = def.auraKey or "FREEZING"
             local u = def.auraUnit or (auraMap[tKey] and auraMap[tKey].auraUnit) or "target"
             local newSt = math.max(0, (simAuraStacks[u][tKey] or simStacks or 0) - cost)
             if tKey == "FREEZING" then simStacks = newSt end
-            SetSimAuraStacks(u, tKey, newSt)
+            SetSimAuraState(u, tKey, newSt)
           end
           if def.stacksGain and def.stacksGain > 0 then
             local tKey = def.auraKey or "FREEZING"
             local u = def.auraUnit or (auraMap[tKey] and auraMap[tKey].auraUnit) or "target"
             local newSt = math.min(20, (simAuraStacks[u][tKey] or simStacks or 0) + def.stacksGain)
             if tKey == "FREEZING" then simStacks = newSt end
-            SetSimAuraStacks(u, tKey, newSt, def.auraDuration or 15.0)
+            SetSimAuraState(u, tKey, newSt, def.auraDuration or 15.0)
           end
           local consumedRuleStacks = false
           if pickedRule and type(pickedRule.cond) == "string" and not (def.burstDuration and def.burstDuration > 0) and not def.isBossSkill and (def.baseCD or 0) < 15 then
@@ -1189,7 +1114,7 @@ function SpArc:BuildRotationQueue(maxSlots)
                 local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or math.max(thresh, 10)
                 local newSt = math.max(0, curSt - cost)
                 if aKey == "FREEZING" then simStacks = newSt end
-                SetSimAuraStacks(u, aKey, newSt)
+                SetSimAuraState(u, aKey, newSt)
                 consumedRuleStacks = true
               end
             end
@@ -1197,11 +1122,11 @@ function SpArc:BuildRotationQueue(maxSlots)
           if not consumedRuleStacks and (pickedKey == "LIGHTNING_BOLT" or pickedKey == "CHAIN_LIGHTNING" or pickedKey == "TEMPEST" or pickedKey == "ELEMENTAL_BLAST") then
             local curMW = simAuraStacks.player["MAELSTROM_WEAPON"] or 0
             if curMW > 0 then
-              SetSimAuraStacks("player", "MAELSTROM_WEAPON", math.max(0, curMW - 10))
+              SetSimAuraState("player", "MAELSTROM_WEAPON", math.max(0, curMW - 10))
             end
           elseif auraMap["MAELSTROM_WEAPON"] and (pickedKey == "STORMSTRIKE" or pickedKey == "WINDSTRIKE" or pickedKey == "LAVA_LASH" or pickedKey == "CRASH_LIGHTNING" or pickedKey == "VOLTAIC_BLAZE" or pickedKey == "SUNDERING" or pickedKey == "ICE_STRIKE") then
             local curMW = simAuraStacks.player["MAELSTROM_WEAPON"] or 0
-            SetSimAuraStacks("player", "MAELSTROM_WEAPON", math.min(10, curMW + 2), 30.0)
+            SetSimAuraState("player", "MAELSTROM_WEAPON", math.min(10, curMW + 2), 30.0)
           end
           if def.procOnly or def.isSpender or def.isExecute then
             simCD[pickedKey] = 9999
@@ -1284,8 +1209,6 @@ end
 
 function SpArc:RecordSpellCastSuccess(defKey, now)
   st.lastAnyCastAt = now
-  st.lockedTopKey = nil
-  st.lockedTopCandidateKey = nil
   if not defKey then return end
   st.lastCastAt[defKey] = now
   if defKey == "MOONKIN_FORM" or defKey == "SHADOWFORM" or defKey == "BEAR_FORM" or defKey == "CAT_FORM" then
@@ -1352,12 +1275,6 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
     local curE = (SpArc.GetPlayerEnergy and SpArc:GetPlayerEnergy(now)) or 100
     st.trackedEnergy = math.max(0, curE - SpArc.DEFAULT_ENERGY_COST[defKey])
     st.lastEnergyUpdateAt = now
-  end
-  if def.grantsMFI then
-    st.mfiProcUntil = now + 10.0
-  end
-  if defKey == "MIND_FLAY_INSANITY" then
-    st.mfiProcUntil = 0
   end
   if def.isSpender and SPELL_DEFS["REGROWTH"] then
     local psEntry = { untilTime = now + 12.0, expiresAt = now + 12.0, stacks = 1 }
@@ -1451,8 +1368,6 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     if unit ~= "player" then return end
     local nowSent = GetTime()
     st.lastAnyCastAt = nowSent
-    st.lockedTopKey = nil
-    st.lockedTopCandidateKey = nil
     spellID = arg4
     local defKey = (spellID and not IsSecret(spellID) and SpArc:MatchSpellToDefKey(spellID, nil))
       or ((st.lastPressedAt and (nowSent - st.lastPressedAt) < 0.8) and st.lastPressedDefKey)
@@ -1609,8 +1524,6 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
     end
   elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
     st.lastAnyCastAt = now
-    st.lockedTopKey = nil
-    st.lockedTopCandidateKey = nil
     local defKey = SpArc:MatchSpellToDefKey(spellID, sName)
       or st.castingDefKey
       or ((st.lastPressedAt and (now - st.lastPressedAt) < 1.0) and st.lastPressedDefKey)

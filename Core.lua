@@ -10,7 +10,7 @@ _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
 SpArc.VERSION = "2.9.6"
-SpArc.PROFILE_SCHEMA_VERSION = 33
+SpArc.PROFILE_SCHEMA_VERSION = 37
 
 local C_CVar = _G.C_CVar
 local issecretvalue = _G.issecretvalue
@@ -345,15 +345,11 @@ SpArc.state = {
   spellChargeStart = {},
   gcdStartTime = 0,
   gcdDuration = 0,
-  mfiProcUntil = 0,
   lastStableAssistKey = nil,
   lastStableAssistID = nil,
   lastStableAssistAt = 0,
   assistCandidateKey = nil,
   assistCandidateSince = 0,
-  lockedTopKey = nil,
-  lockedTopCandidateKey = nil,
-  lockedTopCandidateSince = 0,
   lastSpellAudit = {},
   lastShouldInterrupt = false,
   lastIsProtectedChannel = false,

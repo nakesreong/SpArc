@@ -619,11 +619,17 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     -- <20% HP overlays bypass an active execute cooldown like Shadow Word: Death)
     local sinceLastCast = now - (st.lastCastAt[defKey] or 0)
     local allowProcCDReset = (not def.isExecute) and hasSpellOverlayProc and (sinceLastCast > 1.2)
-    local allowAssistCDReset = (assistedKey == defKey) and (sinceLastCast > 1.5)
+    local allowAssistCDReset = (assistedKey == defKey) and (sinceLastCast > 1.4)
     if isOnCD and (allowProcCDReset or allowAssistCDReset) then
       isOnCD = false
       remSec = 0
       charges = math.max(1, charges)
+      if (def.baseCD or 0) <= 25 and not (def.burstDuration and def.burstDuration > 0) and not def.isBossSkill then
+        ClearKnownCD()
+        if maxCh > 1 and (st.spellChargesUsed[defKey] or 0) >= maxCh then
+          st.spellChargesUsed[defKey] = math.max(0, maxCh - 1)
+        end
+      end
       if maxCh > 1 then
         chargesRaw = "sim:" .. tostring(charges) .. "/" .. tostring(maxCh)
       end

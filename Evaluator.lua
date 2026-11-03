@@ -559,7 +559,7 @@ function SpArc:BuildRotationQueue(maxSlots)
   local now = GetTime()
   maxSlots = maxSlots or (db.visual and db.visual.queueLength) or 5
   SpArc:RefreshTrackedInsanity()
-  local assistedKey = SpArc:GetAssistedSuggestedDefKey()
+  local assistedKey, assistedSpellID = SpArc:GetAssistedSuggestedDefKey()
   if assistedKey and SPELL_DEFS[assistedKey] and SPELL_DEFS[assistedKey].isSpender then
     local aCost = SPELL_DEFS[assistedKey].insanityCost or 50
     if st.trackedInsanity < aCost then
@@ -785,154 +785,321 @@ function SpArc:BuildRotationQueue(maxSlots)
     simCtx.targetCastingInterruptible = false
   end
 
-  for step = 1, maxSlots do
+  local anySpellBound = false
+  for _, sObj in pairs(states) do
+    if sObj.keybind and sObj.keybind ~= "" then
+      anySpellBound = true
+      break
+    end
+  end
+
+  local function IsSpellBoundOnBar(spKey)
+    if SpArc.testMode or not anySpellBound then return true end
+    local s = states[spKey]
+    if s and s.keybind and s.keybind ~= "" then
+      return true
+    end
+    local d = SPELL_DEFS[spKey]
+    if d and d.overrideOf and states[d.overrideOf] then
+      local baseKB = states[d.overrideOf].keybind
+      if baseKB and baseKB ~= "" then
+        return true
+      end
+    end
+    return false
+  end
+
+  local function RefreshSimReady(stepIdx)
     for spK, spD in pairs(SPELL_DEFS) do
-      if step == 1 then
+      if spD.procOnly and not simProcs[spK] then
+        simReady[spK] = false
+      elseif stepIdx == 1 then
         simReady[spK] = simKnown[spK] and (states[spK] and states[spK].isReady == true) and (simCD[spK] <= 0.05) or false
       else
         simReady[spK] = simKnown[spK] and (simCD[spK] <= 0.05) or false
       end
     end
+  end
+
+  local function AdvanceSimTime(dt)
+    if not dt or dt <= 0 then return end
+    for spK, spD in pairs(SPELL_DEFS) do
+      local isMajorBurst = spD and (spD.isBossSkill or (spD.burstDuration and spD.burstDuration > 0) or ((spD.baseCD or 0) >= 30))
+      if not isMajorBurst and simCD[spK] and simCD[spK] > 0 and simCD[spK] < 9000 then
+        simCD[spK] = math.max(0, simCD[spK] - dt)
+        if simCD[spK] <= 0.05 and (spD.liveMaxCharges or spD.maxCharges or 1) > 1 and (simCharges[spK] or 0) <= 0 then
+          simCharges[spK] = 1
+        end
+      end
+    end
+    for aK, rVal in pairs(simAuraRem.target) do
+      if rVal and rVal > 0 and rVal < 9000 then
+        simAuraRem.target[aK] = math.max(0, rVal - dt)
+      end
+    end
+    for aK, rVal in pairs(simAuraRem.player) do
+      if rVal and rVal > 0 and rVal < 9000 then
+        simAuraRem.player[aK] = math.max(0, rVal - dt)
+      end
+    end
+  end
+
+  for step = 1, maxSlots do
+    RefreshSimReady(step)
 
     local pickedKey = nil
     local pickedRule = nil
     local pickedIsNoResource = false
-    for _, rule in ipairs(parsed.rules) do
-      local sp = rule.spell
-      if simReady[sp] and simUsable[sp] and IsSpellAllowedByToggles(sp, step) and not (step == 1 and simNoResource[sp]) then
-        if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
-          pickedKey = sp
-          pickedRule = rule
-          break
+    local handledDynamicSlot1 = false
+
+    if step == 1 then
+      -- Priority 0: Interrupts from .MD if target is actively casting an interruptible spell
+      if simCtx.targetCastingInterruptible then
+        for _, rule in ipairs(parsed.rules) do
+          local sp = rule.spell
+          local d = SPELL_DEFS[sp]
+          if d and d.isInterrupt and simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, 1) and not simNoResource[sp] then
+            if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
+              pickedKey = sp
+              pickedRule = rule
+              break
+            end
+          end
+        end
+      end
+
+      -- Primary Slot #1: Always follow Blizzard Assisted Combat (C_AssistedCombat.GetNextCastSpell) when active
+      if not pickedKey and not SpArc.testMode then
+        if assistedKey and SPELL_DEFS[assistedKey] and states[assistedKey] then
+          pickedKey = assistedKey
+          local sA = states[assistedKey]
+          local dA = SPELL_DEFS[assistedKey]
+          sA.isUnavailable = false
+          if (not sA.keybind or sA.keybind == "") and dA.overrideOf and states[dA.overrideOf] and states[dA.overrideOf].keybind ~= "" then
+            sA.keybind = states[dA.overrideOf].keybind
+          end
+          simKnown[assistedKey] = true
+          simUsable[assistedKey] = true
+          if simCD[assistedKey] and simCD[assistedKey] > 0.05 and simCD[assistedKey] <= 18.0 then
+            AdvanceSimTime(simCD[assistedKey])
+          end
+          simCD[assistedKey] = 0
+          simReady[assistedKey] = true
+          for _, rule in ipairs(parsed.rules) do
+            if rule.spell == assistedKey then
+              if not pickedRule then pickedRule = rule end
+              if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
+                pickedRule = rule
+                break
+              end
+            end
+          end
+        elseif assistedSpellID and assistedSpellID > 0 and SpArc.GetDynamicAssistedSpellMeta then
+          local dynIcon, dynKB, dynSlot = SpArc:GetDynamicAssistedSpellMeta(assistedSpellID)
+          local dynKey = "ASSIST_" .. tostring(assistedSpellID)
+          local dynOOR = (SpArc.IsSpellOutOfRange and SpArc:IsSpellOutOfRange(dynKey, nil, assistedSpellID, dynSlot, true)) or false
+          qCount = qCount + 1
+          local qItem = queue[qCount]
+          if not qItem then
+            qItem = {}
+            queue[qCount] = qItem
+          end
+          qItem.key = dynKey
+          qItem.icon = dynIcon or 134400
+          qItem.keybind = dynKB or ""
+          qItem.isProc = false
+          qItem.isReady = true
+          qItem.isUsable = true
+          qItem.isNoResource = false
+          qItem.resWaitSec = 0
+          qItem.isOutOfRange = dynOOR
+          qItem.isUnavailable = false
+          AdvanceSimTime(1.4)
+          handledDynamicSlot1 = true
         end
       end
     end
 
-    if not pickedKey and step == 1 then
-      for _, rule in ipairs(parsed.rules) do
-        local sp = rule.spell
-        if simReady[sp] and simUsable[sp] and IsSpellAllowedByToggles(sp, step) and simNoResource[sp] then
-          if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
-            pickedKey = sp
-            pickedRule = rule
-            pickedIsNoResource = true
+    if not handledDynamicSlot1 then
+      if not pickedKey then
+        for _, rule in ipairs(parsed.rules) do
+          local sp = rule.spell
+          if simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, step) and not (step == 1 and simNoResource[sp]) then
+            if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
+              pickedKey = sp
+              pickedRule = rule
+              break
+            end
+          end
+        end
+      end
+
+      if not pickedKey and step == 1 then
+        for _, rule in ipairs(parsed.rules) do
+          local sp = rule.spell
+          if simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, step) and simNoResource[sp] then
+            if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
+              pickedKey = sp
+              pickedRule = rule
+              pickedIsNoResource = true
+              break
+            end
+          end
+        end
+      end
+
+      -- Cooldown Lookahead Fast-Forward: if all bound rotational rules in .MD are currently on cooldown,
+      -- advance virtual time to the soonest rotational cooldown so Slots #2..#N show the upcoming priority order
+      if not pickedKey then
+        for _ = 1, 3 do
+          local minWait = nil
+          for _, rule in ipairs(parsed.rules) do
+            local sp = rule.spell
+            local spD = SPELL_DEFS[sp]
+            local cdRem = simCD[sp] or 9999
+            if spD and simKnown[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, step)
+              and not spD.procOnly and not spD.isInterrupt and not spD.isBossSkill
+              and not (spD.burstDuration and spD.burstDuration > 0) and (spD.baseCD or 0) < 30
+              and cdRem > 0.05 and cdRem <= 18.0 then
+              if not minWait or cdRem < minWait then
+                minWait = cdRem
+              end
+            end
+          end
+          if not minWait then
+            break
+          end
+          AdvanceSimTime(minWait + 0.01)
+          RefreshSimReady(2)
+          for _, rule in ipairs(parsed.rules) do
+            local sp = rule.spell
+            if simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, step) then
+              if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
+                pickedKey = sp
+                pickedRule = rule
+                break
+              end
+            end
+          end
+          if pickedKey then
             break
           end
         end
       end
-    end
 
-    if pickedKey and states[pickedKey] and not states[pickedKey].isUnavailable then
-      local s = states[pickedKey]
-      local def = SPELL_DEFS[pickedKey]
-      qCount = qCount + 1
-      local qItem = queue[qCount]
-      if not qItem then
-        qItem = {}
-        queue[qCount] = qItem
-      end
-      qItem.key = pickedKey
-      qItem.icon = s.icon
-      qItem.keybind = s.keybind
-      qItem.isProc = (step == 1 and s.isProc) or false
-      qItem.isReady = (step == 1) and s.isReady or true
-      qItem.isUsable = (step == 1) and (s.isUsable and not s.isNoResource) or true
-      qItem.isNoResource = (step == 1 and (pickedIsNoResource or s.isNoResource or (s.isReady and not s.isUsable))) or false
-      qItem.resWaitSec = (qItem.isNoResource and s.resWaitSec and s.resWaitSec > 0) and s.resWaitSec or 2.8
-      qItem.isOutOfRange = s.isOutOfRange or false
-      qItem.isUnavailable = s.isUnavailable or false
+      if pickedKey and states[pickedKey] and not states[pickedKey].isUnavailable then
+        local s = states[pickedKey]
+        local def = SPELL_DEFS[pickedKey]
+        local isAssistedSlot1 = (step == 1 and not SpArc.testMode and pickedKey == assistedKey)
+        qCount = qCount + 1
+        local qItem = queue[qCount]
+        if not qItem then
+          qItem = {}
+          queue[qCount] = qItem
+        end
+        qItem.key = pickedKey
+        qItem.icon = s.icon
+        qItem.keybind = s.keybind
+        qItem.isProc = (step == 1 and s.isProc) or false
+        qItem.isReady = (step == 1) and (isAssistedSlot1 or s.isReady) or true
+        qItem.isUsable = (step == 1) and ((isAssistedSlot1 or s.isUsable) and not s.isNoResource) or true
+        qItem.isNoResource = (step == 1 and (pickedIsNoResource or s.isNoResource or (not isAssistedSlot1 and s.isReady and not s.isUsable))) or false
+        qItem.resWaitSec = (qItem.isNoResource and s.resWaitSec and s.resWaitSec > 0) and s.resWaitSec or 2.8
+        qItem.isOutOfRange = s.isOutOfRange or false
+        qItem.isUnavailable = s.isUnavailable or false
 
-      local pickedWasProc = simProcs[pickedKey]
-      simProcs[pickedKey] = false
-      if def and def.isInterrupt then
-        simCtx.targetCastingInterruptible = false
-        simCtx.targetIsCasting = false
-      end
-      if simCtx.stealthed then
-        simCtx.stealthed = false
-      end
-      if def then
-        local aDur = (def.auraDuration and def.auraDuration > 0) and def.auraDuration or ((def.appliesDoTs and 21.0) or ((def.burstDuration and def.burstDuration > 0) and def.burstDuration) or 0)
-        if aDur > 0 then
-          local u = def.auraUnit or ((def.burstDuration and def.burstDuration > 0 and not def.appliesDoTs) and "player" or "target")
-          simAuraRem[u][pickedKey] = aDur
-          if (simAuraStacks[u][pickedKey] or 0) < 1 then simAuraStacks[u][pickedKey] = 1 end
-          local aIDs = def.auraIDs or def.debuffIDs or def.ids
-          if aIDs then
-            for _, aID in ipairs(aIDs) do
-              local idStr = tostring(aID)
-              simAuraRem[u][idStr] = aDur
-              if (simAuraStacks[u][idStr] or 0) < 1 then simAuraStacks[u][idStr] = 1 end
-              for otherKey, otherDef in pairs(auraMap) do
-                local oIDs = otherDef.auraIDs or otherDef.debuffIDs or otherDef.ids
-                if oIDs then
-                  for _, oID in ipairs(oIDs) do
-                    if oID == aID then
-                      simAuraRem[u][otherKey] = aDur
-                      if (simAuraStacks[u][otherKey] or 0) < 1 then simAuraStacks[u][otherKey] = 1 end
+        local pickedWasProc = simProcs[pickedKey]
+        simProcs[pickedKey] = false
+        if def and def.isInterrupt then
+          simCtx.targetCastingInterruptible = false
+          simCtx.targetIsCasting = false
+        end
+        if simCtx.stealthed then
+          simCtx.stealthed = false
+        end
+        if def then
+          local aDur = (def.auraDuration and def.auraDuration > 0) and def.auraDuration or ((def.appliesDoTs and 21.0) or ((def.burstDuration and def.burstDuration > 0) and def.burstDuration) or 0)
+          if aDur > 0 then
+            local u = def.auraUnit or ((def.burstDuration and def.burstDuration > 0 and not def.appliesDoTs) and "player" or "target")
+            simAuraRem[u][pickedKey] = aDur
+            if (simAuraStacks[u][pickedKey] or 0) < 1 then simAuraStacks[u][pickedKey] = 1 end
+            local aIDs = def.auraIDs or def.debuffIDs or def.ids
+            if aIDs then
+              for _, aID in ipairs(aIDs) do
+                local idStr = tostring(aID)
+                simAuraRem[u][idStr] = aDur
+                if (simAuraStacks[u][idStr] or 0) < 1 then simAuraStacks[u][idStr] = 1 end
+                for otherKey, otherDef in pairs(auraMap) do
+                  local oIDs = otherDef.auraIDs or otherDef.debuffIDs or otherDef.ids
+                  if oIDs then
+                    for _, oID in ipairs(oIDs) do
+                      if oID == aID then
+                        simAuraRem[u][otherKey] = aDur
+                        if (simAuraStacks[u][otherKey] or 0) < 1 then simAuraStacks[u][otherKey] = 1 end
+                      end
                     end
                   end
                 end
               end
             end
+          else
+            simAuraRem.player[pickedKey] = 10.0
           end
-        else
-          simAuraRem.player[pickedKey] = 10.0
-        end
-        if def.appliesDoTs then
-          simHasDoTs = true
-        end
-        if def.burstDuration and def.burstDuration > 0 then
-          simActive[pickedKey] = true
-          simBurst = true
-        end
-        if def.insanityGain then simInsanity = math.min(100, simInsanity + def.insanityGain) end
-        if def.insanityCost and not (def.isSpender and pickedWasProc) then
-          simInsanity = math.max(0, simInsanity - def.insanityCost)
-        end
-        simCtx.insanity = simInsanity
-        simCtx.comboPoints = math.floor(simInsanity / 20)
-        if pickedKey == "TIGERS_FURY" then
-          simEnergy = math.min(100, simEnergy + 50)
-        elseif SpArc.DEFAULT_ENERGY_COST and SpArc.DEFAULT_ENERGY_COST[pickedKey] and not (def.isSpender and pickedWasProc) then
-          simEnergy = math.max(0, simEnergy - SpArc.DEFAULT_ENERGY_COST[pickedKey])
-        end
-        simCtx.energy = simEnergy
-        if def.grantsProc and SPELL_DEFS[def.grantsProc] then
-          simKnown[def.grantsProc] = true
-          simProcs[def.grantsProc] = true
-          simCD[def.grantsProc] = 0
-          simReady[def.grantsProc] = true
-          simUsable[def.grantsProc] = true
-        end
-        local function SetSimAuraStacks(u, aKey, newSt, newRem)
-          simAuraStacks[u][aKey] = newSt
-          if newRem ~= nil then
-            simAuraRem[u][aKey] = newRem
-          elseif newSt <= 0 then
-            simAuraRem[u][aKey] = 0
+          if def.appliesDoTs then
+            simHasDoTs = true
           end
-          local aDef = auraMap[aKey] or SPELL_DEFS[aKey]
-          local aIDs = aDef and (aDef.auraIDs or aDef.debuffIDs or aDef.ids)
-          if aIDs then
-            for _, aID in ipairs(aIDs) do
-              local idStr = tostring(aID)
-              simAuraStacks[u][idStr] = newSt
-              if newRem ~= nil then
-                simAuraRem[u][idStr] = newRem
-              elseif newSt <= 0 then
-                simAuraRem[u][idStr] = 0
-              end
-              for otherKey, otherDef in pairs(auraMap) do
-                local oIDs = otherDef.auraIDs or otherDef.debuffIDs or otherDef.ids
-                if oIDs then
-                  for _, oID in ipairs(oIDs) do
-                    if oID == aID then
-                      simAuraStacks[u][otherKey] = newSt
-                      if newRem ~= nil then
-                        simAuraRem[u][otherKey] = newRem
-                      elseif newSt <= 0 then
-                        simAuraRem[u][otherKey] = 0
+          if def.burstDuration and def.burstDuration > 0 then
+            simActive[pickedKey] = true
+            simBurst = true
+          end
+          if def.insanityGain then simInsanity = math.min(100, simInsanity + def.insanityGain) end
+          if def.insanityCost and not (def.isSpender and pickedWasProc) then
+            simInsanity = math.max(0, simInsanity - def.insanityCost)
+          end
+          simCtx.insanity = simInsanity
+          simCtx.comboPoints = math.floor(simInsanity / 20)
+          if pickedKey == "TIGERS_FURY" then
+            simEnergy = math.min(100, simEnergy + 50)
+          elseif SpArc.DEFAULT_ENERGY_COST and SpArc.DEFAULT_ENERGY_COST[pickedKey] and not (def.isSpender and pickedWasProc) then
+            simEnergy = math.max(0, simEnergy - SpArc.DEFAULT_ENERGY_COST[pickedKey])
+          end
+          simCtx.energy = simEnergy
+          if def.grantsProc and SPELL_DEFS[def.grantsProc] then
+            simKnown[def.grantsProc] = true
+            simProcs[def.grantsProc] = true
+            simCD[def.grantsProc] = 0
+            simReady[def.grantsProc] = true
+            simUsable[def.grantsProc] = true
+          end
+          local function SetSimAuraStacks(u, aKey, newSt, newRem)
+            simAuraStacks[u][aKey] = newSt
+            if newRem ~= nil then
+              simAuraRem[u][aKey] = newRem
+            elseif newSt <= 0 then
+              simAuraRem[u][aKey] = 0
+            end
+            local aDef = auraMap[aKey] or SPELL_DEFS[aKey]
+            local aIDs = aDef and (aDef.auraIDs or aDef.debuffIDs or aDef.ids)
+            if aIDs then
+              for _, aID in ipairs(aIDs) do
+                local idStr = tostring(aID)
+                simAuraStacks[u][idStr] = newSt
+                if newRem ~= nil then
+                  simAuraRem[u][idStr] = newRem
+                elseif newSt <= 0 then
+                  simAuraRem[u][idStr] = 0
+                end
+                for otherKey, otherDef in pairs(auraMap) do
+                  local oIDs = otherDef.auraIDs or otherDef.debuffIDs or otherDef.ids
+                  if oIDs then
+                    for _, oID in ipairs(oIDs) do
+                      if oID == aID then
+                        simAuraStacks[u][otherKey] = newSt
+                        if newRem ~= nil then
+                          simAuraRem[u][otherKey] = newRem
+                        elseif newSt <= 0 then
+                          simAuraRem[u][otherKey] = 0
+                        end
                       end
                     end
                   end
@@ -940,102 +1107,95 @@ function SpArc:BuildRotationQueue(maxSlots)
               end
             end
           end
-        end
-        if def.consumesStacks and not pickedWasProc then
-          local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
-          local tKey = def.auraKey or "FREEZING"
-          local u = def.auraUnit or (auraMap[tKey] and auraMap[tKey].auraUnit) or "target"
-          local newSt = math.max(0, (simAuraStacks[u][tKey] or simStacks or 0) - cost)
-          if tKey == "FREEZING" then simStacks = newSt end
-          SetSimAuraStacks(u, tKey, newSt)
-        end
-        if def.stacksGain and def.stacksGain > 0 then
-          local tKey = def.auraKey or "FREEZING"
-          local u = def.auraUnit or (auraMap[tKey] and auraMap[tKey].auraUnit) or "target"
-          local newSt = math.min(20, (simAuraStacks[u][tKey] or simStacks or 0) + def.stacksGain)
-          if tKey == "FREEZING" then simStacks = newSt end
-          SetSimAuraStacks(u, tKey, newSt, def.auraDuration or 15.0)
-        end
-        if pickedRule and type(pickedRule.cond) == "string" and not (def.burstDuration and def.burstDuration > 0) and not def.isBossSkill and (def.baseCD or 0) < 15 then
-          for uRaw, aKey, prop, op, valStr in pickedRule.cond:gmatch("([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)%.([a-zA-Z_]+)%s*([><=]+)%s*([%d%.]+)") do
-            local u = (uRaw:lower() == "player") and "player" or "target"
-            local pLow = prop:lower()
-            if (pLow == "stacks" or pLow == "stack" or pLow == "applications") and (op == ">=" or op == ">" or op == "==" or op == "=") then
-              local thresh = tonumber(valStr) or 1
-              local curSt = simAuraStacks[u][aKey] or 0
-              local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or math.max(thresh, 10)
-              local newSt = math.max(0, curSt - cost)
-              if aKey == "FREEZING" then simStacks = newSt end
-              SetSimAuraStacks(u, aKey, newSt)
+          if def.consumesStacks and not pickedWasProc then
+            local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
+            local tKey = def.auraKey or "FREEZING"
+            local u = def.auraUnit or (auraMap[tKey] and auraMap[tKey].auraUnit) or "target"
+            local newSt = math.max(0, (simAuraStacks[u][tKey] or simStacks or 0) - cost)
+            if tKey == "FREEZING" then simStacks = newSt end
+            SetSimAuraStacks(u, tKey, newSt)
+          end
+          if def.stacksGain and def.stacksGain > 0 then
+            local tKey = def.auraKey or "FREEZING"
+            local u = def.auraUnit or (auraMap[tKey] and auraMap[tKey].auraUnit) or "target"
+            local newSt = math.min(20, (simAuraStacks[u][tKey] or simStacks or 0) + def.stacksGain)
+            if tKey == "FREEZING" then simStacks = newSt end
+            SetSimAuraStacks(u, tKey, newSt, def.auraDuration or 15.0)
+          end
+          local consumedRuleStacks = false
+          if pickedRule and type(pickedRule.cond) == "string" and not (def.burstDuration and def.burstDuration > 0) and not def.isBossSkill and (def.baseCD or 0) < 15 then
+            for uRaw, aKey, prop, op, valStr in pickedRule.cond:gmatch("([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)%.([a-zA-Z_]+)%s*([><=]+)%s*([%d%.]+)") do
+              local u = (uRaw:lower() == "player") and "player" or "target"
+              local pLow = prop:lower()
+              if (pLow == "stacks" or pLow == "stack" or pLow == "applications") and (op == ">=" or op == ">" or op == "==" or op == "=") then
+                local thresh = tonumber(valStr) or 1
+                local curSt = simAuraStacks[u][aKey] or 0
+                local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or math.max(thresh, 10)
+                local newSt = math.max(0, curSt - cost)
+                if aKey == "FREEZING" then simStacks = newSt end
+                SetSimAuraStacks(u, aKey, newSt)
+                consumedRuleStacks = true
+              end
             end
           end
-        end
-        if def.procOnly or def.isSpender or def.isExecute then
-          simCD[pickedKey] = 9999
-          simReady[pickedKey] = false
-          simUsable[pickedKey] = false
-        elseif (def.burstDuration and def.burstDuration > 0) or def.isBossSkill then
-          -- Never queue a 2nd charge of a burst immediately after the 1st charge in the same queue preview
-          simActive[pickedKey] = true
-          simCD[pickedKey] = math.max(def.burstDuration or 15, def.baseCD or 30)
-          simReady[pickedKey] = false
-          if pickedKey == "VOID_ERUPTION" and states["POWER_INFUSION"] and s.keybind ~= "" and s.keybind == states["POWER_INFUSION"].keybind then
-            simActive["POWER_INFUSION"] = true
-            simCD["POWER_INFUSION"] = 120
-            simReady["POWER_INFUSION"] = false
+          if not consumedRuleStacks and (pickedKey == "LIGHTNING_BOLT" or pickedKey == "CHAIN_LIGHTNING" or pickedKey == "TEMPEST" or pickedKey == "ELEMENTAL_BLAST") then
+            local curMW = simAuraStacks.player["MAELSTROM_WEAPON"] or 0
+            if curMW > 0 then
+              SetSimAuraStacks("player", "MAELSTROM_WEAPON", math.max(0, curMW - 10))
+            end
           end
-        elseif (def.liveMaxCharges or def.maxCharges or 1) > 1 then
-          if def.oncePerQueue then
-            simCharges[pickedKey] = 0
-            simCD[pickedKey] = def.liveChargeCD or def.baseCD or 15
+          if def.procOnly or def.isSpender or def.isExecute then
+            simCD[pickedKey] = 9999
+            simReady[pickedKey] = false
+            simUsable[pickedKey] = false
+          elseif (def.burstDuration and def.burstDuration > 0) or def.isBossSkill then
+            -- Never queue a 2nd charge of a burst immediately after the 1st charge in the same queue preview
+            simActive[pickedKey] = true
+            simCD[pickedKey] = math.max(def.burstDuration or 15, def.baseCD or 30)
+            simReady[pickedKey] = false
+            if pickedKey == "VOID_ERUPTION" and states["POWER_INFUSION"] and s.keybind ~= "" and s.keybind == states["POWER_INFUSION"].keybind then
+              simActive["POWER_INFUSION"] = true
+              simCD["POWER_INFUSION"] = 120
+              simReady["POWER_INFUSION"] = false
+            end
+          elseif (def.liveMaxCharges or def.maxCharges or 1) > 1 then
+            if def.oncePerQueue then
+              simCharges[pickedKey] = 0
+              simCD[pickedKey] = def.liveChargeCD or def.baseCD or 15
+              simReady[pickedKey] = false
+            else
+              simCharges[pickedKey] = (simCharges[pickedKey] or 1) - 1
+              if simCharges[pickedKey] <= 0 then
+                simCD[pickedKey] = def.liveChargeCD or def.baseCD or 7.5
+                simReady[pickedKey] = false
+              elseif def.baseCD and def.baseCD > 1.6 then
+                simCD[pickedKey] = 1.4
+                simReady[pickedKey] = false
+              end
+            end
+          elseif (def.liveChargeCD and def.liveChargeCD > 0) or (def.baseCD and def.baseCD > 0) then
+            simCD[pickedKey] = def.liveChargeCD or def.baseCD
             simReady[pickedKey] = false
           else
-            simCharges[pickedKey] = (simCharges[pickedKey] or 1) - 1
-            if simCharges[pickedKey] <= 0 then
-              simCD[pickedKey] = def.liveChargeCD or def.baseCD or 7.5
-              simReady[pickedKey] = false
-            elseif def.baseCD and def.baseCD > 1.6 then
-              simCD[pickedKey] = 1.4
-              simReady[pickedKey] = false
+            simCD[pickedKey] = 0
+          end
+        end
+
+        AdvanceSimTime(1.4)
+
+        for spK, spD in pairs(SPELL_DEFS) do
+          if spD.isSpender and spD.insanityCost then
+            local canAfford = simInsanity >= spD.insanityCost
+            simUsable[spK] = canAfford
+            if canAfford and (not spD.baseCD or spD.baseCD <= 0) then
+              simCD[spK] = 0
+              simReady[spK] = true
             end
           end
-        elseif (def.liveChargeCD and def.liveChargeCD > 0) or (def.baseCD and def.baseCD > 0) then
-          simCD[pickedKey] = def.liveChargeCD or def.baseCD
-          simReady[pickedKey] = false
-        else
-          simCD[pickedKey] = 0
         end
+      else
+        break
       end
-
-      for spK, spD in pairs(SPELL_DEFS) do
-        local isMajorBurst = spD and (spD.isBossSkill or (spD.burstDuration and spD.burstDuration > 0) or ((spD.baseCD or 0) >= 30))
-        if not isMajorBurst and simCD[spK] and simCD[spK] < 9000 then
-          simCD[spK] = math.max(0, simCD[spK] - 1.4)
-        end
-      end
-      for aK, rVal in pairs(simAuraRem.target) do
-        if rVal and rVal > 0 and rVal < 9000 then
-          simAuraRem.target[aK] = math.max(0, rVal - 1.4)
-        end
-      end
-      for aK, rVal in pairs(simAuraRem.player) do
-        if rVal and rVal > 0 and rVal < 9000 then
-          simAuraRem.player[aK] = math.max(0, rVal - 1.4)
-        end
-      end
-
-      for spK, spD in pairs(SPELL_DEFS) do
-        if spD.isSpender and spD.insanityCost then
-          local canAfford = simInsanity >= spD.insanityCost
-          simUsable[spK] = canAfford
-          if canAfford and (not spD.baseCD or spD.baseCD <= 0) then
-            simCD[spK] = 0
-            simReady[spK] = true
-          end
-        end
-      end
-    else
-      break
     end
   end
 

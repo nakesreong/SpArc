@@ -723,6 +723,10 @@ function SpArc:ScanActionSlotsAndSpells(force)
     def.keybind = (kb and kb ~= "" and kb) or ""
   end
 
+  st.spellIDToSlot = spellIDToSlot
+  st.assistedSlots = assistedSlots
+  st.dynamicSpellMetaCache = {}
+
   for _, def in pairs(SPELL_DEFS) do
     def.inheritedBaseSlot = false
     if def.overrideOf then
@@ -816,6 +820,78 @@ local AOE_ASSIST_KEYS = {
   WHIRLWIND = true,
 }
 
+local NON_ROTATIONAL_ASSIST_BUFFS = {
+  [5761]   = true, -- Numbing Poison
+  [2823]   = true, -- Deadly Poison
+  [8679]   = true, -- Wound Poison
+  [3408]   = true, -- Crippling Poison
+  [315584] = true, -- Instant Poison
+  [381664] = true, -- Amplifying Poison
+  [381637] = true, -- Atrophic Poison
+  [318038] = true, -- Flametongue Weapon
+  [33757]  = true, -- Windfury Weapon
+}
+
+function SpArc:GetDynamicAssistedSpellMeta(spellID)
+  if not spellID or IsSecret(spellID) or type(spellID) ~= "number" or spellID <= 0 then
+    return 134400, "", nil
+  end
+  st.dynamicSpellMetaCache = st.dynamicSpellMetaCache or {}
+  local cached = st.dynamicSpellMetaCache[spellID]
+  if cached then
+    return cached.icon, cached.keybind, cached.slot
+  end
+
+  local icon = nil
+  if C_Spell and C_Spell.GetSpellTexture then
+    local okT, tex = pcall(C_Spell.GetSpellTexture, spellID)
+    if okT and not IsSecret(tex) and tex then
+      icon = tex
+    end
+  end
+  if not icon and C_Spell and C_Spell.GetSpellInfo then
+    local okI, info = pcall(C_Spell.GetSpellInfo, spellID)
+    if okI and type(info) == "table" and not IsSecret(info.iconID) and info.iconID then
+      icon = info.iconID
+    end
+  end
+  icon = icon or 134400
+
+  local sMap = st.spellIDToSlot or {}
+  local aSlots = st.assistedSlots or {}
+  local foundSlot = sMap[spellID]
+  if not foundSlot and C_Spell and C_Spell.GetBaseSpell then
+    local okB, baseID = pcall(C_Spell.GetBaseSpell, spellID)
+    if okB and not IsSecret(baseID) and type(baseID) == "number" and baseID > 0 then
+      foundSlot = sMap[baseID]
+    end
+  end
+  if not foundSlot and C_ActionBar and C_ActionBar.FindSpellActionButtons then
+    local okF, slots = pcall(C_ActionBar.FindSpellActionButtons, spellID)
+    if okF and type(slots) == "table" and not IsSecret(slots) then
+      for _, s in pairs(slots) do
+        if not IsSecret(s) and type(s) == "number" and s > 0 and not aSlots[s] then
+          local kb = SpArc:GetSlotKeybind(s)
+          if kb and kb ~= "" then
+            foundSlot = s
+            break
+          elseif not foundSlot then
+            foundSlot = s
+          end
+        end
+      end
+    end
+  end
+
+  local keybind = (foundSlot and SpArc:GetSlotKeybind(foundSlot)) or ""
+  st.dynamicSpellMetaCache[spellID] = {
+    icon = icon,
+    keybind = keybind,
+    slot = foundSlot,
+  }
+  return icon, keybind, foundSlot
+end
+
 function SpArc:GetAssistedSuggestedDefKey()
   if not (C_AssistedCombat and C_AssistedCombat.GetNextCastSpell) then
     return nil, nil
@@ -837,13 +913,14 @@ function SpArc:GetAssistedSuggestedDefKey()
   end
   local defKey = SpArc:MatchSpellToDefKey(spellID, nil)
   if not defKey then
-    -- Ignore transient non-rotational utility/poison prompts (e.g. 5761 Numbing Poison when stepping out of 5yd melee cone)
-    if st.lastStableAssistKey and (now - (st.lastStableAssistAt or 0)) < 1.5 then
+    -- Ignore transient non-rotational weapon-buff/poison prompts when stepping out of melee range
+    if NON_ROTATIONAL_ASSIST_BUFFS[spellID] and st.lastStableAssistKey and (now - (st.lastStableAssistAt or 0)) < 1.5 then
       local lastCast = st.lastCastAt[st.lastStableAssistKey] or 0
       if lastCast < (st.lastStableAssistAt or 0) then
-        return st.lastStableAssistKey, spellID
+        return st.lastStableAssistKey, st.lastStableAssistID
       end
     end
+    st.lastStableAssistID = spellID
     return nil, spellID
   end
 
@@ -875,7 +952,7 @@ function SpArc:GetAssistedSuggestedDefKey()
     st.assistCandidateSince = now
   end
 
-  local holdNeeded = (AOE_ASSIST_KEYS[defKey] or AOE_ASSIST_KEYS[prevKey]) and 0.85 or 0.30
+  local holdNeeded = (AOE_ASSIST_KEYS[defKey] or AOE_ASSIST_KEYS[prevKey]) and 0.65 or 0.10
   if (now - (st.assistCandidateSince or now)) >= holdNeeded then
     st.lastStableAssistKey = defKey
     st.lastStableAssistID = spellID

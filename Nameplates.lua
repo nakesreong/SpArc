@@ -604,43 +604,73 @@ local function EvaluateNameplateAuraColor(unit, metro, now)
   return nil, nil, nil
 end
 ---------------------------------------------------------------------------------------
---  3. QUEST NPC DETECTION (NATIVE + TOOLTIP SCAN CACHE)
+--  3. QUEST NPC DETECTION (NATIVE + SOFTTARGET + TOOLTIP SCAN CACHE)
 ---------------------------------------------------------------------------------------
-local function IsUnitQuestRelated(unit, guid)
-  local db = SpArc:EnsureDB()
-  if db and db.visual and db.visual.npShowQuestNPCs == false then
-    return false
-  end
+local questTipNextScanByUnit = {}
+
+local function IsUnitQuestRelated(unit, guid, plate)
   if not unit or SafeBool(UnitIsPlayer, unit) then
     return false
   end
   if C_QuestLog and C_QuestLog.UnitIsRelatedToActiveQuest then
     local okQ, isRel = pcall(C_QuestLog.UnitIsRelatedToActiveQuest, unit)
     if okQ and not IsSecret(isRel) and isRel == true then
-      if guid and not IsSecret(guid) then questCacheByGUID[guid] = true end
+      if guid and not IsSecret(guid) then questCacheByGUID[guid] = GetTime() + 2.5 end
       return true
     end
   end
-  if guid and not IsSecret(guid) and questCacheByGUID[guid] ~= nil then
-    return questCacheByGUID[guid]
+  if _G.UnitIsQuestBoss and SafeBool(_G.UnitIsQuestBoss, unit) then
+    if guid and not IsSecret(guid) then questCacheByGUID[guid] = GetTime() + 2.5 end
+    return true
   end
+  -- Check if SoftTargetFrame on this plate is showing a quest icon (! / ? / campaign quest)
+  local uFrame = plate and plate.UnitFrame
+  local stFrame = uFrame and uFrame.SoftTargetFrame
+  if stFrame and SafeBool(stFrame.IsShown, stFrame) then
+    local ic = stFrame.Icon
+    if ic and ic.GetAtlas then
+      local okA, atlas = pcall(ic.GetAtlas, ic)
+      if okA and not IsSecret(atlas) and type(atlas) == "string" and atlas ~= "" then
+        local lowA = atlas:lower()
+        if lowA:find("quest", 1, true) or lowA:find("campaign", 1, true) or lowA:find("turnin", 1, true) or lowA:find("important", 1, true) then
+          return true
+        end
+      end
+    end
+    if not SafeBool(UnitCanAttack, "player", unit) then
+      return true
+    end
+  end
+  local now = GetTime()
+  if guid and not IsSecret(guid) then
+    local exp = questCacheByGUID[guid]
+    if type(exp) == "number" and exp > now then
+      return true
+    end
+  end
+  local nextScan = questTipNextScanByUnit[unit] or 0
+  if now < nextScan then
+    return false
+  end
+  questTipNextScanByUnit[unit] = now + 0.65
   if C_TooltipInfo and C_TooltipInfo.GetUnit then
     local okT, tip = pcall(C_TooltipInfo.GetUnit, unit)
     if okT and type(tip) == "table" and type(tip.lines) == "table" then
+      local tType = _G.Enum and _G.Enum.TooltipDataLineType
+      local qTitle = (tType and tType.QuestTitle) or 17
+      local qObj = (tType and tType.QuestObjective) or 8
+      local qPlayer = (tType and tType.QuestPlayer) or 18
       for i = 2, #tip.lines do
         local ln = tip.lines[i]
         if type(ln) == "table" and not IsSecret(ln.type) then
-          -- 17 = QuestTitle, 8 = QuestObjective
-          if ln.type == 17 or ln.type == 8 then
-            if guid and not IsSecret(guid) then questCacheByGUID[guid] = true end
+          local lt = ln.type
+          if lt == qTitle or lt == qObj or lt == qPlayer or lt == 17 or lt == 8 or lt == 18 then
+            if guid and not IsSecret(guid) then questCacheByGUID[guid] = now + 2.5 end
             return true
           end
         end
       end
     end
-  end
-  if guid and not IsSecret(guid) then
-    questCacheByGUID[guid] = false
   end
   return false
 end
@@ -856,15 +886,15 @@ local function SuppressBlizzardUnitFrame(plate, metro)
         end
       end)
     end
-    -- Preserve SoftTargetFrame (Interact E icon) and WidgetContainer on our Metro frame
+    -- Preserve SoftTargetFrame (Interact E / Quest ! icon) and WidgetContainer on the parent plate
     if metro and not metro._reparentedSoftTarget then
       metro._reparentedSoftTarget = true
       if uFrame.SoftTargetFrame then
-        pcall(uFrame.SoftTargetFrame.SetParent, uFrame.SoftTargetFrame, metro)
+        pcall(uFrame.SoftTargetFrame.SetParent, uFrame.SoftTargetFrame, plate)
         pcall(uFrame.SoftTargetFrame.SetIgnoreParentAlpha, uFrame.SoftTargetFrame, true)
       end
       if uFrame.WidgetContainer then
-        pcall(uFrame.WidgetContainer.SetParent, uFrame.WidgetContainer, metro)
+        pcall(uFrame.WidgetContainer.SetParent, uFrame.WidgetContainer, plate)
         pcall(uFrame.WidgetContainer.SetIgnoreParentAlpha, uFrame.WidgetContainer, true)
       end
     end
@@ -893,10 +923,15 @@ function SpArc:SyncExternalNameplateAddons()
     pcall(C_CVar.SetCVar, "nameplateShowEnemies", "1")
     local db = SpArc:EnsureDB()
     local vis = (db and db.visual) or SpArc.DEFAULT_VISUAL
-    if vis.npShowFriendlyPlayers ~= false then
+    if vis.npShowFriendlyPlayers ~= false or vis.npShowFriendlyNPCs == true or vis.npShowQuestNPCs ~= false then
       pcall(C_CVar.SetCVar, "nameplateShowFriends", "1")
-      pcall(C_CVar.SetCVar, "nameplateShowFriendlyNPCs", "1")
       pcall(C_CVar.SetCVar, "nameplateShowOnlyNameForFriendlyPlayerUnits", "0")
+    end
+    if vis.npShowFriendlyNPCs == true or vis.npShowQuestNPCs ~= false then
+      pcall(C_CVar.SetCVar, "nameplateShowFriendlyNPCs", "1")
+      pcall(C_CVar.SetCVar, "UnitNameFriendlySpecialNPCName", "1")
+    else
+      pcall(C_CVar.SetCVar, "nameplateShowFriendlyNPCs", "0")
     end
     pcall(C_CVar.SetCVar, "nameplateMinScale", "1")
     pcall(C_CVar.SetCVar, "nameplateMaxScale", "1")
@@ -1237,11 +1272,18 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
   --   3. ENEMY_NPC    (`canAttack` & hostile/aggressive): Will attack on sight or actively aggroed -> Red (#D92626)
   metro.classFile = nil
   metro.cachedClassFile = nil
-  local isQuest = IsUnitQuestRelated(unit, cleanGUID)
-  metro.isQuestNPC = isQuest
+  local plate = metro:GetParent()
+  local isQuest = IsUnitQuestRelated(unit, cleanGUID, plate)
+  metro.isQuestNPC = (vis.npShowQuestNPCs ~= false) and isQuest or false
   if not canAttack then
     metro.plateCategory = "FRIENDLY_NPC"
-    return true
+    if vis.npShowFriendlyNPCs == true then
+      return true
+    end
+    if vis.npShowQuestNPCs ~= false and (isQuest or isTarget) then
+      return true
+    end
+    return false
   end
   local inCombat = SafeBool(UnitAffectingCombat, unit)
   local playerInCombat = (InCombatLockdown and InCombatLockdown()) or SafeBool(UnitAffectingCombat, "player")
@@ -1251,7 +1293,13 @@ local function EvaluatePlateVisibilityAndType(unit, metro)
     return true
   else
     metro.plateCategory = "NEUTRAL_NPC"
-    return true
+    if vis.npShowNeutralNPCs ~= false then
+      return true
+    end
+    if (vis.npShowQuestNPCs ~= false and isQuest) or isTarget then
+      return true
+    end
+    return false
   end
 end
 UpdateMetroHealthAndColor = function(metro, now)
@@ -1637,6 +1685,8 @@ npDriver:RegisterEvent("PLAYER_TARGET_CHANGED")
 npDriver:RegisterEvent("PLAYER_REGEN_DISABLED")
 npDriver:RegisterEvent("PLAYER_REGEN_ENABLED")
 npDriver:RegisterEvent("QUEST_LOG_UPDATE")
+npDriver:RegisterEvent("UNIT_QUEST_LOG_CHANGED")
+npDriver:RegisterEvent("SOFT_INTERACT_CHANGED")
 npDriver:RegisterEvent("UNIT_HEALTH")
 npDriver:RegisterEvent("UNIT_MAXHEALTH")
 npDriver:RegisterEvent("UNIT_AURA")
@@ -1647,19 +1697,18 @@ npDriver:RegisterEvent("UNIT_FLAGS")
 npDriver:SetScript("OnEvent", function(_, event, arg1)
   if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
     questCacheByGUID = {}
+    questTipNextScanByUnit = {}
     SpArc:RefreshAllNameplates()
     return
   end
-  if event == "QUEST_LOG_UPDATE" then
-    if InCombatLockdown and InCombatLockdown() then
-      return
-    end
+  if event == "QUEST_LOG_UPDATE" or event == "UNIT_QUEST_LOG_CHANGED" or event == "SOFT_INTERACT_CHANGED" then
     local now = GetTime()
-    if npDriver._lastQuestRefreshAt and (now - npDriver._lastQuestRefreshAt) < 1.5 then
+    if event ~= "SOFT_INTERACT_CHANGED" and npDriver._lastQuestRefreshAt and (now - npDriver._lastQuestRefreshAt) < 0.35 then
       return
     end
     npDriver._lastQuestRefreshAt = now
     questCacheByGUID = {}
+    questTipNextScanByUnit = {}
     for _, metro in pairs(unitToMetro) do
       if metro and metro.unit then
         FullUpdateMetroPlate(metro)
@@ -1800,16 +1849,25 @@ npDriver:SetScript("OnUpdate", function(_, elapsed)
     doAuraRefresh = true
   end
   for _, metro in pairs(unitToMetro) do
-    if metro and metro.unit and metro:IsShown() then
-      if doAuraRefresh then
-        UpdateMetroHealthAndColor(metro, now)
+    if metro and metro.unit then
+      if doAuraRefresh and not metro.isPlayer then
+        local wasQuest = metro.isQuestNPC
+        local shouldShow = EvaluatePlateVisibilityAndType(metro.unit, metro)
+        if shouldShow ~= metro:IsShown() or metro.isQuestNPC ~= wasQuest then
+          FullUpdateMetroPlate(metro)
+        end
       end
-      local uEv = st.unitCastState and st.unitCastState[metro.unit]
-      if doAuraRefresh or metro.castBar:IsShown() or (uEv and uEv.active) then
-        UpdateMetroCastbar(metro, now)
-      end
-      if SpArc.UpdateMetroDistanceFade then
-        SpArc:UpdateMetroDistanceFade(metro, 0.05, doAuraRefresh, false)
+      if metro:IsShown() then
+        if doAuraRefresh then
+          UpdateMetroHealthAndColor(metro, now)
+        end
+        local uEv = st.unitCastState and st.unitCastState[metro.unit]
+        if doAuraRefresh or metro.castBar:IsShown() or (uEv and uEv.active) then
+          UpdateMetroCastbar(metro, now)
+        end
+        if SpArc.UpdateMetroDistanceFade then
+          SpArc:UpdateMetroDistanceFade(metro, 0.05, doAuraRefresh, false)
+        end
       end
     end
   end
@@ -1887,21 +1945,34 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
   ApplyCyrFont(ui.m10Title, 15)
   ui.m10Title:SetPoint("TOPLEFT", 0, 0)
   ui.m10Title:SetTextColor(1, 0.85, 0.25, 1)
-  -- Top Row Checkboxes
+  -- Row 1 Checkboxes: Module & Player Settings
   local cEnable = CreateElvCheck(page, "MOD_ENABLE", "enableNameplates", 0, -22, true, false, function()
     SpArc:RefreshAllNameplates()
   end)
-  cEnable:SetWidth(130)
-  local cClassIcon = CreateElvCheck(page, "CK_NP_CLASS_ICON", "npShowHostileClassIcon", 135, -22, false, false, function()
+  cEnable:SetWidth(145)
+  local cClassIcon = CreateElvCheck(page, "CK_NP_CLASS_ICON", "npShowHostileClassIcon", 155, -22, false, false, function()
     SpArc:RefreshAllNameplates()
   end)
-  cClassIcon:SetWidth(240)
-  local cFriendly = CreateElvCheck(page, "CK_NP_FRIENDLY", "npShowFriendlyPlayers", 385, -22, false, false, function()
+  cClassIcon:SetWidth(250)
+  local cFriendly = CreateElvCheck(page, "CK_NP_FRIENDLY", "npShowFriendlyPlayers", 415, -22, false, false, function()
     SpArc:RefreshAllNameplates()
   end)
-  cFriendly:SetWidth(255)
+  cFriendly:SetWidth(285)
+  -- Row 2 Checkboxes: NPC Visibility Filter (Quest NPCs vs All Friendly/Neutral NPCs)
+  local cQuestNPCs = CreateElvCheck(page, "CK_NP_QUEST_NPCS", "npShowQuestNPCs", 0, -45, false, false, function()
+    SpArc:RefreshAllNameplates()
+  end)
+  cQuestNPCs:SetWidth(285)
+  local cFriendlyNPCs = CreateElvCheck(page, "CK_NP_FRIENDLY_NPCS", "npShowFriendlyNPCs", 295, -45, false, false, function()
+    SpArc:RefreshAllNameplates()
+  end)
+  cFriendlyNPCs:SetWidth(245)
+  local cNeutralNPCs = CreateElvCheck(page, "CK_NP_NEUTRAL_NPCS", "npShowNeutralNPCs", 550, -45, false, false, function()
+    SpArc:RefreshAllNameplates()
+  end)
+  cNeutralNPCs:SetWidth(245)
   -- Group 1: Geometry Sliders + Distance Fade + Live Metro Preview Tile (Top Box)
-  local geoBox = RegisterGroupBox(page, "M10_GRP_GEO", 0, -52, 640, 200)
+  local geoBox = RegisterGroupBox(page, "M10_GRP_GEO", 0, -74, 640, 200)
   CreateElvSlider(geoBox, "SL_NP_WIDTH", "npWidth", 90, 240, 2, 16, -8, 195, function()
     SpArc:RefreshAllNameplates()
     if SpArc.RefreshNameplatesPage then SpArc:RefreshNameplatesPage(ui) end
@@ -1965,7 +2036,7 @@ function SpArc:BuildNameplatesPage(page, ui, helpers)
   end)
   ui.m10CyclePrevBtn = cycleBtn
   -- Group 2: Dynamic Aura / DoT Color Rules (Auto-synced from .MD + Custom rules)
-  local rulesBox = RegisterGroupBox(page, "M10_GRP_AURAS", 0, -262, 640, 354)
+  local rulesBox = RegisterGroupBox(page, "M10_GRP_AURAS", 0, -282, 640, 336)
   local cAutoMD = CreateElvCheck(rulesBox, "CK_NP_AUTO_MD", "npAutoAurasFromMD", 14, -8, false, false, function(checked)
     if checked and SpArc.SyncNameplateAurasFromActiveMD then
       SpArc:SyncNameplateAurasFromActiveMD(nil, false)

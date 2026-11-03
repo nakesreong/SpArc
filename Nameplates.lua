@@ -623,7 +623,7 @@ local function IsUnitQuestRelated(unit, guid, plate)
     if guid and not IsSecret(guid) then questCacheByGUID[guid] = GetTime() + 2.5 end
     return true
   end
-  -- Check if SoftTargetFrame on this plate is showing a quest icon (! / ? / campaign quest)
+  -- Check if SoftTargetFrame on this plate is actively showing a Quest icon (! / ? / campaign quest)
   local uFrame = plate and plate.UnitFrame
   local stFrame = uFrame and uFrame.SoftTargetFrame
   if stFrame and SafeBool(stFrame.IsShown, stFrame) then
@@ -636,9 +636,6 @@ local function IsUnitQuestRelated(unit, guid, plate)
           return true
         end
       end
-    end
-    if not SafeBool(UnitCanAttack, "player", unit) then
-      return true
     end
   end
   local now = GetTime()
@@ -653,18 +650,18 @@ local function IsUnitQuestRelated(unit, guid, plate)
     return false
   end
   questTipNextScanByUnit[unit] = now + 0.65
-  if C_TooltipInfo and C_TooltipInfo.GetUnit then
+  local tType = _G.Enum and _G.Enum.TooltipDataLineType
+  if C_TooltipInfo and C_TooltipInfo.GetUnit and tType then
     local okT, tip = pcall(C_TooltipInfo.GetUnit, unit)
     if okT and type(tip) == "table" and type(tip.lines) == "table" then
-      local tType = _G.Enum and _G.Enum.TooltipDataLineType
-      local qTitle = (tType and tType.QuestTitle) or 17
-      local qObj = (tType and tType.QuestObjective) or 8
-      local qPlayer = (tType and tType.QuestPlayer) or 18
+      local qTitle = tType.QuestTitle
+      local qObj = tType.QuestObjective
+      local qPlayer = tType.QuestPlayer
       for i = 2, #tip.lines do
         local ln = tip.lines[i]
-        if type(ln) == "table" and not IsSecret(ln.type) then
+        if type(ln) == "table" and not IsSecret(ln.type) and ln.type ~= nil then
           local lt = ln.type
-          if lt == qTitle or lt == qObj or lt == qPlayer or lt == 17 or lt == 8 or lt == 18 then
+          if (qTitle and lt == qTitle) or (qObj and lt == qObj) or (qPlayer and lt == qPlayer) then
             if guid and not IsSecret(guid) then questCacheByGUID[guid] = now + 2.5 end
             return true
           end

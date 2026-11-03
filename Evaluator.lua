@@ -174,45 +174,54 @@ function SpArc:SelectActiveParsedProfile()
   local specID = SpArc:GetPlayerSpecID()
   local specMap = specID and SPEC_ID_TO_PRESETS[specID] or nil
 
-  if mode == "AUTO" and _G.UnitClass then
+  if _G.UnitClass then
     local okCls, _, playerClass = pcall(_G.UnitClass, "player")
     if okCls and not IsSecret(playerClass) and type(playerClass) == "string" then
       local curPreset = db.presets and db.presets[presetID]
-      local presetSpec = PRESET_SPEC_IDS[presetID]
-      local specMismatch = (specMap and presetSpec and presetSpec ~= specID) or false
+      local isBuiltInOtherClass = curPreset and SpArc.BuiltInPresets and SpArc.BuiltInPresets[presetID] and curPreset.class ~= playerClass
+      if mode == "AUTO" or isBuiltInOtherClass or not curPreset then
+        local presetSpec = PRESET_SPEC_IDS[presetID]
+        local specMismatch = (mode == "AUTO" and specMap and presetSpec and presetSpec ~= specID) or false
 
-      if not curPreset or curPreset.class ~= playerClass or specMismatch then
-        if specMap then
-          db.autoPresets = db.autoPresets or {}
-          db.autoPresets.PVE  = specMap.PVE
-          db.autoPresets.BOSS = specMap.BOSS
-          db.autoPresets.PVP  = specMap.PVP
-          presetID = specMap[targetMode] or specMap.PVE
-          db.activePresetID = presetID
-          if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
-        else
-          local fallbackID = nil
-          for _, id in ipairs(db.presetOrder or {}) do
-            local p = db.presets and db.presets[id]
-            if p and p.class == playerClass then
-              if not fallbackID then fallbackID = id end
-              if p.mode == targetMode then
-                fallbackID = id
-                break
+        if not curPreset or curPreset.class ~= playerClass or specMismatch then
+          if specMap then
+            db.autoPresets = db.autoPresets or {}
+            db.autoPresets.PVE  = specMap.PVE
+            db.autoPresets.BOSS = specMap.BOSS
+            db.autoPresets.PVP  = specMap.PVP
+            presetID = specMap[targetMode] or specMap.PVE
+            db.activePresetID = presetID
+            if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
+          else
+            local fallbackID = nil
+            for _, id in ipairs(db.presetOrder or {}) do
+              local p = db.presets and db.presets[id]
+              if p and p.class == playerClass then
+                if not fallbackID then fallbackID = id end
+                if p.mode == targetMode then
+                  fallbackID = id
+                  break
+                end
               end
             end
+            if fallbackID then
+              presetID = fallbackID
+              db.activePresetID = presetID
+              db.autoPresets = db.autoPresets or {}
+              db.autoPresets.PVE  = fallbackID
+              db.autoPresets.BOSS = fallbackID
+              db.autoPresets.PVP  = fallbackID
+              if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
+            end
           end
-          if fallbackID then
-            presetID = fallbackID
-          end
+        else
+          db.activePresetID = presetID
+          if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
         end
       else
-        db.activePresetID = presetID
         if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
       end
     end
-  elseif mode ~= "AUTO" then
-    if SpArc.SaveCharPresetState then SpArc:SaveCharPresetState(db) end
   end
 
   local parsed = (SpArc.ParsedPresets and SpArc.ParsedPresets[presetID])
@@ -786,12 +795,14 @@ function SpArc:BuildRotationQueue(maxSlots)
     end
 
     local pickedKey = nil
+    local pickedRule = nil
     local pickedIsNoResource = false
     for _, rule in ipairs(parsed.rules) do
       local sp = rule.spell
       if simReady[sp] and simUsable[sp] and IsSpellAllowedByToggles(sp, step) and not (step == 1 and simNoResource[sp]) then
         if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
           pickedKey = sp
+          pickedRule = rule
           break
         end
       end
@@ -803,6 +814,7 @@ function SpArc:BuildRotationQueue(maxSlots)
         if simReady[sp] and simUsable[sp] and IsSpellAllowedByToggles(sp, step) and simNoResource[sp] then
           if SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
             pickedKey = sp
+            pickedRule = rule
             pickedIsNoResource = true
             break
           end
@@ -887,25 +899,76 @@ function SpArc:BuildRotationQueue(maxSlots)
         end
         simCtx.energy = simEnergy
         if def.grantsProc and SPELL_DEFS[def.grantsProc] then
+          simKnown[def.grantsProc] = true
           simProcs[def.grantsProc] = true
           simCD[def.grantsProc] = 0
           simReady[def.grantsProc] = true
           simUsable[def.grantsProc] = true
         end
+        local function SetSimAuraStacks(u, aKey, newSt, newRem)
+          simAuraStacks[u][aKey] = newSt
+          if newRem ~= nil then
+            simAuraRem[u][aKey] = newRem
+          elseif newSt <= 0 then
+            simAuraRem[u][aKey] = 0
+          end
+          local aDef = auraMap[aKey] or SPELL_DEFS[aKey]
+          local aIDs = aDef and (aDef.auraIDs or aDef.debuffIDs or aDef.ids)
+          if aIDs then
+            for _, aID in ipairs(aIDs) do
+              local idStr = tostring(aID)
+              simAuraStacks[u][idStr] = newSt
+              if newRem ~= nil then
+                simAuraRem[u][idStr] = newRem
+              elseif newSt <= 0 then
+                simAuraRem[u][idStr] = 0
+              end
+              for otherKey, otherDef in pairs(auraMap) do
+                local oIDs = otherDef.auraIDs or otherDef.debuffIDs or otherDef.ids
+                if oIDs then
+                  for _, oID in ipairs(oIDs) do
+                    if oID == aID then
+                      simAuraStacks[u][otherKey] = newSt
+                      if newRem ~= nil then
+                        simAuraRem[u][otherKey] = newRem
+                      elseif newSt <= 0 then
+                        simAuraRem[u][otherKey] = 0
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
         if def.consumesStacks and not pickedWasProc then
           local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
           local tKey = def.auraKey or "FREEZING"
-          local newSt = math.max(0, (simAuraStacks.target[tKey] or simStacks or 0) - cost)
-          simStacks = newSt
-          simAuraStacks.target[tKey] = newSt
-          if newSt <= 0 then simAuraRem.target[tKey] = 0 end
+          local u = def.auraUnit or (auraMap[tKey] and auraMap[tKey].auraUnit) or "target"
+          local newSt = math.max(0, (simAuraStacks[u][tKey] or simStacks or 0) - cost)
+          if tKey == "FREEZING" then simStacks = newSt end
+          SetSimAuraStacks(u, tKey, newSt)
         end
         if def.stacksGain and def.stacksGain > 0 then
           local tKey = def.auraKey or "FREEZING"
-          local newSt = math.min(20, (simAuraStacks.target[tKey] or simStacks or 0) + def.stacksGain)
-          simStacks = newSt
-          simAuraStacks.target[tKey] = newSt
-          simAuraRem.target[tKey] = def.auraDuration or 15.0
+          local u = def.auraUnit or (auraMap[tKey] and auraMap[tKey].auraUnit) or "target"
+          local newSt = math.min(20, (simAuraStacks[u][tKey] or simStacks or 0) + def.stacksGain)
+          if tKey == "FREEZING" then simStacks = newSt end
+          SetSimAuraStacks(u, tKey, newSt, def.auraDuration or 15.0)
+        end
+        if pickedRule and type(pickedRule.cond) == "string" and not (def.burstDuration and def.burstDuration > 0) and not def.isBossSkill and (def.baseCD or 0) < 15 then
+          for uRaw, aKey, prop, op, valStr in pickedRule.cond:gmatch("([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)%.([a-zA-Z_]+)%s*([><=]+)%s*([%d%.]+)") do
+            local u = (uRaw:lower() == "player") and "player" or "target"
+            local pLow = prop:lower()
+            if (pLow == "stacks" or pLow == "stack" or pLow == "applications") and (op == ">=" or op == ">" or op == "==" or op == "=") then
+              local thresh = tonumber(valStr) or 1
+              local curSt = simAuraStacks[u][aKey] or 0
+              local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or math.max(thresh, 10)
+              local newSt = math.max(0, curSt - cost)
+              if aKey == "FREEZING" then simStacks = newSt end
+              SetSimAuraStacks(u, aKey, newSt)
+            end
+          end
         end
         if def.procOnly or def.isSpender or def.isExecute then
           simCD[pickedKey] = 9999
@@ -1090,19 +1153,27 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   if def.consumesStacks and not castWasProc then
     local cost = (def.stacksCost and def.stacksCost > 0) and def.stacksCost or 4
     local tKey = def.auraKey or "FREEZING"
-    local prev = st.unitAuras.target[tKey]
-    local newSt = math.max(0, ((prev and prev.stacks) or st.targetDebuffStacks or 0) - cost)
-    st.targetDebuffStacks = newSt
-    st.unitAuras.target[tKey] = { untilTime = (newSt > 0 and prev and prev.untilTime) or 0, stacks = newSt }
+    local auraMap = (st.activeParsed and st.activeParsed.auras) or SPELL_DEFS
+    local u = def.auraUnit or (auraMap and auraMap[tKey] and auraMap[tKey].auraUnit) or "target"
+    local uMap = st.unitAuras[u]
+    local prev = uMap[tKey]
+    local newSt = math.max(0, ((prev and prev.stacks) or (tKey == "FREEZING" and st.targetDebuffStacks) or 0) - cost)
+    if tKey == "FREEZING" then st.targetDebuffStacks = newSt end
+    uMap[tKey] = { untilTime = (newSt > 0 and prev and prev.untilTime) or 0, stacks = newSt }
   end
   if def.stacksGain and def.stacksGain > 0 then
     local tKey = def.auraKey or "FREEZING"
-    local prev = st.unitAuras.target[tKey]
-    local newSt = math.min(20, ((prev and prev.stacks) or st.targetDebuffStacks or 0) + def.stacksGain)
+    local auraMap = (st.activeParsed and st.activeParsed.auras) or SPELL_DEFS
+    local u = def.auraUnit or (auraMap and auraMap[tKey] and auraMap[tKey].auraUnit) or "target"
+    local uMap = st.unitAuras[u]
+    local prev = uMap[tKey]
+    local newSt = math.min(20, ((prev and prev.stacks) or (tKey == "FREEZING" and st.targetDebuffStacks) or 0) + def.stacksGain)
     local newUntil = now + (def.auraDuration or 15.0)
-    st.targetDebuffStacks = newSt
-    st.targetDebuffUntil = newUntil
-    st.unitAuras.target[tKey] = { untilTime = newUntil, stacks = newSt }
+    if tKey == "FREEZING" then
+      st.targetDebuffStacks = newSt
+      st.targetDebuffUntil = newUntil
+    end
+    uMap[tKey] = { untilTime = newUntil, stacks = newSt }
   end
   local maxCh = def.liveMaxCharges or def.maxCharges or 1
   if maxCh > 1 or (def.baseCD and def.baseCD > 0 and def.baseCD <= 30) then

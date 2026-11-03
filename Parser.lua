@@ -216,14 +216,14 @@ function SpArc:ParseMarkdownFSM(mdText)
   for rawLine in mdText:gmatch("[^\r\n]+") do
     local line = Trim(rawLine)
     if line ~= "" and not line:match("^```") then
-      -- Metadata headers in comments
-      local profTitle = line:match("^#%s*PROFILE:%s*(.+)$") or line:match("^#%s*TITLE:%s*(.+)$")
+      -- Metadata headers in comments or plain lines (with or without leading '#')
+      local profTitle = line:match("^#*%s*PROFILE:%s*(.+)$") or line:match("^#*%s*TITLE:%s*(.+)$")
       if profTitle then parsed.title = Trim(profTitle) end
-      local profClass = line:match("^#%s*CLASS:%s*([A-Z]+)")
+      local profClass = line:match("^#*%s*CLASS:%s*([A-Z]+)")
       if profClass then parsed.class = Trim(profClass) end
-      local profSpec = line:match("^#%s*SPEC:%s*(.+)$")
+      local profSpec = line:match("^#*%s*SPEC:%s*(.+)$")
       if profSpec then parsed.spec = Trim(profSpec) end
-      local profMode = line:match("^#%s*MODE:%s*([A-Z]+)")
+      local profMode = line:match("^#*%s*MODE:%s*([A-Z]+)")
       if profMode then parsed.mode = Trim(profMode) end
 
       local debuffHeaderOrBody = line:match("^#%s*TARGET_DEBUFF:%s*(.+)$") or line:match("^TARGET_DEBUFF:%s*(.+)$")
@@ -291,7 +291,9 @@ function SpArc:ParseMarkdownFSM(mdText)
             or line:match("^INTERRUPTIBLE_CHANNELS:%s*(.+)$")
           if intList then
             for token in intList:gmatch("([A-Z0-9_]+)") do
-              parsed.interruptibleChannels[token] = true
+              if token ~= "NONE" then
+                parsed.interruptibleChannels[token] = true
+              end
             end
           end
 
@@ -299,21 +301,27 @@ function SpArc:ParseMarkdownFSM(mdText)
             or line:match("^PROTECTED_CHANNELS:%s*(.+)$")
           if protList then
             for token in protList:gmatch("([A-Z0-9_]+)") do
-              parsed.protectedChannels[token] = true
+              if token ~= "NONE" then
+                parsed.protectedChannels[token] = true
+              end
             end
           end
 
           local savesList = line:match("^TRACK_SAVES:%s*(.+)$")
           if savesList then
             for token in savesList:gmatch("([A-Z0-9_]+)") do
-              parsed.saves[#parsed.saves + 1] = token
+              if token ~= "NONE" then
+                parsed.saves[#parsed.saves + 1] = token
+              end
             end
           end
 
           local cdsList = line:match("^TRACK_CDS:%s*(.+)$")
           if cdsList then
             for token in cdsList:gmatch("([A-Z0-9_]+)") do
-              parsed.cds[#parsed.cds + 1] = token
+              if token ~= "NONE" then
+                parsed.cds[#parsed.cds + 1] = token
+              end
             end
           end
 
@@ -321,7 +329,9 @@ function SpArc:ParseMarkdownFSM(mdText)
             or line:match("^TRACK_AURAS:%s*(.+)$")
           if dotsList then
             for token in dotsList:gmatch("([A-Z0-9_]+)") do
-              parsed.dots[#parsed.dots + 1] = token
+              if token ~= "NONE" then
+                parsed.dots[#parsed.dots + 1] = token
+              end
             end
           end
 

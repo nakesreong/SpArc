@@ -449,8 +449,7 @@ function SpArc:GetCurrentCharKey()
       cachedCharKey = uName .. " - " .. rName
       return cachedCharKey
     end
-    cachedCharKey = uName
-    return cachedCharKey
+    return uName
   end
   return "Default"
 end
@@ -972,6 +971,21 @@ function SpArc:RebuildParsedProfiles()
     if p and type(p.md) == "string" and SpArc.ParseMarkdownFSM then
       local compiled = SpArc:ParseMarkdownFSM(p.md)
       SpArc.ParsedPresets[id] = compiled
+      local isBuiltIn = (SpArc.BuiltInPresets and SpArc.BuiltInPresets[id] ~= nil) or false
+      if not isBuiltIn or p.userModified then
+        if compiled.title and compiled.title ~= "" and compiled.title ~= "Custom FSM" then
+          p.title = compiled.title
+        end
+        local idPrefixCls = tostring(id):match("^([A-Z]+)_CUSTOM_")
+        if compiled.class and compiled.class ~= "" and (compiled.class ~= "PRIEST" or p.md:match("CLASS:%s*PRIEST")) then
+          p.class = compiled.class
+        elseif idPrefixCls and (not p.class or p.class == "PRIEST") then
+          p.class = idPrefixCls
+        end
+        if compiled.mode and compiled.mode ~= "" then
+          p.mode = compiled.mode
+        end
+      end
     end
   end
 end

@@ -29,6 +29,7 @@ local controlFrame
 local selectedPresetForEdit = "PRIEST_01_SHADOW_PVE"
 local filterClassOnly = true
 local showingAIPrompt = false
+local editorHasUnsavedChanges = false
 local isRefreshingUI = false
 local currentTabIdx = 1
 local activeKeybindCapture = nil
@@ -151,6 +152,9 @@ local function OpenControlCenter(initialTab)
     SetBackdropFlat(controlFrame, 0.05, 0.05, 0.07, 0.97, 0.24, 0.24, 0.32, 1.0)
 
     controlFrame:SetScript("OnHide", function()
+      if editorHasUnsavedChanges and controlFrame.SaveCurrentEditorMD then
+        controlFrame.SaveCurrentEditorMD(true)
+      end
       SpArc.previewCrosshairInConfig = false
       if activeKeybindCapture and activeKeybindCapture.CancelCapture then
         activeKeybindCapture:CancelCapture()
@@ -278,6 +282,9 @@ local function OpenControlCenter(initialTab)
     ui.allChecks = allChecks
 
     local function SelectTab(idx)
+      if editorHasUnsavedChanges and controlFrame.SaveCurrentEditorMD then
+        controlFrame.SaveCurrentEditorMD(true)
+      end
       currentTabIdx = idx or 1
       if activeKeybindCapture and activeKeybindCapture.CancelCapture then
         activeKeybindCapture:CancelCapture()
@@ -790,27 +797,32 @@ local function OpenControlCenter(initialTab)
       ui.editBox:SetScript("OnEscapePressed", function() ui.editBox:ClearFocus() end)
       mdScroll:SetScrollChild(ui.editBox)
 
-      ui.saveMdBtn = CreateElvButton(p2, 230, 30, "")
-      ui.saveMdBtn:SetPoint("BOTTOMLEFT", 0, 2)
-      ui.saveMdBtn:SetScript("OnClick", function()
-        if showingAIPrompt then return end
+      local function SaveCurrentEditorMD(silent)
+        if showingAIPrompt or not ui.editBox then return false end
         local txt = ui.editBox:GetText() or ""
+        if txt == "" then return false end
         if selectedPresetForEdit and db.presets[selectedPresetForEdit] then
+          if silent and not editorHasUnsavedChanges and db.presets[selectedPresetForEdit].md == txt then
+            return false
+          end
           db.presets[selectedPresetForEdit].md = txt
           db.presets[selectedPresetForEdit].userModified = true
           local compiled = SpArc:ParseMarkdownFSM(txt)
           SpArc.ParsedPresets[selectedPresetForEdit] = compiled
-          if compiled.title and compiled.title ~= "" then
+          if compiled.title and compiled.title ~= "" and compiled.title ~= "Custom FSM" then
             db.presets[selectedPresetForEdit].title = compiled.title
           end
-          if compiled.class and compiled.class ~= "" then
+          local pCls = GetPlayerClassTag()
+          local idPrefixCls = tostring(selectedPresetForEdit):match("^([A-Z]+)_CUSTOM_")
+          if compiled.class and compiled.class ~= "" and (compiled.class ~= "PRIEST" or txt:match("CLASS:%s*PRIEST")) then
             db.presets[selectedPresetForEdit].class = compiled.class
+          elseif idPrefixCls then
+            db.presets[selectedPresetForEdit].class = idPrefixCls
           end
           if compiled.mode and compiled.mode ~= "" then
             db.presets[selectedPresetForEdit].mode = compiled.mode
           end
           db.activePresetID = selectedPresetForEdit
-          local pCls = GetPlayerClassTag()
           if db.presets[selectedPresetForEdit].class and db.presets[selectedPresetForEdit].class ~= pCls then
             db.mode = "MANUAL"
           elseif db.mode == "AUTO" and type(db.autoPresets) == "table" then
@@ -824,9 +836,41 @@ local function OpenControlCenter(initialTab)
           end
           SpArc:SelectActiveParsedProfile()
           SpArc:ScanActionSlotsAndSpells(true)
-          controlFrame:RefreshUI()
-          print(string.format(SpArc:L("MSG_MD_SAVED"), SpArc:GetPresetDisplayTitle(db.presets[selectedPresetForEdit])))
+          editorHasUnsavedChanges = false
+          if not silent then
+            controlFrame:RefreshUI()
+            print(string.format(SpArc:L("MSG_MD_SAVED"), SpArc:GetPresetDisplayTitle(db.presets[selectedPresetForEdit])))
+          end
+          return true
         end
+        return false
+      end
+      controlFrame.SaveCurrentEditorMD = SaveCurrentEditorMD
+
+      ui.editBox:SetScript("OnTextChanged", function(self, userInput)
+        if not userInput or isRefreshingUI or showingAIPrompt then return end
+        editorHasUnsavedChanges = true
+        if selectedPresetForEdit and db.presets[selectedPresetForEdit] then
+          local txt = self:GetText() or ""
+          if txt ~= "" then
+            db.presets[selectedPresetForEdit].md = txt
+            db.presets[selectedPresetForEdit].userModified = true
+          end
+        end
+      end)
+      ui.editBox:SetScript("OnEditFocusLost", function()
+        if editorHasUnsavedChanges then
+          SaveCurrentEditorMD(true)
+          if controlFrame and controlFrame:IsShown() and controlFrame.RefreshUI then
+            controlFrame:RefreshUI()
+          end
+        end
+      end)
+
+      ui.saveMdBtn = CreateElvButton(p2, 230, 30, "")
+      ui.saveMdBtn:SetPoint("BOTTOMLEFT", 0, 2)
+      ui.saveMdBtn:SetScript("OnClick", function()
+        SaveCurrentEditorMD(false)
       end)
 
       ui.resetMdBtn = CreateElvButton(p2, 210, 30, "")
@@ -1647,7 +1691,10 @@ local function OpenControlCenter(initialTab)
           (cp and cp.saves and #cp.saves) or 0,
           (cp and cp.cds and #cp.cds) or 0
         ))
-        ui.editBox:SetText((pr and pr.md) or "")
+        if not ui.editBox:HasFocus() then
+          ui.editBox:SetText((pr and pr.md) or "")
+          editorHasUnsavedChanges = false
+        end
       end
 
       -- Sliders & Checkboxes refresh

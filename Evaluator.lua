@@ -691,11 +691,18 @@ function SpArc:BuildRotationQueue(maxSlots)
   simCtx.stealthed = (_G.IsStealthed and SafeBool(_G.IsStealthed)) or false
   simCtx.inCombat = (_G.InCombatLockdown and SafeBool(_G.InCombatLockdown)) or (_G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player")) or false
   local hasHostileTarget = _G.UnitExists and SafeBool(_G.UnitExists, "target") and _G.UnitCanAttack and SafeBool(_G.UnitCanAttack, "player", "target") and not (_G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, "target"))
-  if not simCtx.inCombat and not hasHostileTarget and not SpArc.testMode and (not SpArc.IsAutoUnshiftEnabled or SpArc:IsAutoUnshiftEnabled()) then
+  local unshiftActiveHere = (SpArc.IsAutoUnshiftActiveHere and SpArc:IsAutoUnshiftActiveHere())
+    or (not SpArc.IsAutoUnshiftActiveHere and (not SpArc.IsAutoUnshiftEnabled or SpArc:IsAutoUnshiftEnabled()))
+  if not simCtx.inCombat and not hasHostileTarget and not SpArc.testMode and unshiftActiveHere then
     simAuraRem.player["MOONKIN_FORM"] = 3600
     simAuraRem.player["24858"] = 3600
     simAuraRem.player["SHADOWFORM"] = 3600
     simAuraRem.player["232698"] = 3600
+    simAuraRem.player["LIGHTNING_SHIELD"] = 3600
+    simAuraRem.player["192106"] = 3600
+    simAuraRem.player["EARTH_SHIELD"] = 3600
+    simAuraRem.player["974"] = 3600
+    simAuraRem.player["383648"] = 3600
   end
   simCtx.canPickPocket = (SpArc.CanPickPocketTarget and SpArc:CanPickPocketTarget(now)) or false
   simCtx.bossMode = (SpArc.IsBossRotationEnabled and SpArc:IsBossRotationEnabled()) or false
@@ -921,7 +928,36 @@ function SpArc:BuildRotationQueue(maxSlots)
         pickedKey, pickedRule = PickMatchingRule(1, true, nil, "exclude")
       end
 
-      -- Primary Slot #1: Always follow Blizzard Assisted Combat (C_AssistedCombat.GetNextCastSpell) when active
+      -- Smart Arbiter ("Trust Blizzard Helper, but override when it lags or lies"):
+      -- Check if .MD has an immediate Ready & Usable action that should supersede a stale/blind Assisted Combat suggestion
+      if not pickedKey and not SpArc.testMode then
+        local mdKey, mdRule = PickMatchingRule(1, false, nil, "exclude")
+        local sMD = mdKey and states[mdKey]
+        local sA = assistedKey and states[assistedKey]
+        if mdKey and sMD and sMD.isReady and sMD.isUsable and not sMD.isNoResource then
+          local condStr = (mdRule and type(mdRule.cond) == "string") and mdRule.cond or ""
+          local isLowHpEmergency = (simCtx.playerHP <= 45) and (condStr:find("player.hp", 1, true) ~= nil or condStr:find("HP", 1, true) ~= nil)
+          local isStealthOpener = simCtx.stealthed and (mdKey == "PICK_POCKET" or condStr:find("STEALTH", 1, true) ~= nil or condStr:find("stealthed", 1, true) ~= nil)
+          local assistIsStaleOrOnCD = sA and ((not sA.isReady and (sA.remSec or 0) > 0.35) or sA.isNoResource or not sA.isUsable)
+          local isHigherPriorityProc = false
+          if sMD.isProc and sA and not sA.isProc and mdKey ~= assistedKey then
+            for _, r in ipairs(parsed.rules) do
+              if r == mdRule then
+                isHigherPriorityProc = true
+                break
+              elseif r.spell == assistedKey then
+                break
+              end
+            end
+          end
+          if isLowHpEmergency or isStealthOpener or assistIsStaleOrOnCD or isHigherPriorityProc then
+            pickedKey = mdKey
+            pickedRule = mdRule
+          end
+        end
+      end
+
+      -- Primary Slot #1: Follow Blizzard Assisted Combat (C_AssistedCombat.GetNextCastSpell) when active
       if not pickedKey and not SpArc.testMode then
         if assistedKey and SPELL_DEFS[assistedKey] and states[assistedKey] then
           pickedKey = assistedKey

@@ -1202,12 +1202,15 @@ local function OpenControlCenter(initialTab)
       CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_Y", "camCrosshairOffsetY", -200, 250, 2, 336, -46, 280)
       CreateElvSlider(m6CrossBox, "SL_CAM_CROSS_SCALE", "camCrosshairScale", 0.50, 2.50, 0.05, 16, -108, 280)
 
-      local m6ClickBox = RegisterGroupBox(p6, "M6_GRP_CLICK", 0, -458, 640, 105)
+      local m6ClickBox = RegisterGroupBox(p6, "M6_GRP_CLICK", 0, -458, 640, 112)
       CreateElvCheck(m6ClickBox, "CK_CAM_CLICKCAST", "enableCamClickCast", 16, -12, false, false, function()
         if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
         SpArc:ScanActionSlotsAndSpells(true)
       end)
       CreateElvCheck(m6ClickBox, "CK_AUTO_UNSHIFT", "autoUnshiftOutOfCombat", 16, -40, false, false, function()
+        if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
+      end)
+      CreateElvCheck(m6ClickBox, "CK_KEEP_FORMS_INSTANCES", "keepFormsInInstances", 16, -68, false, false, function()
         if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
       end)
 

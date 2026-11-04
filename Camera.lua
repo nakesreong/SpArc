@@ -241,6 +241,52 @@ function SpArc:IsAutoUnshiftEnabled()
   return (db and db.visual and db.visual.autoUnshiftOutOfCombat == true) or false
 end
 
+function SpArc:IsKeepFormsInInstancesEnabled()
+  local db = SpArc:EnsureDB()
+  return not (db and db.visual and db.visual.keepFormsInInstances == false)
+end
+
+function SpArc:IsInProtectedContentInstance()
+  if _G.C_PartyInfo and _G.C_PartyInfo.IsDelveInProgress and SafeBool(_G.C_PartyInfo.IsDelveInProgress) then
+    return true
+  end
+  if _G.C_DelvesUI and _G.C_DelvesUI.HasActiveDelve and SafeBool(_G.C_DelvesUI.HasActiveDelve) then
+    return true
+  end
+  if _G.GetInstanceInfo then
+    local okI, _, instType, diffID = pcall(_G.GetInstanceInfo)
+    if okI then
+      if not SpArc.IsSecret(diffID) and diffID == 208 then
+        return true
+      end
+      if not SpArc.IsSecret(instType) and type(instType) == "string" then
+        if instType == "party" or instType == "raid" or instType == "pvp" or instType == "arena" or instType == "scenario" then
+          return true
+        end
+      end
+    end
+  end
+  if _G.IsInInstance then
+    local okIn, inInst, instType = pcall(_G.IsInInstance)
+    if okIn and not SpArc.IsSecret(inInst) and inInst and not SpArc.IsSecret(instType) and type(instType) == "string" then
+      if instType == "party" or instType == "raid" or instType == "pvp" or instType == "arena" or instType == "scenario" then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+function SpArc:IsAutoUnshiftActiveHere()
+  if not SpArc:IsAutoUnshiftEnabled() then
+    return false
+  end
+  if SpArc:IsKeepFormsInInstancesEnabled() and SpArc:IsInProtectedContentInstance() then
+    return false
+  end
+  return true
+end
+
 function SpArc:GetCamHoldKey()
   local db = SpArc:EnsureDB()
   local k = db and db.visual and db.visual.camHoldKey
@@ -901,7 +947,7 @@ local function UnlockCamera()
   if wasLooking or lastFreelookCentering ~= "0" then
     lockBounceToken = lockBounceToken + 1
     SetFreelookCenteringCVar(false, true)
-    if C_CVar and C_CVar.SetCVar then
+    if C_CVar and C_CVar.SetCVar and not (InCombatLockdown and InCombatLockdown()) then
       pcall(C_CVar.SetCVar, "CursorStickyCentering", "0")
     end
     if wasLooking and MouselookStop then
@@ -1051,25 +1097,128 @@ interactBtn:HookScript("PostClick", function()
   end
 end)
 
+local SHAMAN_SHIELD_AURA_IDS = { 192106, 324, 974, 383648, 52127 }
+local cachedHasShieldAura = false
+local lastShieldAuraScanAt = 0
+
+local function GetSafeSpellName(spellID, fallbackRU, fallbackEN)
+  if _G.C_Spell then
+    if _G.C_Spell.GetSpellName then
+      local okN, nm = pcall(_G.C_Spell.GetSpellName, spellID)
+      if okN and not SpArc.IsSecret(nm) and type(nm) == "string" and nm ~= "" then
+        return nm
+      end
+    end
+    if _G.C_Spell.GetSpellInfo then
+      local okI, info = pcall(_G.C_Spell.GetSpellInfo, spellID)
+      if okI and type(info) == "table" and not SpArc.IsSecret(info.name) and type(info.name) == "string" and info.name ~= "" then
+        return info.name
+      end
+    end
+  end
+  local loc = _G.GetLocale and _G.GetLocale() or "ruRU"
+  return (loc == "ruRU") and fallbackRU or fallbackEN
+end
+
+local function BuildUnshiftInteractMacro()
+  local lsName = GetSafeSpellName(192106, "Щит молний", "Lightning Shield")
+  local esName = GetSafeSpellName(974, "Щит земли", "Earth Shield")
+  local wsName = GetSafeSpellName(52127, "Водный щит", "Water Shield")
+  return table.concat({
+    BASE_INTERACT_MACRO,
+    "/stopmacro [combat][flying]",
+    "/cancelform [nocombat,nostealth,noflying]",
+    "/cancelaura " .. lsName,
+    "/cancelaura " .. esName,
+    "/cancelaura " .. wsName,
+  }, "\n")
+end
+
+local function RefreshCancelableShieldAuraCache(force)
+  if InCombatLockdown and SafeBool(InCombatLockdown) then
+    cachedHasShieldAura = false
+    return false
+  end
+  local now = _G.GetTime and _G.GetTime() or 0
+  if not force and (now - lastShieldAuraScanAt) < 0.4 then
+    return cachedHasShieldAura
+  end
+  lastShieldAuraScanAt = now
+  cachedHasShieldAura = false
+  if _G.C_UnitAuras and _G.C_UnitAuras.GetPlayerAuraBySpellID then
+    for i = 1, #SHAMAN_SHIELD_AURA_IDS do
+      local okA, aura = pcall(_G.C_UnitAuras.GetPlayerAuraBySpellID, SHAMAN_SHIELD_AURA_IDS[i])
+      if okA and aura ~= nil then
+        cachedHasShieldAura = true
+        return true
+      end
+    end
+  end
+  return false
+end
+
 local lastAutoUnshiftAttr = nil
 
 function SpArc:ClearPendingAutoUnshift()
 end
 
 local function IsInCosmeticCombatForm()
+  if not SpArc:IsAutoUnshiftActiveHere() then
+    return false
+  end
+  if InCombatLockdown and SafeBool(InCombatLockdown) then
+    return false
+  end
+  if _G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player") then
+    return false
+  end
+  if _G.IsFlying and SafeBool(_G.IsFlying) then
+    return false
+  end
+  if _G.IsStealthed and SafeBool(_G.IsStealthed) then
+    return false
+  end
+  if _G.IsMounted and SafeBool(_G.IsMounted) then
+    return false
+  end
+  if UnitExists and SafeBool(UnitExists, "target")
+    and UnitCanAttack and SafeBool(UnitCanAttack, "player", "target")
+    and not (UnitIsDeadOrGhost and SafeBool(UnitIsDeadOrGhost, "target")) then
+    return false
+  end
+
+  if _G.GetShapeshiftForm then
+    local okS, sForm = pcall(_G.GetShapeshiftForm)
+    if okS and not SpArc.IsSecret(sForm) and type(sForm) == "number" and sForm > 0 then
+      return true
+    end
+  end
+
+  if _G.GetShapeshiftFormID then
+    local okF, formID = pcall(_G.GetShapeshiftFormID)
+    if okF and not SpArc.IsSecret(formID) and type(formID) == "number" and formID > 0 then
+      return true
+    end
+  end
+
+  if RefreshCancelableShieldAuraCache(false) then
+    return true
+  end
+
   return false
 end
 
 local function UpdateAutoUnshiftBindings(force)
   if InCombatLockdown and InCombatLockdown() then return end
-  if not force and lastAutoUnshiftAttr == true then return end
-  lastAutoUnshiftAttr = true
+  local active = SpArc:IsAutoUnshiftActiveHere()
+  if not force and lastAutoUnshiftAttr == active then return end
+  lastAutoUnshiftAttr = active
   holdBtn:SetAttribute("type", nil)
   holdBtn:SetAttribute("macrotext", nil)
   toggleBtn:SetAttribute("type", nil)
   toggleBtn:SetAttribute("macrotext", nil)
   interactBtn:SetAttribute("type", "macro")
-  interactBtn:SetAttribute("macrotext", BASE_INTERACT_MACRO)
+  interactBtn:SetAttribute("macrotext", active and BuildUnshiftInteractMacro() or BASE_INTERACT_MACRO)
 end
 
 local lastInteractMode = nil
@@ -1279,7 +1428,9 @@ end
 local camDriver = CreateFrame("Frame", "SpArcCameraDriver")
 camDriver:RegisterEvent("PLAYER_LOGIN")
 camDriver:RegisterEvent("PLAYER_ENTERING_WORLD")
+camDriver:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 camDriver:RegisterEvent("PLAYER_REGEN_ENABLED")
+camDriver:RegisterEvent("PLAYER_REGEN_DISABLED")
 camDriver:RegisterEvent("PLAYER_DEAD")
 camDriver:RegisterEvent("PLAYER_ALIVE")
 camDriver:RegisterEvent("PLAYER_UNGHOST")
@@ -1294,6 +1445,7 @@ camDriver:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 camDriver:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 camDriver:RegisterEvent("PLAYER_TARGET_CHANGED")
 camDriver:RegisterUnitEvent("UNIT_TARGET", "player")
+camDriver:RegisterUnitEvent("UNIT_AURA", "player")
 pcall(camDriver.RegisterEvent, camDriver, "PLAYER_SOFT_INTERACT_CHANGED")
 pcall(camDriver.RegisterEvent, camDriver, "PLAYER_SOFT_ENEMY_CHANGED")
 pcall(camDriver.RegisterEvent, camDriver, "PLAYER_SOFT_FRIEND_CHANGED")
@@ -1368,15 +1520,22 @@ camDriver:SetScript("OnEvent", function(_, event, arg1, arg2)
         end
       end)
     end
-  elseif event == "PLAYER_REGEN_ENABLED" then
+  elseif event == "PLAYER_REGEN_ENABLED" or event == "ZONE_CHANGED_NEW_AREA" then
     if SpArc.state then
       SpArc.state.lastManualFormCastAt = 0
     end
+    RefreshCancelableShieldAuraCache(true)
     if pendingBindingSync then
       SpArc:ApplyCombatCameraBindings("REGEN_ENABLED")
     end
     UpdateAutoUnshiftBindings(true)
     UpdateInteractBindingMode(true)
+  elseif event == "PLAYER_REGEN_DISABLED" then
+    cachedHasShieldAura = false
+    UpdateInteractBindingMode(true)
+  elseif event == "UNIT_AURA" then
+    RefreshCancelableShieldAuraCache(true)
+    UpdateInteractBindingMode(false)
   elseif event == "PLAYER_DEAD" or event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
     loadingScreenActive = false
     if pendingBindingSync and not (InCombatLockdown and InCombatLockdown()) then

@@ -101,7 +101,8 @@ local STRINGS = {
     SL_CAM_CROSS_SCALE = "Crosshair Scale",
     M6_GRP_CLICK = "Mouselook Click-Casting (Bartender4 / ActionBars)",
     CK_CAM_CLICKCAST = "Bind LMB/RMB (+Shift/Ctrl/Alt) to Action Slots 1..8 while camera is locked",
-    CK_AUTO_UNSHIFT = "Unshift forms out of combat on Interact (E) / Hold Cursor (G) on the ground (safe while flying)",
+    CK_AUTO_UNSHIFT = "Remove forms & Shaman shields out of combat on Interact (E) on the ground (safe while flying)",
+    CK_KEEP_FORMS_INSTANCES = "Do not remove forms/shields in Dungeons, Raids, BGs, Arenas & Delves",
 
     M7_TITLE = "Live SpellBook & Rotation Telemetry",
 
@@ -411,7 +412,8 @@ local STRINGS = {
     SL_CAM_CROSS_SCALE = "Масштаб прицела",
     M6_GRP_CLICK = "Боевой клик-каст мыши (Mouselook Click-Casting)",
     CK_CAM_CLICKCAST = "Перехватывать ЛКМ/ПКМ (+Shift/Ctrl/Alt) под способности 1..8 при зажатой камере",
-    CK_AUTO_UNSHIFT = "Снимать облик вне боя по кнопке Взаимодействия (E) / Курсора (G) на земле (в полёте не сбрасывает)",
+    CK_AUTO_UNSHIFT = "Снимать облик и щиты шамана вне боя по клавише Взаимодействия (E) на земле (в полёте не срабатывает)",
+    CK_KEEP_FORMS_INSTANCES = "Не снимать облик и щиты в инстах, рейдах, БГ, аренах и вылазках",
 
     M7_TITLE = "Телеметрия книги заклинаний и отладка ротации",
 

@@ -1103,11 +1103,13 @@ local lastShieldAuraScanAt = 0
 
 local cancelMHBtn = CreateFrame("Button", "SpArcCancelMHImbueBtn", UIParent, "SecureActionButtonTemplate")
 cancelMHBtn:RegisterForClicks("AnyDown", "AnyUp")
+cancelMHBtn:SetID(16)
 cancelMHBtn:SetAttribute("type", "cancelaura")
 cancelMHBtn:SetAttribute("target-slot", 16)
 
 local cancelOHBtn = CreateFrame("Button", "SpArcCancelOHImbueBtn", UIParent, "SecureActionButtonTemplate")
 cancelOHBtn:RegisterForClicks("AnyDown", "AnyUp")
+cancelOHBtn:SetID(17)
 cancelOHBtn:SetAttribute("type", "cancelaura")
 cancelOHBtn:SetAttribute("target-slot", 17)
 
@@ -1145,9 +1147,66 @@ local function BuildUnshiftInteractMacro()
     "/cancelaura " .. wsName,
     "/cancelaura " .. ftName,
     "/cancelaura " .. wfName,
-    "/click SpArcCancelMHImbueBtn",
-    "/click SpArcCancelOHImbueBtn",
+    "/click SpArcCancelMHImbueBtn LeftButton 1",
+    "/click SpArcCancelMHImbueBtn LeftButton 0",
+    "/click SpArcCancelOHImbueBtn LeftButton 1",
+    "/click SpArcCancelOHImbueBtn LeftButton 0",
+    "/click ElvUIPlayerBuffsTempEnchant1 RightButton 1",
+    "/click ElvUIPlayerBuffsTempEnchant1 RightButton 0",
+    "/click ElvUIPlayerBuffsTempEnchant2 RightButton 1",
+    "/click ElvUIPlayerBuffsTempEnchant2 RightButton 0",
+    "/click TempEnchant1 RightButton 1",
+    "/click TempEnchant1 RightButton 0",
+    "/click TempEnchant2 RightButton 1",
+    "/click TempEnchant2 RightButton 0",
   }, "\n")
+end
+
+local function HasActiveShamanWeaponEnchant()
+  local isShaman = true
+  if _G.UnitClass then
+    local okC, _, cls = pcall(_G.UnitClass, "player")
+    if okC and not SpArc.IsSecret(cls) and type(cls) == "string" then
+      isShaman = (cls == "SHAMAN")
+    end
+  end
+  if not isShaman then
+    return false
+  end
+  if _G.C_PaperDollInfo and _G.C_PaperDollInfo.GetTemporaryEnchantmentInfo then
+    local okM, mhInfo = pcall(_G.C_PaperDollInfo.GetTemporaryEnchantmentInfo, 16)
+    if okM and mhInfo ~= nil then
+      if type(mhInfo) == "boolean" then
+        if mhInfo == true then return true end
+      elseif type(mhInfo) == "table" then
+        if mhInfo.hasEnchant == true or (mhInfo.remainingTimeMs ~= nil and (SpArc.IsSecret(mhInfo.remainingTimeMs) or mhInfo.remainingTimeMs > 0)) then
+          return true
+        end
+      end
+    end
+    local okO, ohInfo = pcall(_G.C_PaperDollInfo.GetTemporaryEnchantmentInfo, 17)
+    if okO and ohInfo ~= nil then
+      if type(ohInfo) == "boolean" then
+        if ohInfo == true then return true end
+      elseif type(ohInfo) == "table" then
+        if ohInfo.hasEnchant == true or (ohInfo.remainingTimeMs ~= nil and (SpArc.IsSecret(ohInfo.remainingTimeMs) or ohInfo.remainingTimeMs > 0)) then
+          return true
+        end
+      end
+    end
+  end
+  if _G.GetWeaponEnchantInfo then
+    local okW, hasMH, mhExp, _, _, hasOH, ohExp = pcall(_G.GetWeaponEnchantInfo)
+    if okW then
+      if (not SpArc.IsSecret(hasMH) and hasMH == true)
+        or (not SpArc.IsSecret(hasOH) and hasOH == true)
+        or (mhExp ~= nil and not SpArc.IsSecret(mhExp) and type(mhExp) == "number" and mhExp > 0)
+        or (ohExp ~= nil and not SpArc.IsSecret(ohExp) and type(ohExp) == "number" and ohExp > 0) then
+        return true
+      end
+    end
+  end
+  return false
 end
 
 local function RefreshCancelableShieldAuraCache(force)
@@ -1170,23 +1229,9 @@ local function RefreshCancelableShieldAuraCache(force)
       end
     end
   end
-  if _G.GetWeaponEnchantInfo then
-    local isShaman = true
-    if _G.UnitClass then
-      local okC, _, cls = pcall(_G.UnitClass, "player")
-      if okC and not SpArc.IsSecret(cls) and type(cls) == "string" then
-        isShaman = (cls == "SHAMAN")
-      end
-    end
-    if isShaman then
-      local okW, hasMH, _, _, _, hasOH = pcall(_G.GetWeaponEnchantInfo)
-      if okW then
-        if (not SpArc.IsSecret(hasMH) and hasMH == true) or (not SpArc.IsSecret(hasOH) and hasOH == true) then
-          cachedHasShieldAura = true
-          return true
-        end
-      end
-    end
+  if HasActiveShamanWeaponEnchant() then
+    cachedHasShieldAura = true
+    return true
   end
   return false
 end
@@ -1482,6 +1527,7 @@ camDriver:RegisterEvent("PLAYER_TARGET_CHANGED")
 camDriver:RegisterUnitEvent("UNIT_TARGET", "player")
 camDriver:RegisterUnitEvent("UNIT_AURA", "player")
 camDriver:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
+pcall(camDriver.RegisterEvent, camDriver, "WEAPON_ENCHANT_CHANGED")
 pcall(camDriver.RegisterEvent, camDriver, "PLAYER_SOFT_INTERACT_CHANGED")
 pcall(camDriver.RegisterEvent, camDriver, "PLAYER_SOFT_ENEMY_CHANGED")
 pcall(camDriver.RegisterEvent, camDriver, "PLAYER_SOFT_FRIEND_CHANGED")
@@ -1569,7 +1615,7 @@ camDriver:SetScript("OnEvent", function(_, event, arg1, arg2)
   elseif event == "PLAYER_REGEN_DISABLED" then
     cachedHasShieldAura = false
     UpdateInteractBindingMode(true)
-  elseif event == "UNIT_AURA" or event == "UNIT_INVENTORY_CHANGED" then
+  elseif event == "UNIT_AURA" or event == "UNIT_INVENTORY_CHANGED" or event == "WEAPON_ENCHANT_CHANGED" then
     RefreshCancelableShieldAuraCache(true)
     UpdateInteractBindingMode(false)
   elseif event == "PLAYER_DEAD" or event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then

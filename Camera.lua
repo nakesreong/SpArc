@@ -1097,9 +1097,19 @@ interactBtn:HookScript("PostClick", function()
   end
 end)
 
-local SHAMAN_SHIELD_AURA_IDS = { 192106, 324, 974, 383648, 52127 }
+local SHAMAN_SHIELD_AURA_IDS = { 192106, 324, 974, 383648, 52127, 318038, 33757, 382021 }
 local cachedHasShieldAura = false
 local lastShieldAuraScanAt = 0
+
+local cancelMHBtn = CreateFrame("Button", "SpArcCancelMHImbueBtn", UIParent, "SecureActionButtonTemplate")
+cancelMHBtn:RegisterForClicks("AnyDown", "AnyUp")
+cancelMHBtn:SetAttribute("type", "cancelaura")
+cancelMHBtn:SetAttribute("target-slot", 16)
+
+local cancelOHBtn = CreateFrame("Button", "SpArcCancelOHImbueBtn", UIParent, "SecureActionButtonTemplate")
+cancelOHBtn:RegisterForClicks("AnyDown", "AnyUp")
+cancelOHBtn:SetAttribute("type", "cancelaura")
+cancelOHBtn:SetAttribute("target-slot", 17)
 
 local function GetSafeSpellName(spellID, fallbackRU, fallbackEN)
   if _G.C_Spell then
@@ -1124,13 +1134,19 @@ local function BuildUnshiftInteractMacro()
   local lsName = GetSafeSpellName(192106, "Щит молний", "Lightning Shield")
   local esName = GetSafeSpellName(974, "Щит земли", "Earth Shield")
   local wsName = GetSafeSpellName(52127, "Водный щит", "Water Shield")
+  local ftName = GetSafeSpellName(318038, "Оружие языка пламени", "Flametongue Weapon")
+  local wfName = GetSafeSpellName(33757, "Оружие неистовства ветра", "Windfury Weapon")
   return table.concat({
     BASE_INTERACT_MACRO,
-    "/stopmacro [combat][flying]",
-    "/cancelform [nocombat,nostealth,noflying]",
+    "/stopmacro [combat]",
+    "/cancelform [nocombat,nostealth,noflying][nocombat,nostealth,mounted]",
     "/cancelaura " .. lsName,
     "/cancelaura " .. esName,
     "/cancelaura " .. wsName,
+    "/cancelaura " .. ftName,
+    "/cancelaura " .. wfName,
+    "/click SpArcCancelMHImbueBtn",
+    "/click SpArcCancelOHImbueBtn",
   }, "\n")
 end
 
@@ -1154,6 +1170,24 @@ local function RefreshCancelableShieldAuraCache(force)
       end
     end
   end
+  if _G.GetWeaponEnchantInfo then
+    local isShaman = true
+    if _G.UnitClass then
+      local okC, _, cls = pcall(_G.UnitClass, "player")
+      if okC and not SpArc.IsSecret(cls) and type(cls) == "string" then
+        isShaman = (cls == "SHAMAN")
+      end
+    end
+    if isShaman then
+      local okW, hasMH, _, _, _, hasOH = pcall(_G.GetWeaponEnchantInfo)
+      if okW then
+        if (not SpArc.IsSecret(hasMH) and hasMH == true) or (not SpArc.IsSecret(hasOH) and hasOH == true) then
+          cachedHasShieldAura = true
+          return true
+        end
+      end
+    end
+  end
   return false
 end
 
@@ -1172,18 +1206,23 @@ local function IsInCosmeticCombatForm()
   if _G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player") then
     return false
   end
-  if _G.IsFlying and SafeBool(_G.IsFlying) then
-    return false
-  end
   if _G.IsStealthed and SafeBool(_G.IsStealthed) then
-    return false
-  end
-  if _G.IsMounted and SafeBool(_G.IsMounted) then
     return false
   end
   if UnitExists and SafeBool(UnitExists, "target")
     and UnitCanAttack and SafeBool(UnitCanAttack, "player", "target")
     and not (UnitIsDeadOrGhost and SafeBool(UnitIsDeadOrGhost, "target")) then
+    return false
+  end
+
+  if RefreshCancelableShieldAuraCache(false) then
+    return true
+  end
+
+  local isFlying = _G.IsFlying and SafeBool(_G.IsFlying)
+  local isMounted = _G.IsMounted and SafeBool(_G.IsMounted)
+  -- Never cancel Druid Flight Form while airborne without a mount
+  if isFlying and not isMounted then
     return false
   end
 
@@ -1199,10 +1238,6 @@ local function IsInCosmeticCombatForm()
     if okF and not SpArc.IsSecret(formID) and type(formID) == "number" and formID > 0 then
       return true
     end
-  end
-
-  if RefreshCancelableShieldAuraCache(false) then
-    return true
   end
 
   return false
@@ -1446,6 +1481,7 @@ camDriver:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 camDriver:RegisterEvent("PLAYER_TARGET_CHANGED")
 camDriver:RegisterUnitEvent("UNIT_TARGET", "player")
 camDriver:RegisterUnitEvent("UNIT_AURA", "player")
+camDriver:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
 pcall(camDriver.RegisterEvent, camDriver, "PLAYER_SOFT_INTERACT_CHANGED")
 pcall(camDriver.RegisterEvent, camDriver, "PLAYER_SOFT_ENEMY_CHANGED")
 pcall(camDriver.RegisterEvent, camDriver, "PLAYER_SOFT_FRIEND_CHANGED")
@@ -1533,7 +1569,7 @@ camDriver:SetScript("OnEvent", function(_, event, arg1, arg2)
   elseif event == "PLAYER_REGEN_DISABLED" then
     cachedHasShieldAura = false
     UpdateInteractBindingMode(true)
-  elseif event == "UNIT_AURA" then
+  elseif event == "UNIT_AURA" or event == "UNIT_INVENTORY_CHANGED" then
     RefreshCancelableShieldAuraCache(true)
     UpdateInteractBindingMode(false)
   elseif event == "PLAYER_DEAD" or event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then

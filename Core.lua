@@ -697,6 +697,7 @@ function SpArc:EnsureDB(forceReinit)
       ["Улак - Свежеватель Душ"]         = "ROGUE_01_ASSA_PVE",
       ["Моржовый - Свежеватель Душ"]     = "WARRIOR_02_ARGS_BOSS",
       ["Ниоч - Свежеватель Душ"]         = "SHAMAN_01_ENH_PVE",
+      ["Ниоч - Пиратская Бухта"]         = "SHAMAN_01_ENH_PVE",
     }
     for pName, pObj in pairs(db.profiles or {}) do
       if not pObj.activePresetID or not db.presets[pObj.activePresetID] then
@@ -706,6 +707,36 @@ function SpArc:EnsureDB(forceReinit)
       end
     end
     db.profileSchemaVersion = SpArc.PROFILE_SCHEMA_VERSION
+  end
+
+  if not db._shamanBuiltInPresetMigrated then
+    if db.presets and db.presets["SHAMAN_01_ENH_PVE"] then
+      if db.presets["SHAMAN_CUSTOM_7"] then
+        db.presets["SHAMAN_CUSTOM_7"] = nil
+        for i = #db.presetOrder, 1, -1 do
+          if db.presetOrder[i] == "SHAMAN_CUSTOM_7" then
+            table.remove(db.presetOrder, i)
+          end
+        end
+      end
+      if db.activePresetID == "SHAMAN_CUSTOM_7" then
+        db.activePresetID = "SHAMAN_01_ENH_PVE"
+      end
+      if type(db.autoPresets) == "table" then
+        for k, v in pairs(db.autoPresets) do
+          if v == "SHAMAN_CUSTOM_7" then db.autoPresets[k] = "SHAMAN_01_ENH_PVE" end
+        end
+      end
+      for pName, pObj in pairs(db.profiles or {}) do
+        if type(pObj) == "table" then
+          if pObj.activePresetID == "SHAMAN_CUSTOM_7" or pName:find("Ниоч", 1, true) then
+            pObj.activePresetID = "SHAMAN_01_ENH_PVE"
+            pObj.autoPresets = { PVE = "SHAMAN_01_ENH_PVE", BOSS = "SHAMAN_01_ENH_PVE", PVP = "SHAMAN_01_ENH_PVE" }
+          end
+        end
+      end
+    end
+    db._shamanBuiltInPresetMigrated = true
   end
 
   if activeProf.mode then

@@ -1087,10 +1087,25 @@ toggleBtn:HookScript("PostClick", function()
   _G.SpArc_CameraToggleKey("down")
 end)
 
+local function SyncElvUIEnchantButtons()
+  local container = _G.ElvUIPlayerBuffs
+  if not container or type(container.buttons) ~= "table" then return end
+  local idx = 0
+  for btn in pairs(container.buttons) do
+    if type(btn) == "table" and type(btn.data) == "table" and btn.data.isEnchantment then
+      idx = idx + 1
+      _G["SpArcElvEnchantBtn" .. idx] = btn
+    end
+  end
+end
+
 local interactBtn = CreateFrame("Button", "SpArcCamInteractButton", UIParent, "SecureActionButtonTemplate")
 interactBtn:RegisterForClicks("AnyDown")
 interactBtn:SetAttribute("type", "macro")
 interactBtn:SetAttribute("macrotext", BASE_INTERACT_MACRO)
+interactBtn:HookScript("PreClick", function()
+  SyncElvUIEnchantButtons()
+end)
 interactBtn:HookScript("PostClick", function()
   if _G.GetTime then
     lastTargetClickAt = _G.GetTime()
@@ -1132,65 +1147,58 @@ local function GetSafeSpellName(spellID, fallbackRU, fallbackEN)
   return (loc == "ruRU") and fallbackRU or fallbackEN
 end
 
-local function BuildUnshiftInteractMacro()
-  local lsName = GetSafeSpellName(192106, "Щит молний", "Lightning Shield")
-  local esName = GetSafeSpellName(974, "Щит земли", "Earth Shield")
-  local wsName = GetSafeSpellName(52127, "Водный щит", "Water Shield")
-  local ftName = GetSafeSpellName(318038, "Оружие языка пламени", "Flametongue Weapon")
-  local wfName = GetSafeSpellName(33757, "Оружие неистовства ветра", "Windfury Weapon")
-  return table.concat({
-    BASE_INTERACT_MACRO,
-    "/stopmacro [combat]",
-    "/cancelform [nocombat,nostealth,noflying][nocombat,nostealth,mounted]",
-    "/cancelaura " .. lsName,
-    "/cancelaura " .. esName,
-    "/cancelaura " .. wsName,
-    "/cancelaura " .. ftName,
-    "/cancelaura " .. wfName,
-    "/click SpArcCancelMHImbueBtn LeftButton 1",
-    "/click SpArcCancelMHImbueBtn LeftButton 0",
-    "/click SpArcCancelOHImbueBtn LeftButton 1",
-    "/click SpArcCancelOHImbueBtn LeftButton 0",
-    "/click ElvUIPlayerBuffsTempEnchant1 RightButton 1",
-    "/click ElvUIPlayerBuffsTempEnchant1 RightButton 0",
-    "/click ElvUIPlayerBuffsTempEnchant2 RightButton 1",
-    "/click ElvUIPlayerBuffsTempEnchant2 RightButton 0",
-    "/click TempEnchant1 RightButton 1",
-    "/click TempEnchant1 RightButton 0",
-    "/click TempEnchant2 RightButton 1",
-    "/click TempEnchant2 RightButton 0",
-  }, "\n")
-end
-
-local function HasActiveShamanWeaponEnchant()
-  local isShaman = true
+local function IsPlayerShaman()
   if _G.UnitClass then
     local okC, _, cls = pcall(_G.UnitClass, "player")
     if okC and not SpArc.IsSecret(cls) and type(cls) == "string" then
-      isShaman = (cls == "SHAMAN")
+      return (cls == "SHAMAN")
     end
   end
+  return false
+end
+
+local function BuildUnshiftInteractMacro()
+  SyncElvUIEnchantButtons()
+  local isShaman = IsPlayerShaman()
+  local lsName = GetSafeSpellName(192106, "Щит молний", "Lightning Shield")
+  local esName = GetSafeSpellName(974, "Щит земли", "Earth Shield")
+  local wsName = GetSafeSpellName(52127, "Водный щит", "Water Shield")
+  local lines = {
+    BASE_INTERACT_MACRO,
+    "/stopmacro [combat]",
+  }
   if not isShaman then
+    lines[#lines + 1] = "/cancelform [nocombat,nostealth,noflying][nocombat,nostealth,mounted]"
+  end
+  lines[#lines + 1] = "/cancelaura " .. lsName
+  lines[#lines + 1] = "/cancelaura " .. esName
+  lines[#lines + 1] = "/cancelaura " .. wsName
+  lines[#lines + 1] = "/click SpArcElvEnchantBtn1 RightButton 1"
+  lines[#lines + 1] = "/click SpArcElvEnchantBtn1 RightButton 0"
+  lines[#lines + 1] = "/click SpArcElvEnchantBtn2 RightButton 1"
+  lines[#lines + 1] = "/click SpArcElvEnchantBtn2 RightButton 0"
+  lines[#lines + 1] = "/click SpArcCancelMHImbueBtn LeftButton 1"
+  lines[#lines + 1] = "/click SpArcCancelMHImbueBtn LeftButton 0"
+  lines[#lines + 1] = "/click SpArcCancelOHImbueBtn LeftButton 1"
+  lines[#lines + 1] = "/click SpArcCancelOHImbueBtn LeftButton 0"
+  return table.concat(lines, "\n")
+end
+
+local function HasActiveShamanWeaponEnchant()
+  if not IsPlayerShaman() then
     return false
   end
-  if _G.C_PaperDollInfo and _G.C_PaperDollInfo.GetTemporaryEnchantmentInfo then
-    local okM, mhInfo = pcall(_G.C_PaperDollInfo.GetTemporaryEnchantmentInfo, 16)
-    if okM and mhInfo ~= nil then
-      if type(mhInfo) == "boolean" then
-        if mhInfo == true then return true end
-      elseif type(mhInfo) == "table" then
-        if mhInfo.hasEnchant == true or (mhInfo.remainingTimeMs ~= nil and (SpArc.IsSecret(mhInfo.remainingTimeMs) or mhInfo.remainingTimeMs > 0)) then
-          return true
-        end
-      end
-    end
-    local okO, ohInfo = pcall(_G.C_PaperDollInfo.GetTemporaryEnchantmentInfo, 17)
-    if okO and ohInfo ~= nil then
-      if type(ohInfo) == "boolean" then
-        if ohInfo == true then return true end
-      elseif type(ohInfo) == "table" then
-        if ohInfo.hasEnchant == true or (ohInfo.remainingTimeMs ~= nil and (SpArc.IsSecret(ohInfo.remainingTimeMs) or ohInfo.remainingTimeMs > 0)) then
-          return true
+  local getTempEnchant = _G.GetTemporaryEnchantmentInfo or (_G.C_PaperDollInfo and _G.C_PaperDollInfo.GetTemporaryEnchantmentInfo)
+  if getTempEnchant then
+    for _, slotID in ipairs({ 16, 17 }) do
+      local okE, info = pcall(getTempEnchant, slotID)
+      if okE and info ~= nil then
+        if type(info) == "boolean" then
+          if info == true then return true end
+        elseif type(info) == "table" then
+          if info.hasEnchant == true or (info.remainingTimeMs ~= nil and (SpArc.IsSecret(info.remainingTimeMs) or info.remainingTimeMs > 0)) then
+            return true
+          end
         end
       end
     end
@@ -1230,6 +1238,7 @@ local function RefreshCancelableShieldAuraCache(force)
     end
   end
   if HasActiveShamanWeaponEnchant() then
+    SyncElvUIEnchantButtons()
     cachedHasShieldAura = true
     return true
   end
@@ -1262,6 +1271,11 @@ local function IsInCosmeticCombatForm()
 
   if RefreshCancelableShieldAuraCache(false) then
     return true
+  end
+
+  -- Never treat Shaman Ghost Wolf (Призрачный волк) as a combat form to cancel on E
+  if IsPlayerShaman() then
+    return false
   end
 
   local isFlying = _G.IsFlying and SafeBool(_G.IsFlying)

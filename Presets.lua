@@ -866,7 +866,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 37
+SpArc.PROFILE_SCHEMA_VERSION = 38
 
 ---------------------------------------------------------------------------------------
 --      7 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID, SHAMAN)      --
@@ -1372,7 +1372,7 @@ SPELL WIND_SHEAR = ID:57994 | NAME:"Пронизывающий ветер","Wind
 SPELL CAPACITOR_TOTEM = ID:192058,51514 | NAME:"Тотем конденсации","Сглаз","Capacitor Totem","Hex" | CD:60 | PVP:true | ICON:136013
 SPELL LIGHTNING_SHIELD = ID:192106 | AURA_ID:192106 | AURA_UNIT:player | AURA_DUR:3600 | NAME:"Щит молний","Lightning Shield" | CD:0 | ICON:136051
 SPELL DOOM_WINDS = ID:384352,114051 | AURA_ID:384352,466772,114051 | AURA_UNIT:player | AURA_DUR:8 | BURST:8 | BOSS:true | NAME:"Ветра рока","Перерождение","Doom Winds","Ascendance" | CD:60 | ICON:136022
-SPELL FERAL_SPIRIT = ID:51533 | AURA_ID:333957,51533 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | BOSS:true | NAME:"Дух дикого волка","Feral Spirit" | CD:90 | ICON:237577
+SPELL FERAL_SPIRIT = ID:51533 | AURA_ID:333957,51533 | AURA_UNIT:player | AURA_DUR:15 | BURST:15 | BOSS:true | NAME:"Дух дикого зверя","Дух дикого волка","Feral Spirit" | CD:90 | ICON:237577
 SPELL SUNDERING = ID:197214 | AURA_ID:1218125 | AURA_UNIT:player | AURA_DUR:15 | GRANTS:PRIMORDIAL_STORM | NAME:"Раскол","Sundering" | CD:30 | ICON:136025
 SPELL PRIMORDIAL_STORM = ID:1218090,375982 | NAME:"Первозданная буря","Первозданная волна","Primordial Storm","Primordial Wave" | CD:0 | PROC_ONLY:true | OVERRIDE_OF:SUNDERING | ICON:462328
 SPELL TEMPEST = ID:452201,454009 | NAME:"Буря","Tempest" | CD:0 | PROC_ONLY:true | OVERRIDE_OF:LIGHTNING_BOLT | ICON:136048

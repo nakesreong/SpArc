@@ -519,6 +519,7 @@ local simCD = {}
 local simKnown = {}
 local simActive = {}
 local simNoResource = {}
+local usedInQueue = {}
 local simAuraRem = { target = {}, player = {} }
 local simAuraStacks = { target = {}, player = {} }
 local simCtx = { auraRem = simAuraRem, auraStacks = simAuraStacks }
@@ -547,6 +548,7 @@ function SpArc:BuildRotationQueue(maxSlots)
   for k in pairs(simAuraRem.player) do simAuraRem.player[k] = nil end
   for k in pairs(simAuraStacks.target) do simAuraStacks.target[k] = nil end
   for k in pairs(simAuraStacks.player) do simAuraStacks.player[k] = nil end
+  for k in pairs(usedInQueue) do usedInQueue[k] = nil end
 
   local states = reusableStates
   for k in pairs(states) do
@@ -657,10 +659,12 @@ function SpArc:BuildRotationQueue(maxSlots)
         simAuraStacks.player["MAELSTROM_WEAPON"] = 5
         simAuraStacks.player["344179"] = 5
       elseif (simAuraRem.player["MAELSTROM_WEAPON"] or 0) > 0 and (simAuraStacks.player["MAELSTROM_WEAPON"] or 0) <= 1 then
-        simAuraStacks.player["MAELSTROM_WEAPON"] = 4
-        simAuraStacks.player["344179"] = 4
+        local estMW = math.max(2, math.min(7, st.maelstromWeaponStacks or 4))
+        simAuraStacks.player["MAELSTROM_WEAPON"] = estMW
+        simAuraStacks.player["344179"] = estMW
       end
     end
+    st.maelstromWeaponStacks = simAuraStacks.player["MAELSTROM_WEAPON"] or 0
   end
   local simStacks = simAuraStacks.target["FREEZING"] or 0
   local simBurst = (SpArc.IsPlayerInBurst and SpArc:IsPlayerInBurst(states, parsed, now)) or false
@@ -740,7 +744,7 @@ function SpArc:BuildRotationQueue(maxSlots)
       end
     end
     if stepIdx and stepIdx >= 2 then
-      if qCount >= 2 and queue[qCount] and queue[qCount - 1] and queue[qCount].key == spKey and queue[qCount - 1].key == spKey then
+      if usedInQueue[spKey] or (d.overrideOf and usedInQueue[d.overrideOf]) then
         return false
       end
       if auraMap["MAELSTROM_WEAPON"] and (spKey == "TEMPEST" or spKey == "LIGHTNING_BOLT" or spKey == "CHAIN_LIGHTNING" or spKey == "ELEMENTAL_BLAST") then
@@ -1003,6 +1007,7 @@ function SpArc:BuildRotationQueue(maxSlots)
           qItem.resWaitSec = 0
           qItem.isOutOfRange = dynOOR
           qItem.isUnavailable = false
+          usedInQueue[dynKey] = true
           AdvanceSimTime(1.4)
           handledDynamicSlot1 = true
         end
@@ -1080,6 +1085,10 @@ function SpArc:BuildRotationQueue(maxSlots)
         qItem.resWaitSec = (qItem.isNoResource and s.resWaitSec and s.resWaitSec > 0) and s.resWaitSec or 2.8
         qItem.isOutOfRange = s.isOutOfRange or false
         qItem.isUnavailable = s.isUnavailable or false
+        usedInQueue[pickedKey] = true
+        if def and def.overrideOf then
+          usedInQueue[def.overrideOf] = true
+        end
 
         local pickedWasProc = simProcs[pickedKey]
         simProcs[pickedKey] = false
@@ -1346,6 +1355,24 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
       st.targetDebuffUntil = newUntil
     end
     uMap[tKey] = { untilTime = newUntil, stacks = newSt }
+  end
+  if defKey == "LIGHTNING_BOLT" or defKey == "CHAIN_LIGHTNING" or defKey == "TEMPEST" or defKey == "ELEMENTAL_BLAST" then
+    local curMW = math.max(0, (st.maelstromWeaponStacks or 0) - 10)
+    st.maelstromWeaponStacks = curMW
+    if st.unitAuras and st.unitAuras.player then
+      st.unitAuras.player["MAELSTROM_WEAPON"] = curMW > 0 and { untilTime = now + 30.0, stacks = curMW } or nil
+      st.unitAuras.player[344179] = st.unitAuras.player["MAELSTROM_WEAPON"]
+      st.unitAuras.player["344179"] = st.unitAuras.player["MAELSTROM_WEAPON"]
+    end
+  elseif defKey == "STORMSTRIKE" or defKey == "WINDSTRIKE" or defKey == "LAVA_LASH" or defKey == "CRASH_LIGHTNING" or defKey == "VOLTAIC_BLAZE" or defKey == "SUNDERING" or defKey == "ICE_STRIKE" then
+    local curMW = math.min(10, (st.maelstromWeaponStacks or 0) + 2)
+    st.maelstromWeaponStacks = curMW
+    if st.unitAuras and st.unitAuras.player then
+      local mwEntry = { untilTime = now + 30.0, stacks = curMW }
+      st.unitAuras.player["MAELSTROM_WEAPON"] = mwEntry
+      st.unitAuras.player[344179] = mwEntry
+      st.unitAuras.player["344179"] = mwEntry
+    end
   end
   local maxCh = def.liveMaxCharges or def.maxCharges or 1
   if maxCh > 1 or (def.baseCD and def.baseCD > 0 and def.baseCD <= 30) then

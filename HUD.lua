@@ -378,12 +378,22 @@ end
 local activeWingKeys = {}
 local function UpdateCooldownRow(boxes, spellKeys, states, now, gcdStart, gcdDur)
   local defs = SpArc.SPELL_DEFS
+  local anyBound = false
+  if states and not SpArc.testMode then
+    for _, sObj in pairs(states) do
+      if sObj.keybind and sObj.keybind ~= "" then
+        anyBound = true
+        break
+      end
+    end
+  end
   local kCount = 0
   if spellKeys and states then
     for i = 1, #spellKeys do
       local k = spellKeys[i]
       local stObj = k and states[k]
-      if stObj and (not stObj.isUnavailable or SpArc.testMode) then
+      local isBound = (not anyBound) or (stObj and stObj.keybind and stObj.keybind ~= "") or (defs and defs[k] and defs[k].slot ~= nil)
+      if stObj and ((not stObj.isUnavailable and isBound) or SpArc.testMode) then
         kCount = kCount + 1
         activeWingKeys[kCount] = k
       end

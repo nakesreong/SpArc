@@ -63,8 +63,8 @@ thresholdTick:SetPoint("BOTTOM", resFrame, "BOTTOMLEFT", 138, -1)
 thresholdTick:SetColorTexture(1.0, 0.88, 0.35, 0.90)
 thresholdTick:Hide()
 
--- Discrete Pips (Combo Points, Arcane Charges, Holy Power, Soul Shards, Freezing Stacks)
-local MAX_PIPS = 7
+-- Discrete Pips (Combo Points, Arcane Charges, Holy Power, Soul Shards, Freezing Stacks, Maelstrom Weapon)
+local MAX_PIPS = 10
 local pipFrames = {}
 for i = 1, MAX_PIPS do
   local p = CreateFrame("Frame", nil, resFrame)
@@ -397,7 +397,49 @@ local function ResolveResourceSpec(now)
     }
   end
 
-  -- 13. SHAMAN: Maelstrom (11)
+  -- 13. SHAMAN: Enhancement Maelstrom Weapon Pips (263) or Elemental Maelstrom Bar (11)
+  if specID == 263 then
+    local curMW = nil
+    local auraPresent = nil
+    if _G.C_UnitAuras and _G.C_UnitAuras.GetPlayerAuraBySpellID then
+      local okA, aura = pcall(_G.C_UnitAuras.GetPlayerAuraBySpellID, 344179)
+      if okA then
+        if aura == nil then
+          auraPresent = false
+          curMW = 0
+          st.maelstromWeaponStacks = 0
+        else
+          auraPresent = true
+          if not IsSecret(aura.applications) and type(aura.applications) == "number" then
+            curMW = math.max(1, aura.applications)
+            st.maelstromWeaponStacks = curMW
+          end
+        end
+      end
+    end
+    if curMW == nil then
+      if st.maelstromWeaponStacks and st.maelstromWeaponStacks > 0 then
+        curMW = st.maelstromWeaponStacks
+      elseif auraPresent then
+        curMW = 1
+      end
+    end
+    curMW = math.max(0, math.min(10, curMW or 0))
+    if SpArc.testMode and curMW == 0 then
+      curMW = (math.floor(now * 1.5) % 10) + 1
+    end
+    return {
+      mode = "PIPS",
+      cur = curMW,
+      max = 10,
+      finisherThreshold = 5,
+      r1 = 0.18, g1 = 0.62, b1 = 0.98,
+      r2 = 1.00, g2 = 0.80, b2 = 0.16,
+      leftLabel = isRU and "Водоворот" or "Maelstrom",
+      rightLabel = string.format("%d / 10", curMW),
+    }
+  end
+
   local maxM = SafeReadPowerMax(11, 100)
   local curM = SafeReadPower(11) or 0
   if SpArc.testMode and curM == 0 then curM = math.floor((now * 20) % 100) end

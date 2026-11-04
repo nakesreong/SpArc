@@ -101,6 +101,7 @@ if SpArc.RegisterStrings then
     CK_UF_TOT = "Show Target of Target (ToT)",
     CK_UF_FOCUS = "Show Focus Frame (+ Castbar)",
     CK_UF_PET = "Show Pet Frame",
+    CK_UF_PARTY = "Show Party Frames (Party 1..4)",
     CK_UF_BOSS = "Show Boss Frames (Boss 1..5)",
     M12_GRP_GEO = "2. Frame Dimensions, Portrait Size & Typography",
     SL_UF_WIDTH = "Main Bar Width (px)",
@@ -122,11 +123,12 @@ if SpArc.RegisterStrings then
     EM_MOVER_UF_TOT = "Target of Target (ToT)",
     EM_MOVER_UF_FOCUS = "Focus Frame",
     EM_MOVER_UF_PET = "Pet Frame",
+    EM_MOVER_UF_PARTY = "Party Frames (1..4)",
     EM_MOVER_UF_BOSS = "Boss Frames (1..5)",
     MSG_ELVUF_DISABLED = "|cffa335eeSpArc UnitFrames:|r Disabled ElvUI UnitFrames in current profile. Type |cffffd100/reload|r to apply cleanly.",
   }, {
     NAV_12 = "Юнитфреймы",
-    M12_TITLE = "Юнитфреймы SpArc (Игрок, Цель, Кастбар цели, Цель цели, Фокус, Питомец и Боссы)",
+    M12_TITLE = "Юнитфреймы SpArc (Игрок, Цель, Кастбар цели, Цель цели, Фокус, Питомец, Группа и Боссы)",
     M12_EDIT_POS_BTN = "Двигать фреймы (Редактировать)",
     M12_DISABLE_ELVUF_BTN = "Отключить фреймы ElvUI",
     M12_GRP_STYLE = "1. Стиль портрета, Окраска полос и Включённые фреймы",
@@ -137,13 +139,14 @@ if SpArc.RegisterStrings then
     M12_COLOR_LBL = "Окраска ХП:",
     M12_COLOR_CLASS = "Цвет класса и реакции",
     M12_COLOR_DARK = "Тёмный обсидиан",
-    CK_UF_HIDE_BLIZZ = "Скрывать стандартные фреймы Blizzard (Игрок, Цель, Фокус, Боссы)",
+    CK_UF_HIDE_BLIZZ = "Скрывать стандартные фреймы Blizzard (Игрок, Цель, Фокус, Группа, Боссы)",
     CK_UF_POWER = "Полоска маны / ресурса снизу",
     CK_UF_TGT_CAST = "Кастбар цели под фреймом цели",
     CK_UF_TGT_AURAS = "Доты и баффы над фреймом цели",
     CK_UF_TOT = "Цель цели (ToT)",
     CK_UF_FOCUS = "Фокус (+ Кастбар фокуса)",
     CK_UF_PET = "Фрейм питомца (Pet)",
+    CK_UF_PARTY = "Фреймы группы (Party 1..4)",
     CK_UF_BOSS = "Фреймы боссов (Boss 1..5)",
     M12_GRP_GEO = "2. Размеры полосы здоровья, Диаметр портрета и Шрифт",
     SL_UF_WIDTH = "Ширина полосы ХП (px)",
@@ -165,6 +168,7 @@ if SpArc.RegisterStrings then
     EM_MOVER_UF_TOT = "Цель цели (ToT)",
     EM_MOVER_UF_FOCUS = "Юнитфрейм: Фокус",
     EM_MOVER_UF_PET = "Юнитфрейм: Питомец",
+    EM_MOVER_UF_PARTY = "Юнитфреймы: Группа (1..4)",
     EM_MOVER_UF_BOSS = "Фреймы Боссов (1..5)",
     MSG_ELVUF_DISABLED = "|cffa335eeSpArc Юнитфреймы:|r Юнитфреймы ElvUI отключены. Напиши |cffffd100/reload|r для чистого применения.",
   })
@@ -206,19 +210,42 @@ local hiddenBlizzParent = CreateFrame("Frame", "SpArcHiddenBlizzUFParent", UIPar
 hiddenBlizzParent:Hide()
 local suppressedBlizzFrames = {}
 
-local function SuppressSingleBlizzFrame(f)
-  if not f or suppressedBlizzFrames[f] then return end
+local hookedBlizzShow = {}
+
+local function SuppressSingleBlizzFrame(f, lockShow)
+  if not f then return end
   if InCombatLockdown and InCombatLockdown() then return end
-  suppressedBlizzFrames[f] = true
-  pcall(f.UnregisterAllEvents, f)
-  if f.healthbar then pcall(f.healthbar.UnregisterAllEvents, f.healthbar) end
-  if f.manabar then pcall(f.manabar.UnregisterAllEvents, f.manabar) end
-  if f.spellbar then pcall(f.spellbar.UnregisterAllEvents, f.spellbar) end
-  if f.UnregisterEvent then
-    pcall(UnregisterUnitWatch, f)
+  if not suppressedBlizzFrames[f] then
+    suppressedBlizzFrames[f] = true
+    pcall(f.UnregisterAllEvents, f)
+    if f.healthbar then pcall(f.healthbar.UnregisterAllEvents, f.healthbar) end
+    if f.HealthBarsContainer and f.HealthBarsContainer.healthBar then
+      pcall(f.HealthBarsContainer.healthBar.UnregisterAllEvents, f.HealthBarsContainer.healthBar)
+    end
+    if f.manabar then pcall(f.manabar.UnregisterAllEvents, f.manabar) end
+    if f.ManaBar then pcall(f.ManaBar.UnregisterAllEvents, f.ManaBar) end
+    if f.spellbar then pcall(f.spellbar.UnregisterAllEvents, f.spellbar) end
+    if f.UnregisterEvent then
+      pcall(UnregisterUnitWatch, f)
+    end
   end
   pcall(f.Hide, f)
   pcall(f.SetParent, f, hiddenBlizzParent)
+  if lockShow and _G.hooksecurefunc and not hookedBlizzShow[f] then
+    hookedBlizzShow[f] = true
+    _G.hooksecurefunc(f, "Show", function(self)
+      if not (InCombatLockdown and InCombatLockdown()) and SpArc:IsUnitFramesEnabled() then
+        pcall(self.Hide, self)
+      end
+    end)
+    if f.SetShown then
+      _G.hooksecurefunc(f, "SetShown", function(self, shown)
+        if shown and not (InCombatLockdown and InCombatLockdown()) and SpArc:IsUnitFramesEnabled() then
+          pcall(self.Hide, self)
+        end
+      end)
+    end
+  end
 end
 
 local function SyncBlizzardUnitFramesSuppression()
@@ -238,10 +265,30 @@ local function SyncBlizzardUnitFramesSuppression()
   if v.ufShowPet ~= false then
     SuppressSingleBlizzFrame(_G.PetFrame)
   end
-  if v.ufShowBoss ~= false and _G.BossTargetFrameContainer then
-    SuppressSingleBlizzFrame(_G.BossTargetFrameContainer)
+  if v.ufShowParty ~= false then
+    if _G.PartyFrame then
+      SuppressSingleBlizzFrame(_G.PartyFrame, true)
+      if _G.PartyFrame.PartyMemberFramePool and _G.PartyFrame.PartyMemberFramePool.EnumerateActive then
+        for child in _G.PartyFrame.PartyMemberFramePool:EnumerateActive() do
+          SuppressSingleBlizzFrame(child, true)
+        end
+      end
+      for i = 1, 4 do
+        SuppressSingleBlizzFrame(_G.PartyFrame["MemberFrame" .. i], true)
+      end
+    end
+    if _G.CompactPartyFrame then
+      SuppressSingleBlizzFrame(_G.CompactPartyFrame, true)
+    end
     for i = 1, 5 do
-      SuppressSingleBlizzFrame(_G["Boss" .. i .. "TargetFrame"])
+      SuppressSingleBlizzFrame(_G["PartyMemberFrame" .. i], true)
+      SuppressSingleBlizzFrame(_G["CompactPartyFrameMember" .. i], true)
+    end
+  end
+  if v.ufShowBoss ~= false and _G.BossTargetFrameContainer then
+    SuppressSingleBlizzFrame(_G.BossTargetFrameContainer, true)
+    for i = 1, 5 do
+      SuppressSingleBlizzFrame(_G["Boss" .. i .. "TargetFrame"], true)
     end
   end
 end
@@ -254,20 +301,25 @@ local function GetUnitBarColor(unit, colorMode, isDemo, demoIsHostile)
     return COLOR_OBSIDIAN_DARK.r, COLOR_OBSIDIAN_DARK.g, COLOR_OBSIDIAN_DARK.b
   end
   if isDemo then
+    if unit == "party1" then return 0.67, 0.83, 0.45 end
+    if unit == "party2" then return 0.95, 0.55, 0.73 end
+    if unit == "party3" then return 0.25, 0.78, 0.92 end
+    if unit == "party4" then return 0.98, 0.98, 0.98 end
     if demoIsHostile then
       return COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
     end
     local _, pClass = UnitClass("player")
     local c = (pClass and not IsSecret(pClass) and RAID_CLASS_COLORS and RAID_CLASS_COLORS[pClass]) or nil
-    if c then return c.r, c.g, c.b end
+    if c then return c.r, c.b and c.g or 0.55, c.b or 0.12 end
     return 0.90, 0.55, 0.12
   end
   if not unit or not SafeBool(UnitExists, unit) then
     return COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
   end
   local canAttack = SafeBool(UnitCanAttack, "player", unit)
-  if SafeBool(UnitIsPlayer, unit) then
-    if canAttack and unit ~= "player" and colorMode == "REACTION" then
+  local isPartyUnit = (type(unit) == "string" and unit:find("^party") ~= nil)
+  if SafeBool(UnitIsPlayer, unit) or isPartyUnit then
+    if canAttack and unit ~= "player" and not isPartyUnit and colorMode == "REACTION" then
       return COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
     end
     local okC, _, classFile = pcall(UnitClass, unit)
@@ -275,7 +327,7 @@ local function GetUnitBarColor(unit, colorMode, isDemo, demoIsHostile)
       local c = RAID_CLASS_COLORS[classFile]
       return c.r, c.g, c.b
     end
-    if canAttack then
+    if canAttack and not isPartyUnit then
       return COLOR_HOSTILE_RED.r, COLOR_HOSTILE_RED.g, COLOR_HOSTILE_RED.b
     end
     return COLOR_FRIENDLY_GREEN.r, COLOR_FRIENDLY_GREEN.g, COLOR_FRIENDLY_GREEN.b
@@ -318,6 +370,7 @@ end
 --  3. UNITFRAME FACTORY (CIRCULAR MASKED PORTRAIT + METRO BAR + CASTBAR + AURAS)
 ---------------------------------------------------------------------------------------
 local ufFrames = {}
+local partyFrames = {}
 local bossFrames = {}
 local targetCastbarFrame = nil
 
@@ -385,13 +438,21 @@ local function CreateCircularPortraitWidget(parent, side)
   sqBorder:Hide()
   holder.sqBorder = sqBorder
 
-  -- Combat / Resting Badge on Portrait Corner
+  -- Combat / Resting / Group Role Badge on Portrait Corner
   local statusIcon = holder:CreateTexture(nil, "OVERLAY", nil, 4)
   statusIcon:SetSize(18, 18)
   statusIcon:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", -2, -2)
   statusIcon:SetTexture("Interface\\CharacterFrame\\UI-StateIcon")
   statusIcon:Hide()
   holder.statusIcon = statusIcon
+
+  -- Party Leader Crown Badge on Top-Left of Portrait
+  local leaderIcon = holder:CreateTexture(nil, "OVERLAY", nil, 5)
+  leaderIcon:SetSize(14, 14)
+  leaderIcon:SetPoint("TOPLEFT", holder, "TOPLEFT", -2, 4)
+  leaderIcon:SetTexture("Interface\\GroupFrame\\UI-Group-LeaderIcon")
+  leaderIcon:Hide()
+  holder.leaderIcon = leaderIcon
 
   return holder
 end
@@ -642,6 +703,9 @@ local function CreateSpArcUnitFrame(frameName, unitToken, portraitSide, isCompac
     f._unitWatchRegistered = true
   end
 
+  _G.ClickCastFrames = _G.ClickCastFrames or {}
+  _G.ClickCastFrames[f] = true
+
   return f
 end
 
@@ -653,6 +717,12 @@ ufFrames.focus  = CreateSpArcUnitFrame("SpArcUF_Focus", "focus", "LEFT", true)
 ufFrames.pet    = CreateSpArcUnitFrame("SpArcUF_Pet", "pet", nil, true)
 
 targetCastbarFrame = CreateStandaloneCastbar("SpArcUF_TargetCastbar", UIParent, true)
+
+for i = 1, 4 do
+  partyFrames[i] = CreateSpArcUnitFrame("SpArcUF_Party" .. i, "party" .. i, "LEFT", false)
+  partyFrames[i].isParty = true
+  partyFrames[i].partyIndex = i
+end
 
 for i = 1, 5 do
   bossFrames[i] = CreateSpArcUnitFrame("SpArcUF_Boss" .. i, "boss" .. i, nil, false)
@@ -709,6 +779,7 @@ local function UpdatePortraitForUnitFrame(f, unit, r, g, b, isDemo)
   end
 
   if unit == "player" and port.statusIcon then
+    port.statusIcon:SetTexture("Interface\\CharacterFrame\\UI-StateIcon")
     if SafeBool(UnitAffectingCombat, "player") then
       port.statusIcon:SetTexCoord(0.5, 1.0, 0.0, 0.49)
       port.statusIcon:Show()
@@ -718,8 +789,46 @@ local function UpdatePortraitForUnitFrame(f, unit, r, g, b, isDemo)
     else
       port.statusIcon:Hide()
     end
-  elseif port.statusIcon then
-    port.statusIcon:Hide()
+    if port.leaderIcon then
+      if _G.UnitIsGroupLeader and SafeBool(_G.UnitIsGroupLeader, "player") then
+        port.leaderIcon:Show()
+      else
+        port.leaderIcon:Hide()
+      end
+    end
+  elseif f.isParty and port.statusIcon then
+    local role = "NONE"
+    if isDemo then
+      role = (f.partyIndex == 1 and "DAMAGER") or (f.partyIndex == 2 and "TANK") or (f.partyIndex == 3 and "DAMAGER") or "HEALER"
+    elseif _G.UnitGroupRolesAssigned and SafeBool(UnitExists, unit) then
+      local okR, rVal = pcall(_G.UnitGroupRolesAssigned, unit)
+      if okR and not IsSecret(rVal) and type(rVal) == "string" then
+        role = rVal
+      end
+    end
+    if role == "TANK" or role == "HEALER" or role == "DAMAGER" then
+      port.statusIcon:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES")
+      if role == "TANK" then
+        port.statusIcon:SetTexCoord(0, 19/64, 22/64, 41/64)
+      elseif role == "HEALER" then
+        port.statusIcon:SetTexCoord(20/64, 39/64, 1/64, 20/64)
+      else
+        port.statusIcon:SetTexCoord(20/64, 39/64, 22/64, 41/64)
+      end
+      port.statusIcon:Show()
+    else
+      port.statusIcon:Hide()
+    end
+    if port.leaderIcon then
+      if (isDemo and f.partyIndex == 1) or (_G.UnitIsGroupLeader and SafeBool(_G.UnitIsGroupLeader, unit)) then
+        port.leaderIcon:Show()
+      else
+        port.leaderIcon:Hide()
+      end
+    end
+  else
+    if port.statusIcon then port.statusIcon:Hide() end
+    if port.leaderIcon then port.leaderIcon:Hide() end
   end
 end
 
@@ -895,7 +1004,7 @@ local function UpdateSingleUnitFrame(f, now, isDemo)
   local db = SpArc:EnsureDB()
   local v = db.visual or DEFAULT_VISUAL
   local colorMode = v.ufColorMode or "CLASS"
-  local demoHostile = (unit ~= "player" and unit ~= "pet")
+  local demoHostile = (unit ~= "player" and unit ~= "pet" and not f.isParty)
   local r, g, b = GetUnitBarColor(unit, colorMode, isDemo and not exists, demoHostile)
   f.healthBar:SetStatusBarColor(r, g, b, 1.0)
 
@@ -917,6 +1026,10 @@ local function UpdateSingleUnitFrame(f, now, isDemo)
       targettarget = (UnitName and UnitName("player")) or "Yoxzene",
       focus = "Void Ascendant",
       pet = "Shadowfiend",
+      party1 = "Бранн Бронзобород",
+      party2 = "Аллерия",
+      party3 = "Туралион",
+      party4 = "Джайна",
       boss1 = "Harbinger Xal'atath",
       boss2 = "Nether-Prince",
       boss3 = "Voidweaver",
@@ -928,35 +1041,45 @@ local function UpdateSingleUnitFrame(f, now, isDemo)
 
   -- Health Bar & Value Text ("94% | 78K")
   if exists then
-    local ok1, hp = pcall(UnitHealth, unit)
-    local ok2, maxHp = pcall(UnitHealthMax, unit)
-    if ok1 and ok2 and hp ~= nil and maxHp ~= nil then
-      pcall(f.healthBar.SetMinMaxValues, f.healthBar, 0, maxHp)
-      pcall(f.healthBar.SetValue, f.healthBar, hp)
-      if not IsSecret(hp) and not IsSecret(maxHp) and type(hp) == "number" and type(maxHp) == "number" and maxHp > 0 then
-        local pct = (hp / maxHp) * 100
-        if f.isCompact then
-          f.hpText:SetText(string.format("%.0f%%", pct))
-        else
-          local pctStr = (pct < 99.95 and pct > 0 and unit ~= "player") and string.format("%.1f%%", pct) or string.format("%.0f%%", pct)
-          f.hpText:SetText(string.format("%s | %s", pctStr, FormatAbbrevHP(hp)))
-        end
-      elseif _G.UnitHealthPercent then
-        local okP, sPct = pcall(_G.UnitHealthPercent, unit, true, _G.CurveConstants and _G.CurveConstants.ScaleTo100)
-        if okP and sPct ~= nil then
-          pcall(f.hpText.SetFormattedText, f.hpText, "%.0f%%", sPct)
+    if f.isParty and _G.UnitIsConnected and not SafeBool(_G.UnitIsConnected, unit) then
+      f.healthBar:SetMinMaxValues(0, 100)
+      f.healthBar:SetValue(0)
+      f.hpText:SetText("Оффлайн")
+    elseif f.isParty and _G.UnitIsDeadOrGhost and SafeBool(_G.UnitIsDeadOrGhost, unit) then
+      f.healthBar:SetMinMaxValues(0, 100)
+      f.healthBar:SetValue(0)
+      f.hpText:SetText("Мёртв")
+    else
+      local ok1, hp = pcall(UnitHealth, unit)
+      local ok2, maxHp = pcall(UnitHealthMax, unit)
+      if ok1 and ok2 and hp ~= nil and maxHp ~= nil then
+        pcall(f.healthBar.SetMinMaxValues, f.healthBar, 0, maxHp)
+        pcall(f.healthBar.SetValue, f.healthBar, hp)
+        if not IsSecret(hp) and not IsSecret(maxHp) and type(hp) == "number" and type(maxHp) == "number" and maxHp > 0 then
+          local pct = (hp / maxHp) * 100
+          if f.isCompact or f.isParty then
+            f.hpText:SetText(string.format("%.0f%%", pct))
+          else
+            local pctStr = (pct < 99.95 and pct > 0 and unit ~= "player") and string.format("%.1f%%", pct) or string.format("%.0f%%", pct)
+            f.hpText:SetText(string.format("%s | %s", pctStr, FormatAbbrevHP(hp)))
+          end
+        elseif _G.UnitHealthPercent then
+          local okP, sPct = pcall(_G.UnitHealthPercent, unit, true, _G.CurveConstants and _G.CurveConstants.ScaleTo100)
+          if okP and sPct ~= nil then
+            pcall(f.hpText.SetFormattedText, f.hpText, "%.0f%%", sPct)
+          else
+            f.hpText:SetText("")
+          end
         else
           f.hpText:SetText("")
         end
-      else
-        f.hpText:SetText("")
       end
     end
   else
     f.healthBar:SetMinMaxValues(0, 100)
-    local demoPct = (unit == "player" and 94) or (unit == "target" and 82.9) or 76
+    local demoPct = (unit == "player" and 94) or (unit == "target" and 82.9) or (f.isParty and (100 - (f.partyIndex - 1) * 8)) or 76
     f.healthBar:SetValue(demoPct)
-    if f.isCompact then
+    if f.isCompact or f.isParty then
       f.hpText:SetText(string.format("%.0f%%", demoPct))
     elseif unit == "player" then
       f.hpText:SetText("94% | 78K")
@@ -989,14 +1112,17 @@ local function UpdateSingleUnitFrame(f, now, isDemo)
     end
   end
 
-  -- Out-of-Combat Alpha
+  -- Out-of-Combat & Party Range Alpha
   local inCombat = SafeBool(UnitAffectingCombat, "player")
   local oocAlpha = tonumber(v.ufOocAlpha) or 0.85
-  if inCombat or isDemo or SafeBool(UnitExists, "target") then
-    f:SetAlpha(1.0)
-  else
-    f:SetAlpha(oocAlpha)
+  local targetAlpha = (inCombat or isDemo or SafeBool(UnitExists, "target")) and 1.0 or oocAlpha
+  if f.isParty and exists and not isDemo and _G.UnitInRange then
+    local okRng, inRange, checkedRange = pcall(_G.UnitInRange, unit)
+    if okRng and not IsSecret(inRange) and not IsSecret(checkedRange) and checkedRange and inRange == false then
+      targetAlpha = targetAlpha * 0.48
+    end
   end
+  f:SetAlpha(targetAlpha)
 
   if unit == "target" then
     UpdateTargetAuras(f, isDemo)
@@ -1098,6 +1224,29 @@ function SpArc:ApplyUnitFramesSettings()
   ApplyCompactGeometry(ufFrames.focus, tonumber(v.ufFocusX) or -430, tonumber(v.ufFocusY) or -40, math.max(130, math.floor(w * 0.84)), math.max(22, h - 4))
   ApplyCompactGeometry(ufFrames.pet, tonumber(v.ufPetX) or -260, tonumber(v.ufPetY) or -194, math.max(120, math.floor(w * 0.76)), math.max(20, h - 6))
 
+  local partyBaseX = tonumber(v.ufPartyX) or -460
+  local partyBaseY = tonumber(v.ufPartyY) or 120
+  local partyW = math.max(134, math.floor(w * 0.88))
+  local partyH = math.max(22, h - 4)
+  local partyPort = math.max(34, math.floor(portSize * 0.80))
+  local partyPbH = showPower and math.max(4, math.floor(partyH * 0.20 + 0.5)) or 0
+  local partyStepY = math.max(partyH + 22, partyPort + 8)
+  for i = 1, 4 do
+    local pf = partyFrames[i]
+    local py = partyBaseY - (i - 1) * partyStepY
+    if not (InCombatLockdown and InCombatLockdown()) then
+      pf:SetSize(partyW, partyH)
+      pf:ClearAllPoints()
+      pf:SetPoint("CENTER", UIParent, "CENTER", partyBaseX, py)
+    end
+    pf.healthBar:SetPoint("BOTTOMRIGHT", pf.barContainer, "BOTTOMRIGHT", -1, showPower and (partyPbH + 1) or 1)
+    if pf.portrait then
+      pf.portrait:SetSize(partyPort, partyPort)
+    end
+    ApplyCyrFont(pf.nameText, math.max(9, fSize - 1))
+    ApplyCyrFont(pf.hpText, math.max(9, fSize - 1))
+  end
+
   local bossBaseX = tonumber(v.ufBossX) or 460
   local bossBaseY = tonumber(v.ufBossY) or 140
   for i = 1, 5 do
@@ -1119,6 +1268,9 @@ function SpArc:ApplyUnitFramesSettings()
   SyncUnitFrameWatchState(ufFrames.tot,    enabled and (v.ufShowToT ~= false), isDemo)
   SyncUnitFrameWatchState(ufFrames.focus,  enabled and (v.ufShowFocus ~= false), isDemo)
   SyncUnitFrameWatchState(ufFrames.pet,    enabled and (v.ufShowPet ~= false), isDemo)
+  for i = 1, 4 do
+    SyncUnitFrameWatchState(partyFrames[i], enabled and (v.ufShowParty ~= false), isDemo and i <= 2)
+  end
   for i = 1, 5 do
     SyncUnitFrameWatchState(bossFrames[i], enabled and (v.ufShowBoss ~= false), isDemo and i <= 2)
   end
@@ -1142,6 +1294,11 @@ function SpArc:UpdateUnitFrames(now)
   for _, f in pairs(ufFrames) do
     if f:IsShown() then
       UpdateSingleUnitFrame(f, now, isDemo)
+    end
+  end
+  for i = 1, 4 do
+    if partyFrames[i]:IsShown() then
+      UpdateSingleUnitFrame(partyFrames[i], now, isDemo)
     end
   end
   for i = 1, 5 do
@@ -1270,6 +1427,24 @@ if SpArc.RegisterEditMover then
   })
 
   SpArc:RegisterEditMover({
+    id = "UF_PARTY",
+    labelKey = "EM_MOVER_UF_PARTY",
+    keyX = "ufPartyX",
+    keyY = "ufPartyY",
+    defaultX = -460,
+    defaultY = 120,
+    width = 190,
+    height = 96,
+    color = { 0.12, 0.34, 0.22 },
+    borderColor = { 0.35, 0.96, 0.62 },
+    isEnabled = function()
+      local db = SpArc:EnsureDB()
+      return SpArc:IsUnitFramesEnabled() and (not db.visual or db.visual.ufShowParty ~= false)
+    end,
+    onChanged = function() SpArc:ApplyUnitFramesSettings() end,
+  })
+
+  SpArc:RegisterEditMover({
     id = "UF_BOSS",
     labelKey = "EM_MOVER_UF_BOSS",
     keyX = "ufBossX",
@@ -1299,6 +1474,11 @@ ufDriver:RegisterEvent("PLAYER_REGEN_ENABLED")
 ufDriver:RegisterEvent("PLAYER_REGEN_DISABLED")
 ufDriver:RegisterEvent("PLAYER_UPDATE_RESTING")
 ufDriver:RegisterEvent("UNIT_PET")
+ufDriver:RegisterEvent("GROUP_ROSTER_UPDATE")
+ufDriver:RegisterEvent("PARTY_LEADER_CHANGED")
+ufDriver:RegisterEvent("PLAYER_ROLES_ASSIGNED")
+ufDriver:RegisterEvent("UNIT_CONNECTION")
+ufDriver:RegisterEvent("UNIT_PHASE")
 ufDriver:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
 ufDriver:RegisterEvent("UNIT_AURA")
 
@@ -1308,7 +1488,14 @@ local lastWatchDemoState = false
 ufDriver:SetScript("OnEvent", function(_, event, arg1)
   if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_REGEN_ENABLED" then
     SpArc:ApplyUnitFramesSettings()
-  elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" or event == "INSTANCE_ENCOUNTER_ENGAGE_UNIT" then
+  elseif event == "GROUP_ROSTER_UPDATE" then
+    if not (InCombatLockdown and InCombatLockdown()) then
+      SpArc:ApplyUnitFramesSettings()
+    else
+      SpArc:UpdateUnitFrames(GetTime())
+    end
+  elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" or event == "INSTANCE_ENCOUNTER_ENGAGE_UNIT"
+      or event == "PARTY_LEADER_CHANGED" or event == "PLAYER_ROLES_ASSIGNED" or event == "UNIT_CONNECTION" or event == "UNIT_PHASE" then
     SpArc:UpdateUnitFrames(GetTime())
   elseif event == "UNIT_AURA" and (arg1 == "target" or arg1 == "focus") then
     SpArc:UpdateUnitFrames(GetTime())
@@ -1442,8 +1629,9 @@ function SpArc:BuildUnitFramesPage(page, ui, helpers)
   AddUFCheck("CK_UF_FOCUS",     "ufShowFocus",         282, -94, 255)
   AddUFCheck("CK_UF_PET",       "ufShowPet",           548, -94, 255)
 
-  AddUFCheck("CK_UF_BOSS",      "ufShowBoss",          16,  -120, 255)
-  AddUFCheck("CK_UF_HIDE_BLIZZ","ufHideBlizzard",      282, -120, 510)
+  AddUFCheck("CK_UF_PARTY",     "ufShowParty",         16,  -120, 255)
+  AddUFCheck("CK_UF_BOSS",      "ufShowBoss",          282, -120, 255)
+  AddUFCheck("CK_UF_HIDE_BLIZZ","ufHideBlizzard",      548, -120, 255)
 
   -- Group 2: Geometry & Typography Sliders
   local grpGeo = RegisterGroupBox(page, "M12_GRP_GEO", 0, -242, 640, 186)

@@ -13,9 +13,9 @@
 ## X-Website: https://github.com/nakesreong/SpArc
 ## X-Github: github.com/nakesreong/SpArc
 ## X-Curse-Project-ID: 1756564
+Core.lua
 Presets.lua
 Parser.lua
-Core.lua
 Scanner.lua
 State.lua
 Evaluator.lua

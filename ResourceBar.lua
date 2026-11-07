@@ -159,7 +159,27 @@ local function SafeReadPowerMax(powerType, fallbackMax)
   return fallbackMax or 100
 end
 
+---------------------------------------------------------------------------------------
+--  UNIFIED CLASS RESOURCE DESCRIPTOR (2 Archetypes: "BAR" 0..100 vs "PIPS" 1..10)
+---------------------------------------------------------------------------------------
+local BAR_RESOURCE_BY_CLASS = {
+  WARRIOR     = { powerType = 1,  r = 0.85, g = 0.20, b = 0.20, ru = "Ярость",          en = "Rage" },
+  DRUID       = { powerType = 8,  r = 0.25, g = 0.58, b = 0.96, ru = "Астральная мощь", en = "Astral Power", threshold = 40 },
+  DEATHKNIGHT = { powerType = 6,  r = 0.15, g = 0.75, b = 0.95, ru = "Сила рун",        en = "Runic Power" },
+  DEMONHUNTER = { powerType = 17, r = 0.65, g = 0.20, b = 0.88, ru = "Гнев",            en = "Fury" },
+  HUNTER      = { powerType = 2,  r = 0.92, g = 0.52, b = 0.18, ru = "Концентрация",    en = "Focus" },
+  SHAMAN      = { powerType = 11, r = 0.18, g = 0.55, b = 0.96, ru = "Водоворот",       en = "Maelstrom" },
+}
+
+local PIP_RESOURCE_BY_CLASS = {
+  PALADIN = { powerType = 9,  max = 5, finisher = 3, r1 = 0.95, g1 = 0.75, b1 = 0.18, r2 = 1.00, g2 = 0.92, b2 = 0.35, ru = "Энергия Света", en = "Holy Power" },
+  WARLOCK = { powerType = 7,  max = 5, finisher = 3, r1 = 0.58, g1 = 0.32, b1 = 0.90, r2 = 0.82, g2 = 0.38, b2 = 1.00, ru = "Осколки души",  en = "Soul Shards" },
+  MONK    = { powerType = 12, max = 5, finisher = 3, r1 = 0.15, g1 = 0.85, b1 = 0.55, r2 = 0.35, g2 = 1.00, b2 = 0.72, ru = "Ци",            en = "Chi" },
+  EVOKER  = { powerType = 19, max = 5, finisher = 3, r1 = 0.22, g1 = 0.78, b1 = 0.62, r2 = 0.95, g2 = 0.80, b2 = 0.28, ru = "Сущность",      en = "Essence" },
+}
+
 local function ResolveResourceSpec(now)
+  now = now or _G.GetTime()
   local classTag = "PRIEST"
   if UnitClass then
     local ok, _, c = pcall(UnitClass, "player")
@@ -170,12 +190,12 @@ local function ResolveResourceSpec(now)
   local specID = SpArc.GetPlayerSpecID and SpArc:GetPlayerSpecID() or nil
   local isRU = SpArc.IsRU and SpArc:IsRU()
 
-  -- 1. ROGUE (All specs) or FERAL DRUID (103): Combo Points + Energy sub-bar
+  -- 1. PIPS: Rogue or Feral Druid (103) -> Combo Points + Energy sub-bar
   if classTag == "ROGUE" or (classTag == "DRUID" and specID == 103) then
     local maxCP = math.max(5, math.min(MAX_PIPS, SafeReadPowerMax(4, 5)))
     local curCP = SafeReadPower(4)
     if curCP == nil then
-      curCP = math.floor(((st.trackedInsanity or 0) + 5) / 20)
+      curCP = st.trackedComboPoints or math.floor(((st.trackedInsanity or 0) + 5) / 20)
     end
     if SpArc.testMode and curCP == 0 then
       curCP = (math.floor(now * 1.2) % maxCP) + 1
@@ -206,214 +226,7 @@ local function ResolveResourceSpec(now)
     }
   end
 
-  -- 2. PRIEST (Shadow 258 or default Priest with Devouring Plague): Insanity (Безумие)
-  if classTag == "PRIEST" then
-    local maxIns = SafeReadPowerMax(13, 100)
-    local curIns = SafeReadPower(13)
-    if curIns == nil then
-      curIns = st.trackedInsanity or 0
-    end
-    if SpArc.testMode and curIns == 0 then
-      curIns = math.floor((now * 22) % (maxIns + 1))
-    end
-    curIns = math.max(0, math.min(maxIns, curIns))
-    local readyPlague = (curIns >= 50)
-    return {
-      mode = "BAR",
-      cur = curIns,
-      max = maxIns,
-      threshold = 50,
-      r = readyPlague and 0.90 or 0.56,
-      g = readyPlague and 0.22 or 0.20,
-      b = readyPlague and 1.00 or 0.92,
-      glowBorder = readyPlague,
-      leftLabel = isRU and "Безумие" or "Insanity",
-      rightLabel = string.format("%d / %d", curIns, maxIns),
-    }
-  end
-
-  -- 3. MAGE: Arcane Charges (62) or Frost Freezing Stacks (64)
-  if classTag == "MAGE" then
-    if specID == 62 then
-      local maxAC = 4
-      local curAC = SafeReadPower(16) or 0
-      if SpArc.testMode and curAC == 0 then
-        curAC = (math.floor(now) % 5)
-      end
-      return {
-        mode = "PIPS",
-        cur = curAC,
-        max = maxAC,
-        finisherThreshold = 4,
-        r1 = 0.30, g1 = 0.62, b1 = 1.00,
-        r2 = 0.72, g2 = 0.38, b2 = 1.00,
-        leftLabel = isRU and "Чародейские заряды" or "Arcane Charges",
-        rightLabel = string.format("%d / %d", curAC, maxAC),
-      }
-    else
-      local curSt = st.targetDebuffStacks or 0
-      if SpArc.testMode and curSt == 0 then
-        curSt = (math.floor(now) % 5)
-      end
-      local dispPips = math.min(5, curSt)
-      return {
-        mode = "PIPS",
-        cur = dispPips,
-        max = 5,
-        finisherThreshold = 4,
-        r1 = 0.22, g1 = 0.68, b1 = 0.98,
-        r2 = 0.45, g2 = 0.92, b2 = 1.00,
-        leftLabel = isRU and "Обледенение" or "Freezing",
-        rightLabel = tostring(curSt),
-      }
-    end
-  end
-
-  -- 4. PALADIN: Holy Power (9)
-  if classTag == "PALADIN" then
-    local maxHP = math.max(5, math.min(MAX_PIPS, SafeReadPowerMax(9, 5)))
-    local curHP = SafeReadPower(9) or 0
-    if SpArc.testMode and curHP == 0 then curHP = (math.floor(now) % maxHP) + 1 end
-    return {
-      mode = "PIPS",
-      cur = curHP,
-      max = maxHP,
-      finisherThreshold = 3,
-      r1 = 0.95, g1 = 0.75, b1 = 0.18,
-      r2 = 1.00, g2 = 0.92, b2 = 0.35,
-      leftLabel = isRU and "Энергия Света" or "Holy Power",
-      rightLabel = string.format("%d / %d", curHP, maxHP),
-    }
-  end
-
-  -- 5. WARLOCK: Soul Shards (7)
-  if classTag == "WARLOCK" then
-    local maxSS = 5
-    local curSS = SafeReadPower(7) or 0
-    if SpArc.testMode and curSS == 0 then curSS = (math.floor(now) % 5) + 1 end
-    return {
-      mode = "PIPS",
-      cur = curSS,
-      max = maxSS,
-      finisherThreshold = 3,
-      r1 = 0.58, g1 = 0.32, b1 = 0.90,
-      r2 = 0.82, g2 = 0.38, b2 = 1.00,
-      leftLabel = isRU and "Осколки души" or "Soul Shards",
-      rightLabel = string.format("%d / %d", curSS, maxSS),
-    }
-  end
-
-  -- 6. MONK: Chi (12)
-  if classTag == "MONK" then
-    local maxChi = math.max(5, math.min(MAX_PIPS, SafeReadPowerMax(12, 5)))
-    local curChi = SafeReadPower(12) or 0
-    if SpArc.testMode and curChi == 0 then curChi = (math.floor(now) % maxChi) + 1 end
-    return {
-      mode = "PIPS",
-      cur = curChi,
-      max = maxChi,
-      finisherThreshold = 3,
-      r1 = 0.15, g1 = 0.85, b1 = 0.55,
-      r2 = 0.35, g2 = 1.00, b2 = 0.72,
-      leftLabel = isRU and "Ци" or "Chi",
-      rightLabel = string.format("%d / %d", curChi, maxChi),
-    }
-  end
-
-  -- 7. EVOKER: Essence (19)
-  if classTag == "EVOKER" then
-    local maxEss = math.max(5, math.min(MAX_PIPS, SafeReadPowerMax(19, 5)))
-    local curEss = SafeReadPower(19) or 0
-    if SpArc.testMode and curEss == 0 then curEss = (math.floor(now) % maxEss) + 1 end
-    return {
-      mode = "PIPS",
-      cur = curEss,
-      max = maxEss,
-      finisherThreshold = 3,
-      r1 = 0.22, g1 = 0.78, b1 = 0.62,
-      r2 = 0.95, g2 = 0.80, b2 = 0.28,
-      leftLabel = isRU and "Сущность" or "Essence",
-      rightLabel = string.format("%d / %d", curEss, maxEss),
-    }
-  end
-
-  -- 8. WARRIOR / GUARDIAN DRUID: Rage (1)
-  if classTag == "WARRIOR" or (classTag == "DRUID" and specID == 104) then
-    local maxRg = SafeReadPowerMax(1, 100)
-    local curRg = SafeReadPower(1) or 0
-    if SpArc.testMode and curRg == 0 then curRg = math.floor((now * 20) % 100) end
-    return {
-      mode = "BAR",
-      cur = curRg,
-      max = maxRg,
-      r = 0.85, g = 0.20, b = 0.20,
-      leftLabel = isRU and "Ярость" or "Rage",
-      rightLabel = string.format("%d / %d", curRg, maxRg),
-    }
-  end
-
-  -- 9. BALANCE DRUID: Astral Power (8)
-  if classTag == "DRUID" then
-    local maxAP = SafeReadPowerMax(8, 100)
-    local curAP = SafeReadPower(8) or 0
-    if SpArc.testMode and curAP == 0 then curAP = math.floor((now * 20) % 100) end
-    return {
-      mode = "BAR",
-      cur = curAP,
-      max = maxAP,
-      threshold = 40,
-      r = 0.25, g = 0.58, b = 0.96,
-      leftLabel = isRU and "Астральная мощь" or "Astral Power",
-      rightLabel = string.format("%d / %d", curAP, maxAP),
-    }
-  end
-
-  -- 10. DEATH KNIGHT: Runic Power (6)
-  if classTag == "DEATHKNIGHT" then
-    local maxRP = SafeReadPowerMax(6, 100)
-    local curRP = SafeReadPower(6) or 0
-    if SpArc.testMode and curRP == 0 then curRP = math.floor((now * 20) % 100) end
-    return {
-      mode = "BAR",
-      cur = curRP,
-      max = maxRP,
-      r = 0.15, g = 0.75, b = 0.95,
-      leftLabel = isRU and "Сила рун" or "Runic Power",
-      rightLabel = string.format("%d / %d", curRP, maxRP),
-    }
-  end
-
-  -- 11. DEMON HUNTER: Fury (17)
-  if classTag == "DEMONHUNTER" then
-    local maxF = SafeReadPowerMax(17, 100)
-    local curF = SafeReadPower(17) or 0
-    if SpArc.testMode and curF == 0 then curF = math.floor((now * 20) % 100) end
-    return {
-      mode = "BAR",
-      cur = curF,
-      max = maxF,
-      r = 0.65, g = 0.20, b = 0.88,
-      leftLabel = isRU and "Гнев" or "Fury",
-      rightLabel = string.format("%d / %d", curF, maxF),
-    }
-  end
-
-  -- 12. HUNTER: Focus (2)
-  if classTag == "HUNTER" then
-    local maxFc = SafeReadPowerMax(2, 100)
-    local curFc = SafeReadPower(2) or 0
-    if SpArc.testMode and curFc == 0 then curFc = math.floor((now * 20) % 100) end
-    return {
-      mode = "BAR",
-      cur = curFc,
-      max = maxFc,
-      r = 0.92, g = 0.52, b = 0.18,
-      leftLabel = isRU and "Концентрация" or "Focus",
-      rightLabel = string.format("%d / %d", curFc, maxFc),
-    }
-  end
-
-  -- 13. SHAMAN: Enhancement Maelstrom Weapon Pips (263) or Elemental Maelstrom Bar (11)
+  -- 2. PIPS: Enhancement Shaman (263) -> Maelstrom Weapon (1..10 stacks)
   if specID == 263 then
     local curMW = nil
     local auraPresent = nil
@@ -456,17 +269,96 @@ local function ResolveResourceSpec(now)
     }
   end
 
-  local maxM = SafeReadPowerMax(11, 100)
-  local curM = SafeReadPower(11) or 0
-  if SpArc.testMode and curM == 0 then curM = math.floor((now * 20) % 100) end
+  -- 3. PIPS: Mage -> Arcane Charges (62) or Frost Freezing Stacks (64)
+  if classTag == "MAGE" then
+    if specID == 62 then
+      local maxAC = 4
+      local curAC = SafeReadPower(16) or 0
+      if SpArc.testMode and curAC == 0 then curAC = (math.floor(now) % 5) end
+      return {
+        mode = "PIPS",
+        cur = curAC,
+        max = maxAC,
+        finisherThreshold = 4,
+        r1 = 0.30, g1 = 0.62, b1 = 1.00,
+        r2 = 0.72, g2 = 0.38, b2 = 1.00,
+        leftLabel = isRU and "Чародейские заряды" or "Arcane Charges",
+        rightLabel = string.format("%d / %d", curAC, maxAC),
+      }
+    else
+      local curSt = st.targetDebuffStacks or 0
+      if SpArc.testMode and curSt == 0 then curSt = (math.floor(now) % 5) end
+      return {
+        mode = "PIPS",
+        cur = math.min(5, curSt),
+        max = 5,
+        finisherThreshold = 4,
+        r1 = 0.22, g1 = 0.68, b1 = 0.98,
+        r2 = 0.45, g2 = 0.92, b2 = 1.00,
+        leftLabel = isRU and "Обледенение" or "Freezing",
+        rightLabel = tostring(curSt),
+      }
+    end
+  end
+
+  -- 4. PIPS: Standard Discrete Power Classes (Paladin, Warlock, Monk, Evoker)
+  local pipCfg = PIP_RESOURCE_BY_CLASS[classTag]
+  if pipCfg then
+    local maxP = math.max(pipCfg.max, math.min(MAX_PIPS, SafeReadPowerMax(pipCfg.powerType, pipCfg.max)))
+    local curP = SafeReadPower(pipCfg.powerType) or 0
+    if SpArc.testMode and curP == 0 then curP = (math.floor(now) % maxP) + 1 end
+    return {
+      mode = "PIPS",
+      cur = curP,
+      max = maxP,
+      finisherThreshold = pipCfg.finisher,
+      r1 = pipCfg.r1, g1 = pipCfg.g1, b1 = pipCfg.b1,
+      r2 = pipCfg.r2, g2 = pipCfg.g2, b2 = pipCfg.b2,
+      leftLabel = isRU and pipCfg.ru or pipCfg.en,
+      rightLabel = string.format("%d / %d", curP, maxP),
+    }
+  end
+
+  -- 5. BAR (0..100): Shadow Priest Insanity (with 50+ Devouring Plague glow)
+  if classTag == "PRIEST" then
+    local maxIns = SafeReadPowerMax(13, 100)
+    local curIns = SafeReadPower(13)
+    if curIns == nil then curIns = st.trackedInsanity or 0 end
+    if SpArc.testMode and curIns == 0 then curIns = math.floor((now * 22) % (maxIns + 1)) end
+    curIns = math.max(0, math.min(maxIns, curIns))
+    local readyPlague = (curIns >= 50)
+    return {
+      mode = "BAR",
+      cur = curIns,
+      max = maxIns,
+      threshold = 50,
+      r = readyPlague and 0.90 or 0.56,
+      g = readyPlague and 0.22 or 0.20,
+      b = readyPlague and 1.00 or 0.92,
+      glowBorder = readyPlague,
+      leftLabel = isRU and "Безумие" or "Insanity",
+      rightLabel = string.format("%d / %d", curIns, maxIns),
+    }
+  end
+
+  -- 6. BAR (0..100): Standard Continuous Scale Classes (Warrior, Guardian/Balance Druid, DK, DH, Hunter, Ele Shaman)
+  local barCfg = (classTag == "DRUID" and specID == 104) and BAR_RESOURCE_BY_CLASS.WARRIOR or BAR_RESOURCE_BY_CLASS[classTag] or BAR_RESOURCE_BY_CLASS.SHAMAN
+  local maxB = SafeReadPowerMax(barCfg.powerType, 100)
+  local curB = SafeReadPower(barCfg.powerType) or 0
+  if SpArc.testMode and curB == 0 then curB = math.floor((now * 20) % 100) end
   return {
     mode = "BAR",
-    cur = curM,
-    max = maxM,
-    r = 0.18, g = 0.55, b = 0.96,
-    leftLabel = isRU and "Водоворот" or "Maelstrom",
-    rightLabel = string.format("%d / %d", curM, maxM),
+    cur = curB,
+    max = maxB,
+    threshold = barCfg.threshold,
+    r = barCfg.r, g = barCfg.g, b = barCfg.b,
+    leftLabel = isRU and barCfg.ru or barCfg.en,
+    rightLabel = string.format("%d / %d", curB, maxB),
   }
+end
+
+function SpArc:GetClassResourceState(now)
+  return ResolveResourceSpec(now)
 end
 
 function SpArc:ApplyResourceBarLayout()

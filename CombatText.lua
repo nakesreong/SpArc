@@ -19,34 +19,9 @@
 local _G = _G
 local SpArc = _G.SpArc
 
--- @techdebt [AUDIT-CT1]: Local duplicates of SpArc.IsSecret / CVar helpers; consolidate in Phase 1
-local issecretvalue = _G.issecretvalue or function() return false end
-local function IsSecret(v)
-  return issecretvalue(v)
-end
-
-local function SafeGetCVar(cvar)
-  if C_CVar and C_CVar.GetCVar then
-    local ok, v = pcall(C_CVar.GetCVar, cvar)
-    if ok then return v end
-  elseif _G.GetCVar then
-    local ok, v = pcall(_G.GetCVar, cvar)
-    if ok then return v end
-  end
-  return nil
-end
-
-local function SafeSetCVar(cvar, val)
-  local sVal = tostring(val)
-  if SafeGetCVar(cvar) == sVal then
-    return
-  end
-  if C_CVar and C_CVar.SetCVar then
-    pcall(C_CVar.SetCVar, cvar, sVal)
-  elseif _G.SetCVar then
-    pcall(_G.SetCVar, cvar, sVal)
-  end
-end
+local IsSecret = SpArc.IsSecret
+local SafeGetCVar = SpArc.SafeGetCVar
+local SafeSetCVar = SpArc.SafeSetCVar
 
 function SpArc:IsCombatTextEnabled()
   local db = SpArc:EnsureDB()

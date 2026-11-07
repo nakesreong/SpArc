@@ -63,8 +63,68 @@ function SpArc.SafeBool(fn, ...)
 end
 
 function SpArc.Trim(s)
-  if not s then return "" end
+  if not s or SpArc.IsSecret(s) or type(s) ~= "string" then return "" end
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+function SpArc.SafeGetCVar(cvar)
+  if C_CVar and C_CVar.GetCVar then
+    local ok, v = pcall(C_CVar.GetCVar, cvar)
+    if ok and not SpArc.IsSecret(v) then return v end
+  elseif _G.GetCVar then
+    local ok, v = pcall(_G.GetCVar, cvar)
+    if ok and not SpArc.IsSecret(v) then return v end
+  end
+  return nil
+end
+
+function SpArc.SafeSetCVar(cvar, val)
+  local sVal = tostring(val)
+  if SpArc.SafeGetCVar(cvar) == sVal then
+    return
+  end
+  if C_CVar and C_CVar.SetCVar then
+    pcall(C_CVar.SetCVar, cvar, sVal)
+  elseif _G.SetCVar then
+    pcall(_G.SetCVar, cvar, sVal)
+  end
+end
+
+SpArc.FLAT_TEX = "Interface\\Buttons\\WHITE8x8"
+SpArc.CLASS_ICONS_TEX = "Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES"
+
+SpArc.METRO_COLORS = {
+  HOSTILE_RED    = { r = 0.85, g = 0.15, b = 0.15 },
+  NEUTRAL_YELLOW = { r = 0.92, g = 0.78, b = 0.16 },
+  FRIENDLY_GREEN = { r = 0.18, g = 0.80, b = 0.32 },
+  DK_CHERRY      = { r = 0.48, g = 0.06, b = 0.18 },
+  TAPPED_GREY    = { r = 0.50, g = 0.50, b = 0.54 },
+  OBSIDIAN_DARK  = { r = 0.14, g = 0.15, b = 0.20 },
+  CAST_GOLD      = { r = 1.00, g = 0.80, b = 0.15 },
+  CAST_GREY      = { r = 0.45, g = 0.47, b = 0.50 },
+}
+
+function SpArc.SetBackdropFlat(frame, bgR, bgG, bgB, bgA, brR, brG, brB, brA)
+  if not frame or not frame.SetBackdrop then return end
+  frame:SetBackdrop({
+    bgFile = SpArc.FLAT_TEX,
+    edgeFile = SpArc.FLAT_TEX,
+    edgeSize = 1,
+  })
+  frame:SetBackdropColor(bgR or 0.06, bgG or 0.06, bgB or 0.08, bgA or 0.95)
+  frame:SetBackdropBorderColor(brR or 0.20, brG or 0.20, brB or 0.26, brA or 1.0)
+end
+
+function SpArc.CreateFlatBorder(parent, thickness, r, g, b, a, levelOffset)
+  local f = _G.CreateFrame("Frame", nil, parent, "BackdropTemplate")
+  f:SetAllPoints(parent)
+  f:SetFrameLevel(parent:GetFrameLevel() + (levelOffset or 2))
+  f:SetBackdrop({
+    edgeFile = SpArc.FLAT_TEX,
+    edgeSize = thickness or 1,
+  })
+  f:SetBackdropBorderColor(r or 0.04, g or 0.04, b or 0.06, a or 1.0)
+  return f
 end
 
 local CYR_UPPER_TO_LOWER = {
@@ -489,18 +549,54 @@ function SpArc:GetGameInteractKey()
 end
 
 ---------------------------------------------------------------------------------------
---  @function InferProfileDefaultPresetID
---  @techdebt [AUDIT-C2] Hardcoded character name substring matching & Priest fallback.
---            Scheduled for replacement in Refactoring Phase 2 with dynamic class/spec resolution.
+--  @function SpArc:GetPlayerDefaultPresetID
+--  @description Dynamically resolves the best default built-in `.MD` preset for the
+--               current player's Specialization and Class without hardcoded names.
 ---------------------------------------------------------------------------------------
+local DEFAULT_PRESET_BY_SPEC_ID = {
+  [102] = "DRUID_02_BALANCE_PVE",
+  [103] = "DRUID_01_FERAL_PVE",
+  [258] = "PRIEST_01_SHADOW_PVE",
+  [259] = "ROGUE_01_ASSA_PVE",
+  [263] = "SHAMAN_01_ENH_PVE",
+  [64]  = "MAGE_04_FROST_PVE",
+  [71]  = "WARRIOR_02_ARGS_BOSS",
+}
+
+local DEFAULT_PRESET_BY_CLASS = {
+  PRIEST  = "PRIEST_01_SHADOW_PVE",
+  DRUID   = "DRUID_02_BALANCE_PVE",
+  ROGUE   = "ROGUE_01_ASSA_PVE",
+  SHAMAN  = "SHAMAN_01_ENH_PVE",
+  MAGE    = "MAGE_04_FROST_PVE",
+  WARRIOR = "WARRIOR_02_ARGS_BOSS",
+}
+
+function SpArc:GetPlayerDefaultPresetID()
+  if _G.GetSpecialization and _G.GetSpecializationInfo then
+    local okS, specIdx = pcall(_G.GetSpecialization)
+    if okS and not SpArc.IsSecret(specIdx) and type(specIdx) == "number" and specIdx > 0 then
+      local okI, specID = pcall(_G.GetSpecializationInfo, specIdx)
+      if okI and not SpArc.IsSecret(specID) and DEFAULT_PRESET_BY_SPEC_ID[specID] then
+        return DEFAULT_PRESET_BY_SPEC_ID[specID]
+      end
+    end
+  end
+  if _G.UnitClass then
+    local okC, _, classTag = pcall(_G.UnitClass, "player")
+    if okC and not SpArc.IsSecret(classTag) and DEFAULT_PRESET_BY_CLASS[classTag] then
+      return DEFAULT_PRESET_BY_CLASS[classTag]
+    end
+  end
+  return "PRIEST_01_SHADOW_PVE"
+end
+
 local function InferProfileDefaultPresetID(profName, profObj)
   if type(profObj) == "table" and type(profObj.activePresetID) == "string" and profObj.activePresetID ~= "" then
     return profObj.activePresetID
   end
   if type(profName) == "string" then
-    if profName:find("Ньарлатхотеп", 1, true) or profName:find("Ньярлатхотеп", 1, true) then
-      return "PRIEST_01_SHADOW_PVE"
-    elseif profName:find("Котастрофа", 1, true) or profName:find("Трипобраз", 1, true) then
+    if profName:find("Котастрофа", 1, true) or profName:find("Трипобраз", 1, true) then
       return "DRUID_02_BALANCE_PVE"
     elseif profName:find("Улак", 1, true) then
       return "ROGUE_01_ASSA_PVE"
@@ -512,7 +608,7 @@ local function InferProfileDefaultPresetID(profName, profObj)
       return "SHAMAN_01_ENH_PVE"
     end
   end
-  return "PRIEST_01_SHADOW_PVE"
+  return SpArc:GetPlayerDefaultPresetID()
 end
 
 function SpArc:GetMDAuraRulesForPreset(presetID, db)
@@ -716,18 +812,9 @@ function SpArc:EnsureDB(forceReinit)
       end
     end
 
-    local charDefaultPreset = {
-      ["Ньарлатхотеп - Свежеватель Душ"] = "PRIEST_01_SHADOW_PVE",
-      ["Калиратри - Свежеватель Душ"]    = "MAGE_04_FROST_PVE",
-      ["Морвара - Свежеватель Душ"]      = "MAGE_04_FROST_PVE",
-      ["Улак - Свежеватель Душ"]         = "ROGUE_01_ASSA_PVE",
-      ["Моржовый - Свежеватель Душ"]     = "WARRIOR_02_ARGS_BOSS",
-      ["Ниоч - Свежеватель Душ"]         = "SHAMAN_01_ENH_PVE",
-      ["Ниоч - Пиратская Бухта"]         = "SHAMAN_01_ENH_PVE",
-    }
     for pName, pObj in pairs(db.profiles or {}) do
       if not pObj.activePresetID or not db.presets[pObj.activePresetID] then
-        local wantID = charDefaultPreset[pName] or "PRIEST_01_SHADOW_PVE"
+        local wantID = InferProfileDefaultPresetID(pName, pObj)
         pObj.activePresetID = wantID
         pObj.autoPresets = { PVE = wantID, BOSS = wantID, PVP = wantID }
       end
@@ -1222,6 +1309,8 @@ function SpArc:RunDebugSelfTest(printToChat)
   check("Core", type(db) == "table" and type(db.visual) == "table", "DB_VISUAL", "db.visual table must exist")
   check("Core", type(db.presets) == "table" and type(db.presetOrder) == "table" and #db.presetOrder > 0, "DB_PRESETS", "db.presets and presetOrder must be non-empty")
   check("Core", type(SpArc.SPELL_DEFS) == "table", "SPELL_DEFS_TABLE", "SpArc.SPELL_DEFS table must exist")
+  check("Core", type(SpArc.SetBackdropFlat) == "function" and type(SpArc.CreateFlatBorder) == "function" and type(SpArc.METRO_COLORS) == "table", "CORE_UI_PRIMITIVES", "Shared Metro UI primitives (SetBackdropFlat, CreateFlatBorder, METRO_COLORS) must exist")
+  check("Core", type(SpArc.GetPlayerDefaultPresetID) == "function" and type(SpArc:GetPlayerDefaultPresetID()) == "string", "CORE_DEFAULT_PRESET", "GetPlayerDefaultPresetID must return a valid preset ID string")
 
   -- 2. Parser & Active Profile contract
   check("Parser", type(SpArc.ParseMarkdownFSM) == "function", "FN_PARSE", "SpArc:ParseMarkdownFSM must be registered")
@@ -1249,6 +1338,7 @@ function SpArc:RunDebugSelfTest(printToChat)
 
   -- 7. ResourceBar contract
   check("ResourceBar", type(SpArc.UpdateResourceBar) == "function" and SpArc.resourceFrame ~= nil, "RES_FRAME", "SpArc.resourceFrame and UpdateResourceBar must exist")
+  check("ResourceBar", type(SpArc.GetClassResourceState) == "function", "RES_STATE_API", "Unified SpArc:GetClassResourceState() API must exist")
 
   -- 8. Camera contract
   check("Camera", type(SpArc.UpdateCameraState) == "function" and _G.SpArcCamHoldButton ~= nil and _G.SpArcCamInteractButton ~= nil, "CAM_BUTTONS", "Secure camera buttons and UpdateCameraState must exist")

@@ -101,11 +101,7 @@ local SPEC_PREFIX_BY_ID = {
   [1473] = "ae", -- Augmentation Evoker
 }
 
--- @techdebt [AUDIT-MG1]: Duplicate of SpArc.Trim; consolidate into Core.lua in Phase 1
-local function TrimStr(s)
-  if not s or IsSecret(s) or type(s) ~= "string" then return "" end
-  return (s:gsub("^%s+", ""):gsub("%s+$", ""))
-end
+local TrimStr = SpArc.Trim
 
 function SpArc:GetMacroNamingPrefixes()
   local classLoc, classFile = "Class", "WARRIOR"

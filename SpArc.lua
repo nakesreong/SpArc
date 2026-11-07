@@ -40,7 +40,7 @@ local IsSecret = SpArc.IsSecret
 local DEFAULT_VISUAL = SpArc.DEFAULT_VISUAL
 
 local controlFrame
-local selectedPresetForEdit = "PRIEST_01_SHADOW_PVE"
+local selectedPresetForEdit = (SpArc.GetPlayerDefaultPresetID and SpArc:GetPlayerDefaultPresetID()) or "PRIEST_01_SHADOW_PVE"
 local filterClassOnly = true
 local showingAIPrompt = false
 local editorHasUnsavedChanges = false
@@ -61,16 +61,7 @@ end
 ---------------------------------------------------------------------------------------
 --  ELVUI-STYLE UI COMPONENT BUILDERS
 ---------------------------------------------------------------------------------------
-local function SetBackdropFlat(frame, bgR, bgG, bgB, bgA, brR, brG, brB, brA)
-  if not frame.SetBackdrop then return end
-  frame:SetBackdrop({
-    bgFile = "Interface\\Buttons\\WHITE8x8",
-    edgeFile = "Interface\\Buttons\\WHITE8x8",
-    edgeSize = 1,
-  })
-  frame:SetBackdropColor(bgR or 0.06, bgG or 0.06, bgB or 0.08, bgA or 0.95)
-  frame:SetBackdropBorderColor(brR or 0.20, brG or 0.20, brB or 0.26, brA or 1.0)
-end
+local SetBackdropFlat = SpArc.SetBackdropFlat
 
 local function CreateElvButton(parent, width, height, text)
   local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")

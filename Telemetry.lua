@@ -130,15 +130,18 @@ local function GetActiveAuditOrder(parsed)
 end
 
 local function GetPrimaryResourceString(isRU)
+  if SpArc.GetClassResourceState then
+    local okR, resInfo = pcall(SpArc.GetClassResourceState, SpArc)
+    if okR and type(resInfo) == "table" and resInfo.leftLabel and resInfo.rightLabel then
+      return string.format("%s(%s [%s])", resInfo.leftLabel, resInfo.rightLabel, resInfo.mode or "BAR")
+    end
+  end
   local pType = 13
   if UnitPowerType then
     local okT, pt = pcall(UnitPowerType, "player")
     if okT and not IsSecret(pt) and type(pt) == "number" then
       pType = pt
     end
-  end
-  if SPELL_DEFS["DEVOURING_PLAGUE"] and SPELL_DEFS["MIND_FLAY"] then
-    pType = 13
   end
   local label = (isRU and POWER_LABELS_RU[pType] or POWER_LABELS_EN[pType]) or (isRU and "Ресурс" or "Power")
   local rawStr = "n/a"
@@ -147,9 +150,6 @@ local function GetPrimaryResourceString(isRU)
     if okP then
       rawStr = IsSecret(p) and "SECRET" or tostring(p)
     end
-  end
-  if pType == 13 then
-    return string.format("%s(книга=%s, трек=%d)", label, rawStr, st.trackedInsanity or 0)
   end
   return string.format("%s(%s)", label, rawStr)
 end

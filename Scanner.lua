@@ -226,7 +226,10 @@ function SpArc:GetSlotKeybind(slot)
     end
   end
 
-  -- @techdebt [AUDIT-SC1]: Priest-only fallback to SLOT_DEFAULT_KEYBIND; generalize in Phase 2
+  -- When Mouselook Click-Casting is active (or on Priest), slots 1..8 map to M1..AM2
+  if SpArc.IsCombatCameraEnabled and SpArc:IsCombatCameraEnabled() and SpArc.IsCamClickCastEnabled and SpArc:IsCamClickCastEnabled() then
+    return SLOT_DEFAULT_KEYBIND[slot]
+  end
   if _G.UnitClass then
     local okC, _, cls = pcall(_G.UnitClass, "player")
     if okC and not IsSecret(cls) and cls == "PRIEST" then

@@ -67,17 +67,18 @@ local IsSecret = SpArc.IsSecret
 local SafeBool = SpArc.SafeBool
 local DEFAULT_VISUAL = SpArc.DEFAULT_VISUAL
 
-local FLAT_TEX = "Interface\\Buttons\\WHITE8x8"
+local FLAT_TEX = SpArc.FLAT_TEX
 local PORTRAIT_MASK_TEX = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
-local CLASS_ICONS_TEX = "Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES"
+local CLASS_ICONS_TEX = SpArc.CLASS_ICONS_TEX
 
--- Reaction & Power Colors
-local COLOR_HOSTILE_RED    = { r = 0.85, g = 0.18, b = 0.16 }
-local COLOR_NEUTRAL_YELLOW = { r = 0.92, g = 0.78, b = 0.16 }
-local COLOR_FRIENDLY_GREEN = { r = 0.18, g = 0.80, b = 0.32 }
-local COLOR_OBSIDIAN_DARK  = { r = 0.14, g = 0.15, b = 0.20 }
-local COLOR_CAST_GOLD      = { r = 1.00, g = 0.80, b = 0.15 }
-local COLOR_CAST_GREY      = { r = 0.45, g = 0.47, b = 0.50 }
+-- Shared Metro Reaction & Cast Colors (from Core.lua)
+local METRO_COLORS = SpArc.METRO_COLORS
+local COLOR_HOSTILE_RED    = METRO_COLORS.HOSTILE_RED
+local COLOR_NEUTRAL_YELLOW = METRO_COLORS.NEUTRAL_YELLOW
+local COLOR_FRIENDLY_GREEN = METRO_COLORS.FRIENDLY_GREEN
+local COLOR_OBSIDIAN_DARK  = METRO_COLORS.OBSIDIAN_DARK
+local COLOR_CAST_GOLD      = METRO_COLORS.CAST_GOLD
+local COLOR_CAST_GREY      = METRO_COLORS.CAST_GREY
 
 local POWER_COLORS = {
   [0]  = { r = 0.12, g = 0.52, b = 0.98 }, -- Mana
@@ -206,17 +207,7 @@ local function FormatAbbrevHP(val)
   return tostring(math.floor(val + 0.5))
 end
 
-local function CreateFlatBorder(parent, thickness, r, g, b, a, levelOffset)
-  local f = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-  f:SetAllPoints(parent)
-  f:SetFrameLevel(parent:GetFrameLevel() + (levelOffset or 2))
-  f:SetBackdrop({
-    edgeFile = FLAT_TEX,
-    edgeSize = thickness or 1,
-  })
-  f:SetBackdropBorderColor(r or 0.04, g or 0.04, b or 0.06, a or 1.0)
-  return f
-end
+local CreateFlatBorder = SpArc.CreateFlatBorder
 
 ---------------------------------------------------------------------------------------
 --  1. BLIZZARD DEFAULT UNITFRAMES SUPPRESSION (SAFE OUT OF COMBAT)

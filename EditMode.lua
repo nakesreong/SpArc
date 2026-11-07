@@ -45,16 +45,7 @@ local function RoundCoord(v)
   return math.floor((tonumber(v) or 0) + 0.5)
 end
 
-local function SetMoverBackdrop(frame, bgR, bgG, bgB, bgA, brR, brG, brB, brA)
-  if not frame or not frame.SetBackdrop then return end
-  frame:SetBackdrop({
-    bgFile = "Interface\\Buttons\\WHITE8x8",
-    edgeFile = "Interface\\Buttons\\WHITE8x8",
-    edgeSize = 1,
-  })
-  frame:SetBackdropColor(bgR, bgG, bgB, bgA)
-  frame:SetBackdropBorderColor(brR, brG, brB, brA)
-end
+local SetMoverBackdrop = SpArc.SetBackdropFlat
 
 local function ApplyMoverVisualState(mover)
   if not mover then return end

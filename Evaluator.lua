@@ -44,6 +44,24 @@ local pairs = _G.pairs
 local type = _G.type
 local math = _G.math
 
+-- Shared Maelstrom Weapon builder/spender lookup tables (used by both lookahead simulation & live cast recording)
+local MW_SPENDER_KEYS = {
+  LIGHTNING_BOLT  = true,
+  CHAIN_LIGHTNING = true,
+  TEMPEST         = true,
+  ELEMENTAL_BLAST = true,
+}
+
+local MW_BUILDER_KEYS = {
+  STORMSTRIKE     = true,
+  WINDSTRIKE      = true,
+  LAVA_LASH       = true,
+  CRASH_LIGHTNING = true,
+  VOLTAIC_BLAZE   = true,
+  SUNDERING       = true,
+  ICE_STRIKE      = true,
+}
+
 local IsSecret = SpArc.IsSecret
 local SafeBool = SpArc.SafeBool
 local SPELL_DEFS = SpArc.SPELL_DEFS
@@ -1188,12 +1206,12 @@ function SpArc:BuildRotationQueue(maxSlots)
               end
             end
           end
-          if not consumedRuleStacks and (pickedKey == "LIGHTNING_BOLT" or pickedKey == "CHAIN_LIGHTNING" or pickedKey == "TEMPEST" or pickedKey == "ELEMENTAL_BLAST") then
+          if not consumedRuleStacks and MW_SPENDER_KEYS[pickedKey] then
             local curMW = simAuraStacks.player["MAELSTROM_WEAPON"] or 0
             if curMW > 0 then
               SetSimAuraState("player", "MAELSTROM_WEAPON", math.max(0, curMW - 10))
             end
-          elseif auraMap["MAELSTROM_WEAPON"] and (pickedKey == "STORMSTRIKE" or pickedKey == "WINDSTRIKE" or pickedKey == "LAVA_LASH" or pickedKey == "CRASH_LIGHTNING" or pickedKey == "VOLTAIC_BLAZE" or pickedKey == "SUNDERING" or pickedKey == "ICE_STRIKE") then
+          elseif auraMap["MAELSTROM_WEAPON"] and MW_BUILDER_KEYS[pickedKey] then
             local curMW = simAuraStacks.player["MAELSTROM_WEAPON"] or 0
             SetSimAuraState("player", "MAELSTROM_WEAPON", math.min(10, curMW + 2), 30.0)
           end
@@ -1389,7 +1407,7 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
     end
     uMap[tKey] = { untilTime = newUntil, stacks = newSt }
   end
-  if defKey == "LIGHTNING_BOLT" or defKey == "CHAIN_LIGHTNING" or defKey == "TEMPEST" or defKey == "ELEMENTAL_BLAST" then
+  if MW_SPENDER_KEYS[defKey] then
     local curMW = math.max(0, (st.maelstromWeaponStacks or 0) - 10)
     st.maelstromWeaponStacks = curMW
     if st.unitAuras and st.unitAuras.player then
@@ -1397,7 +1415,7 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
       st.unitAuras.player[344179] = st.unitAuras.player["MAELSTROM_WEAPON"]
       st.unitAuras.player["344179"] = st.unitAuras.player["MAELSTROM_WEAPON"]
     end
-  elseif defKey == "STORMSTRIKE" or defKey == "WINDSTRIKE" or defKey == "LAVA_LASH" or defKey == "CRASH_LIGHTNING" or defKey == "VOLTAIC_BLAZE" or defKey == "SUNDERING" or defKey == "ICE_STRIKE" then
+  elseif MW_BUILDER_KEYS[defKey] then
     local curMW = math.min(10, (st.maelstromWeaponStacks or 0) + 2)
     st.maelstromWeaponStacks = curMW
     if st.unitAuras and st.unitAuras.player then

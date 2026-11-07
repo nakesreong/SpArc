@@ -73,16 +73,16 @@ local ApplyCyrFont = SpArc.ApplyCyrFont
 local IsSecret = SpArc.IsSecret
 local SafeBool = SpArc.SafeBool
 local st = SpArc.state
-local FLAT_TEX = "Interface\\Buttons\\WHITE8x8"
-local CLASS_ICONS_TEX = "Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES"
--- Base Metro Colors (Reaction Triad: Aggressive = Red, Neutral = Yellow, Friendly = Green)
-local COLOR_HOSTILE_RED    = { r = 0.85, g = 0.15, b = 0.15 } -- #D92626 Aggressive / In-Combat Red
-local COLOR_NEUTRAL_YELLOW = { r = 0.92, g = 0.78, b = 0.16 } -- #EBC729 Peaceful Neutral Yellow
-local COLOR_FRIENDLY_GREEN = { r = 0.18, g = 0.80, b = 0.32 } -- #2ECC52 Friendly Emerald Green
-local COLOR_DK_CHERRY      = { r = 0.48, g = 0.06, b = 0.18 } -- #7A0F2E Deep Dark Cherry
-local COLOR_TAPPED_GREY    = { r = 0.50, g = 0.50, b = 0.54 }
-local COLOR_CAST_GOLD      = { r = 1.00, g = 0.80, b = 0.15 } -- #FFCC26 Interruptible Gold
-local COLOR_CAST_GREY      = { r = 0.45, g = 0.47, b = 0.50 } -- #737780 Uninterruptible Grey
+local FLAT_TEX = SpArc.FLAT_TEX
+local CLASS_ICONS_TEX = SpArc.CLASS_ICONS_TEX
+local METRO_COLORS = SpArc.METRO_COLORS
+local COLOR_HOSTILE_RED    = METRO_COLORS.HOSTILE_RED
+local COLOR_NEUTRAL_YELLOW = METRO_COLORS.NEUTRAL_YELLOW
+local COLOR_FRIENDLY_GREEN = METRO_COLORS.FRIENDLY_GREEN
+local COLOR_DK_CHERRY      = METRO_COLORS.DK_CHERRY
+local COLOR_TAPPED_GREY    = METRO_COLORS.TAPPED_GREY
+local COLOR_CAST_GOLD      = METRO_COLORS.CAST_GOLD
+local COLOR_CAST_GREY      = METRO_COLORS.CAST_GREY
 -- Known Cast Spell ID <-> Debuff Aura ID aliases (so either Wowhead ID works seamlessly)
 local SPELL_AURA_ALIASES = {
   [8921]    = { 164812 },         -- Moonfire (cast) -> Moonfire (debuff)
@@ -975,17 +975,7 @@ end
 ---------------------------------------------------------------------------------------
 --  5. METRO TILE FRAME FACTORY & UPDATER
 ---------------------------------------------------------------------------------------
-local function CreateBorderFrame(parent, thickness, r, g, b, a, levelOffset)
-  local f = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-  f:SetAllPoints(parent)
-  f:SetFrameLevel(parent:GetFrameLevel() + (levelOffset or 2))
-  f:SetBackdrop({
-    edgeFile = FLAT_TEX,
-    edgeSize = thickness or 1,
-  })
-  f:SetBackdropBorderColor(r or 0.05, g or 0.05, b or 0.08, a or 1.0)
-  return f
-end
+local CreateBorderFrame = SpArc.CreateFlatBorder
 local function CreateMetroPlate(plate, isDemo)
   if plate.sparcMetro then
     return plate.sparcMetro

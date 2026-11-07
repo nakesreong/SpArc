@@ -24,11 +24,7 @@ local tonumber = _G.tonumber
 local ipairs = _G.ipairs
 local pairs = _G.pairs
 
--- @techdebt [AUDIT-P2]: Duplicate of SpArc.Trim (needed because Parser.lua loads before Core.lua in .toc)
-local function Trim(s)
-  if not s then return "" end
-  return (s:gsub("^%s+", ""):gsub("%s+$", ""))
-end
+local Trim = SpArc.Trim
 
 local function ParseCSVTokens(str)
   local list = {}

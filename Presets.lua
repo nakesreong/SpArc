@@ -111,6 +111,7 @@ local STRINGS = {
     CK_CAM_CLICKCAST = "Bind LMB/RMB (+Shift/Ctrl/Alt) to Action Slots 1..8 while camera is locked",
     CK_AUTO_UNSHIFT = "Remove forms, Shaman shields & weapon imbues out of combat on Interact (E) (protects Druid Flight Form)",
     CK_KEEP_FORMS_INSTANCES = "Do not remove forms/shields/imbues in Dungeons, Raids, BGs, Arenas & Delves",
+    CK_SMART_TAB_PRIO = "Smart Priority Tab: Bosses > Elites > Enemy Players (ignores player pets & totems)",
 
     M7_TITLE = "Live SpellBook & Rotation Telemetry",
 
@@ -425,6 +426,7 @@ local STRINGS = {
     CK_CAM_CLICKCAST = "Перехватывать ЛКМ/ПКМ (+Shift/Ctrl/Alt) под способности 1..8 при зажатой камере",
     CK_AUTO_UNSHIFT = "Снимать облик, щиты и чары оружия шамана вне боя по клавише (E) (кроме полётной формы друида)",
     CK_KEEP_FORMS_INSTANCES = "Не снимать облик, щиты и чары в инстах, рейдах, БГ, аренах и вылазках",
+    CK_SMART_TAB_PRIO = "Умный приоритет Tab: Боссы > Элитки > Игроки (игнорировать петов игроков и тотемы)",
 
     M7_TITLE = "Телеметрия книги заклинаний и отладка ротации",
 

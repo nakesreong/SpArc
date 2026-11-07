@@ -626,33 +626,45 @@ end
 ---------------------------------------------------------------------------------------
 local questTipNextScanByUnit = {}
 
+local function IsTooltipObjectiveLineCompleted(ln)
+  if type(ln) ~= "table" then return false end
+  if not IsSecret(ln.completed) and ln.completed == true then
+    return true
+  end
+  local txt = (not IsSecret(ln.leftText) and type(ln.leftText) == "string" and ln.leftText) or nil
+  if txt then
+    local cur, max = txt:match("(%d+)%s*/%s*(%d+)")
+    if cur and max then
+      local nCur, nMax = tonumber(cur), tonumber(max)
+      if nCur and nMax and nMax > 0 and nCur >= nMax then
+        return true
+      end
+    end
+    local pct = txt:match("(%d+)%%")
+    if pct and tonumber(pct) and tonumber(pct) >= 100 then
+      return true
+    end
+  end
+  return false
+end
+
 local function IsUnitQuestRelated(unit, guid, plate)
   if not unit or SafeBool(UnitIsPlayer, unit) then
     return false
-  end
-  if C_QuestLog and C_QuestLog.UnitIsRelatedToActiveQuest then
-    local okQ, isRel = pcall(C_QuestLog.UnitIsRelatedToActiveQuest, unit)
-    if okQ and not IsSecret(isRel) and isRel == true then
-      if guid and not IsSecret(guid) then questCacheByGUID[guid] = GetTime() + 2.5 end
-      return true
-    end
   end
   if _G.UnitIsQuestBoss and SafeBool(_G.UnitIsQuestBoss, unit) then
     if guid and not IsSecret(guid) then questCacheByGUID[guid] = GetTime() + 2.5 end
     return true
   end
-  -- Check if SoftTargetFrame on this plate is actively showing a Quest icon (! / ? / campaign quest)
-  local uFrame = plate and plate.UnitFrame
-  local stFrame = uFrame and uFrame.SoftTargetFrame
-  if stFrame and SafeBool(stFrame.IsShown, stFrame) then
-    local ic = stFrame.Icon
-    if ic and ic.GetAtlas then
-      local okA, atlas = pcall(ic.GetAtlas, ic)
-      if okA and not IsSecret(atlas) and type(atlas) == "string" and atlas ~= "" then
-        local lowA = atlas:lower()
-        if lowA:find("quest", 1, true) or lowA:find("campaign", 1, true) or lowA:find("turnin", 1, true) or lowA:find("important", 1, true) then
-          return true
-        end
+  local canAttack = SafeBool(UnitCanAttack, "player", unit)
+  local apiRelated = false
+  if C_QuestLog and C_QuestLog.UnitIsRelatedToActiveQuest then
+    local okQ, isRel = pcall(C_QuestLog.UnitIsRelatedToActiveQuest, unit)
+    if okQ and not IsSecret(isRel) and isRel == true then
+      apiRelated = true
+      if not canAttack then
+        if guid and not IsSecret(guid) then questCacheByGUID[guid] = GetTime() + 2.5 end
+        return true
       end
     end
   end
@@ -665,7 +677,7 @@ local function IsUnitQuestRelated(unit, guid, plate)
   end
   local nextScan = questTipNextScanByUnit[unit] or 0
   if now < nextScan then
-    return false
+    return apiRelated
   end
   questTipNextScanByUnit[unit] = now + 0.65
   local tType = _G.Enum and _G.Enum.TooltipDataLineType
@@ -675,19 +687,39 @@ local function IsUnitQuestRelated(unit, guid, plate)
       local qTitle = tType.QuestTitle
       local qObj = tType.QuestObjective
       local qPlayer = tType.QuestPlayer
+      local sawIncompleteObj = false
+      local sawCompletedObj = false
+      local sawQuestHeader = false
       for i = 2, #tip.lines do
         local ln = tip.lines[i]
         if type(ln) == "table" and not IsSecret(ln.type) and ln.type ~= nil then
           local lt = ln.type
-          if (qTitle and lt == qTitle) or (qObj and lt == qObj) or (qPlayer and lt == qPlayer) then
-            if guid and not IsSecret(guid) then questCacheByGUID[guid] = now + 2.5 end
-            return true
+          if qObj and lt == qObj then
+            if IsTooltipObjectiveLineCompleted(ln) then
+              sawCompletedObj = true
+            else
+              sawIncompleteObj = true
+            end
+          elseif (qTitle and lt == qTitle) or (qPlayer and lt == qPlayer) then
+            sawQuestHeader = true
           end
         end
       end
+      if sawIncompleteObj then
+        if guid and not IsSecret(guid) then questCacheByGUID[guid] = now + 2.5 end
+        return true
+      end
+      if sawCompletedObj and not sawIncompleteObj then
+        if guid and not IsSecret(guid) then questCacheByGUID[guid] = nil end
+        return false
+      end
+      if not canAttack and (sawQuestHeader or apiRelated) then
+        if guid and not IsSecret(guid) then questCacheByGUID[guid] = now + 2.5 end
+        return true
+      end
     end
   end
-  return false
+  return apiRelated
 end
 ---------------------------------------------------------------------------------------
 --  4. BLIZZARD SUPPRESSION & ELVUI / PLATER CONFLICT DIALOG (NO SILENT AUTO-DISABLE!)
@@ -877,10 +909,15 @@ local function SuppressBlizzardUnitFrame(plate, metro)
   local uFrame = plate.UnitFrame
   local inLockdown = InCombatLockdown and InCombatLockdown()
   if uFrame then
-    if not inLockdown then
-      pcall(uFrame.Hide, uFrame)
-    end
     pcall(uFrame.SetAlpha, uFrame, 0)
+    if uFrame.WidgetContainer then
+      pcall(uFrame.WidgetContainer.SetIgnoreParentAlpha, uFrame.WidgetContainer, false)
+      pcall(uFrame.WidgetContainer.SetAlpha, uFrame.WidgetContainer, 0)
+    end
+    if uFrame.SoftTargetFrame then
+      pcall(uFrame.SoftTargetFrame.SetIgnoreParentAlpha, uFrame.SoftTargetFrame, false)
+      pcall(uFrame.SoftTargetFrame.SetAlpha, uFrame.SoftTargetFrame, 0)
+    end
     if not hookedBlizzFrames[uFrame] then
       hookedBlizzFrames[uFrame] = true
       pcall(uFrame.UnregisterAllEvents, uFrame)
@@ -892,26 +929,21 @@ local function SuppressBlizzardUnitFrame(plate, metro)
       SuppressSubFrameEvents(uFrame.BuffFrame)
       SuppressSubFrameEvents(uFrame.AurasFrame)
       SuppressSubFrameEvents(uFrame.ClassificationFrame)
+      SuppressSubFrameEvents(uFrame.WidgetContainer)
       pcall(_G.hooksecurefunc, uFrame, "Show", function(self)
         if SpArc:IsNameplatesEnabled() and not IsBlockedByUnresolvedConflict() then
-          if not (InCombatLockdown and InCombatLockdown()) then
-            pcall(self.Hide, self)
-          end
           pcall(self.SetAlpha, self, 0)
         end
       end)
-    end
-    -- Preserve SoftTargetFrame (Interact E / Quest ! icon) and WidgetContainer on the parent plate
-    if metro and not metro._reparentedSoftTarget then
-      metro._reparentedSoftTarget = true
-      if uFrame.SoftTargetFrame then
-        pcall(uFrame.SoftTargetFrame.SetParent, uFrame.SoftTargetFrame, plate)
-        pcall(uFrame.SoftTargetFrame.SetIgnoreParentAlpha, uFrame.SoftTargetFrame, true)
-      end
-      if uFrame.WidgetContainer then
-        pcall(uFrame.WidgetContainer.SetParent, uFrame.WidgetContainer, plate)
-        pcall(uFrame.WidgetContainer.SetIgnoreParentAlpha, uFrame.WidgetContainer, true)
-      end
+      local inAlphaHook = false
+      pcall(_G.hooksecurefunc, uFrame, "SetAlpha", function(self, alpha)
+        if inAlphaHook or not alpha or alpha == 0 then return end
+        if SpArc:IsNameplatesEnabled() and not IsBlockedByUnresolvedConflict() then
+          inAlphaHook = true
+          pcall(self.SetAlpha, self, 0)
+          inAlphaHook = false
+        end
+      end)
     end
   end
   -- Only hide ElvUI's per-plate unitFrame if the user explicitly chose SpArc over ElvUI
@@ -952,23 +984,23 @@ function SpArc:SyncExternalNameplateAddons()
     pcall(C_CVar.SetCVar, "nameplateMaxScale", "1")
     pcall(C_CVar.SetCVar, "nameplateSelectedScale", "1")
 
-    -- View Distance (20..60 yd) & Smooth Distance Fading (fixes Plater's -158489 nameplateMinAlphaDistance)
+    -- View Distance (20..60 yd) & Smooth C++ 3D Distance Fading (no double-multiplication with metro:SetAlpha)
     local maxDist = math.floor(math.max(20, math.min(60, tonumber(vis.npMaxDistance) or 40)) + 0.5)
     local distFade = (vis.npDistanceFade ~= false)
-    local minAlpha = math.max(0.10, math.min(1.00, tonumber(vis.npMinAlpha) or 0.30))
+    local minAlpha = math.max(0.42, math.min(1.00, tonumber(vis.npMinAlpha) or 0.50))
     pcall(C_CVar.SetCVar, "nameplateMaxDistance", tostring(maxDist))
     pcall(C_CVar.SetCVar, "nameplatePlayerMaxDistance", tostring(maxDist))
     pcall(C_CVar.SetCVar, "nameplateSelectedAlpha", "1.0")
     pcall(C_CVar.SetCVar, "nameplateMaxAlpha", "1.0")
-    pcall(C_CVar.SetCVar, "nameplateMaxAlphaDistance", "18")
+    pcall(C_CVar.SetCVar, "nameplateMaxAlphaDistance", "28")
     if distFade then
       pcall(C_CVar.SetCVar, "nameplateMinAlpha", string.format("%.2f", minAlpha))
       pcall(C_CVar.SetCVar, "nameplateMinAlphaDistance", "10")
-      pcall(C_CVar.SetCVar, "nameplateOccludedAlphaMult", string.format("%.2f", math.max(0.15, minAlpha * 0.85)))
+      pcall(C_CVar.SetCVar, "nameplateOccludedAlphaMult", string.format("%.2f", math.max(0.40, minAlpha * 0.85)))
     else
       pcall(C_CVar.SetCVar, "nameplateMinAlpha", "0.95")
       pcall(C_CVar.SetCVar, "nameplateMinAlphaDistance", "10")
-      pcall(C_CVar.SetCVar, "nameplateOccludedAlphaMult", "0.60")
+      pcall(C_CVar.SetCVar, "nameplateOccludedAlphaMult", "0.65")
     end
   end
 end
@@ -1560,6 +1592,10 @@ FullUpdateMetroPlate = function(metro)
   end
 end
 
+function SpArc:GetActiveMetroUnits()
+  return unitToMetro
+end
+
 function SpArc:UpdateMetroDistanceFade(metro, dt, recomputeTarget, forceSnap)
   if not metro or not metro.unit then return end
   local db = SpArc:EnsureDB()
@@ -1574,9 +1610,8 @@ function SpArc:UpdateMetroDistanceFade(metro, dt, recomputeTarget, forceSnap)
     return
   end
 
-  local distFadeOn = (vis.npDistanceFade ~= false)
   local oocDimOn = (vis.npDimOutOfCombat ~= false)
-  if not distFadeOn and not oocDimOn then
+  if not oocDimOn then
     metro._targetFadeAlpha = 1.0
     metro._curFadeAlpha = 1.0
     if metro._appliedFadeAlpha ~= 1.0 then
@@ -1588,47 +1623,18 @@ function SpArc:UpdateMetroDistanceFade(metro, dt, recomputeTarget, forceSnap)
 
   if recomputeTarget or not metro._targetFadeAlpha then
     local unit = metro.unit
-    local minA = math.max(0.10, math.min(1.00, tonumber(vis.npMinAlpha) or 0.30))
     local tierA = 1.0
-    if distFadeOn then
-      tierA = minA
-      local close10 = _G.CheckInteractDistance and SafeBool(_G.CheckInteractDistance, unit, 3)
-      if close10 then
-        tierA = 1.0
-      else
-        local mid28 = _G.CheckInteractDistance and (SafeBool(_G.CheckInteractDistance, unit, 4) or SafeBool(_G.CheckInteractDistance, unit, 1))
-        if mid28 then
-          tierA = minA + (1.0 - minA) * 0.72
-        else
-          local inRange40 = false
-          if C_Spell and C_Spell.IsSpellInRange then
-            local okR, r40 = pcall(C_Spell.IsSpellInRange, 589, unit)
-            if okR and not IsSecret(r40) and (r40 == true or r40 == 1) then
-              inRange40 = true
-            end
-          end
-          if not inRange40 and _G.UnitInRange then
-            inRange40 = SafeBool(_G.UnitInRange, unit)
-          end
-          if inRange40 then
-            tierA = minA + (1.0 - minA) * 0.38
-          else
-            tierA = minA
-          end
-        end
-      end
-    end
-
-    -- 2.2 Out-of-Combat Dimming: softly dim non-combat mobs while fighting or targeting another unit
+    -- Smooth 3D distance fading is handled by the C++ parent plate (`nameplateMinAlpha` / `nameplateMaxAlphaDistance`).
+    -- Here we only apply gentle out-of-combat dimming so we never double-multiply distance alpha (`0.30 * 0.30 = 0.09`).
     local unitInCombat = SafeBool(UnitAffectingCombat, unit) or metro.hasActiveDoT
     if not unitInCombat then
       local playerInCombat = (InCombatLockdown and InCombatLockdown()) or SafeBool(UnitAffectingCombat, "player")
-      if oocDimOn and playerInCombat then
-        tierA = math.min(0.32, tierA * 0.40)
-      elseif oocDimOn and st.currentTargetMetro ~= nil then
-        tierA = math.max(minA * 0.75, tierA * 0.62)
-      elseif oocDimOn and metro.reaction == 4 then
-        tierA = math.max(minA, tierA * 0.85)
+      if playerInCombat then
+        tierA = 0.52
+      elseif st.currentTargetMetro ~= nil then
+        tierA = 0.78
+      elseif metro.reaction == 4 then
+        tierA = 0.90
       end
     end
     metro._targetFadeAlpha = tierA

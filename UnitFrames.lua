@@ -702,7 +702,6 @@ local function CreateSpArcUnitFrame(frameName, unitToken, portraitSide, isCompac
 end
 
 -- Create all UnitFrames at load time
-SpArc.unitFrames = ufFrames
 ufFrames.player = CreateSpArcUnitFrame("SpArcUF_Player", "player", "LEFT", false)
 ufFrames.target = CreateSpArcUnitFrame("SpArcUF_Target", "target", "RIGHT", false)
 ufFrames.tot    = CreateSpArcUnitFrame("SpArcUF_ToT", "targettarget", nil, true)
@@ -710,21 +709,37 @@ ufFrames.focus  = CreateSpArcUnitFrame("SpArcUF_Focus", "focus", "LEFT", true)
 ufFrames.pet    = CreateSpArcUnitFrame("SpArcUF_Pet", "pet", nil, true)
 
 targetCastbarFrame = CreateStandaloneCastbar("SpArcUF_TargetCastbar", UIParent, true)
-ufFrames.targetCastbar = targetCastbarFrame
 
 for i = 1, 4 do
   partyFrames[i] = CreateSpArcUnitFrame("SpArcUF_Party" .. i, "party" .. i, "LEFT", false)
   partyFrames[i].isParty = true
   partyFrames[i].partyIndex = i
-  ufFrames["party" .. i] = partyFrames[i]
 end
-ufFrames.partyFrames = partyFrames
 
 for i = 1, 5 do
   bossFrames[i] = CreateSpArcUnitFrame("SpArcUF_Boss" .. i, "boss" .. i, nil, false)
-  ufFrames["boss" .. i] = bossFrames[i]
 end
-ufFrames.bossFrames = bossFrames
+
+-- Public inspection registry (kept separate from `ufFrames` so `pairs(ufFrames)` only iterates the 5 primary frames)
+SpArc.unitFrames = {
+  player        = ufFrames.player,
+  target        = ufFrames.target,
+  tot           = ufFrames.tot,
+  focus         = ufFrames.focus,
+  pet           = ufFrames.pet,
+  targetCastbar = targetCastbarFrame,
+  party1        = partyFrames[1],
+  party2        = partyFrames[2],
+  party3        = partyFrames[3],
+  party4        = partyFrames[4],
+  partyFrames   = partyFrames,
+  boss1         = bossFrames[1],
+  boss2         = bossFrames[2],
+  boss3         = bossFrames[3],
+  boss4         = bossFrames[4],
+  boss5         = bossFrames[5],
+  bossFrames    = bossFrames,
+}
 
 ---------------------------------------------------------------------------------------
 --  4. LIVE UPDATERS (PORTRAIT, HEALTH/POWER, AURAS, CASTBARS)

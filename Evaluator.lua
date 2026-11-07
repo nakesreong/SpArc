@@ -150,6 +150,10 @@ local SPEC_ID_TO_PRESETS = {
   [262] = { PVE = "SHAMAN_01_ENH_PVE",     BOSS = "SHAMAN_01_ENH_PVE",     PVP = "SHAMAN_01_ENH_PVE" },
   [263] = { PVE = "SHAMAN_01_ENH_PVE",     BOSS = "SHAMAN_01_ENH_PVE",     PVP = "SHAMAN_01_ENH_PVE" },
   [264] = { PVE = "SHAMAN_01_ENH_PVE",     BOSS = "SHAMAN_01_ENH_PVE",     PVP = "SHAMAN_01_ENH_PVE" },
+  -- MONK (Windwalker)
+  [268] = { PVE = "MONK_01_WW_PVE",        BOSS = "MONK_01_WW_PVE",        PVP = "MONK_01_WW_PVE" },
+  [269] = { PVE = "MONK_01_WW_PVE",        BOSS = "MONK_01_WW_PVE",        PVP = "MONK_01_WW_PVE" },
+  [270] = { PVE = "MONK_01_WW_PVE",        BOSS = "MONK_01_WW_PVE",        PVP = "MONK_01_WW_PVE" },
 }
 
 local PRESET_SPEC_IDS = {
@@ -160,6 +164,7 @@ local PRESET_SPEC_IDS = {
   DRUID_01_FERAL_PVE   = 103,
   DRUID_02_BALANCE_PVE = 102,
   SHAMAN_01_ENH_PVE    = 263,
+  MONK_01_WW_PVE       = 269,
 }
 
 local lastValidSpecID = nil
@@ -350,6 +355,9 @@ local CTX_NUM_FIELDS = {
   ["player.combo_points"]    = { field = "comboPoints", def = 0 },
   ["COMBO_POINTS"]           = { field = "comboPoints", def = 0 },
   ["cp"]                     = { field = "comboPoints", def = 0 },
+  ["player.chi"]             = { field = "comboPoints", def = 0 },
+  ["CHI"]                    = { field = "comboPoints", def = 0 },
+  ["chi"]                    = { field = "comboPoints", def = 0 },
   ["player.energy"]          = { field = "energy",      def = 100 },
   ["ENERGY"]                 = { field = "energy",      def = 100 },
   ["energy"]                 = { field = "energy",      def = 100 },
@@ -718,7 +726,7 @@ function SpArc:BuildRotationQueue(maxSlots)
       local sSp = states[spK]
       if sSp and not sSp.isUnavailable then
         local cost = spD.insanityCost
-        local isFreeProc = ((spK == "FEROCIOUS_BITE" or spK == "STARSURGE" or spK == "STARFALL") and sSp.isProc)
+        local isFreeProc = ((spK == "FEROCIOUS_BITE" or spK == "STARSURGE" or spK == "STARFALL" or spK == "BLACKOUT_KICK" or spK == "SPINNING_CRANE_KICK") and sSp.isProc)
         if not isFreeProc then
           if not sSp.isUsable and st.trackedInsanity >= cost then
             st.trackedInsanity = math.floor(cost * 0.5)
@@ -786,7 +794,8 @@ function SpArc:BuildRotationQueue(maxSlots)
       end
     end
     if stepIdx and stepIdx >= 2 then
-      if usedInQueue[spKey] or (d.overrideOf and usedInQueue[d.overrideOf]) then
+      local isRepeatableBuilder = (stepIdx >= 3) and d.insanityGain and d.insanityGain > 0 and (not d.baseCD or d.baseCD <= 0) and (simInsanity < 40)
+      if not isRepeatableBuilder and (usedInQueue[spKey] or (d.overrideOf and usedInQueue[d.overrideOf])) then
         return false
       end
       if auraMap["MAELSTROM_WEAPON"] and (spKey == "TEMPEST" or spKey == "LIGHTNING_BOLT" or spKey == "CHAIN_LIGHTNING" or spKey == "ELEMENTAL_BLAST") then
@@ -850,7 +859,7 @@ function SpArc:BuildRotationQueue(maxSlots)
   end
 
   local function IsSpellBoundOnBar(spKey)
-    if SpArc.testMode or not anySpellBound then return true end
+    if not anySpellBound then return true end
     local s = states[spKey]
     if s and s.keybind and s.keybind ~= "" then
       return true
@@ -1142,12 +1151,30 @@ function SpArc:BuildRotationQueue(maxSlots)
           simCtx.stealthed = false
         end
         if def then
-          local aDur = (def.auraDuration and def.auraDuration > 0) and def.auraDuration or ((def.appliesDoTs and 21.0) or ((def.burstDuration and def.burstDuration > 0) and def.burstDuration) or 0)
-          if aDur > 0 then
-            local u = def.auraUnit or ((def.burstDuration and def.burstDuration > 0 and not def.appliesDoTs) and "player" or "target")
-            SetSimAuraState(u, pickedKey, math.max(1, simAuraStacks[u][pickedKey] or 1), aDur)
+          local isProcConsumer = (SpArc.PROC_CONSUMER_AURA_SPELLS and SpArc.PROC_CONSUMER_AURA_SPELLS[pickedKey]) or false
+          if isProcConsumer then
+            SetSimAuraState("player", pickedKey, 0)
+            if pickedKey == "SPINNING_CRANE_KICK" then
+              SetSimAuraState("player", "DANCE_OF_CHI_JI", 0)
+            elseif pickedKey == "BLACKOUT_KICK" then
+              SetSimAuraState("player", "BLACKOUT_KICK_PROC", 0)
+              SetSimAuraState("player", "TEACHINGS_OF_THE_MONASTERY", 0)
+            elseif pickedKey == "VIVIFY" then
+              SetSimAuraState("player", "VIVACIOUS_VIVIFICATION", 0)
+            end
           else
-            simAuraRem.player[pickedKey] = 10.0
+            local aDur = (def.auraDuration and def.auraDuration > 0) and def.auraDuration or ((def.appliesDoTs and 21.0) or ((def.burstDuration and def.burstDuration > 0) and def.burstDuration) or 0)
+            if aDur > 0 then
+              local u = def.auraUnit or ((def.burstDuration and def.burstDuration > 0 and not def.appliesDoTs) and "player" or "target")
+              local nextStacks = math.max(1, simAuraStacks[u][pickedKey] or 1)
+              if pickedKey == "TIGER_PALM" then
+                nextStacks = math.min(4, (simAuraStacks.player["TEACHINGS_OF_THE_MONASTERY"] or simAuraStacks.player["TIGER_PALM"] or 0) + 1)
+                SetSimAuraState("player", "TEACHINGS_OF_THE_MONASTERY", nextStacks, aDur)
+              end
+              SetSimAuraState(u, pickedKey, nextStacks, aDur)
+            else
+              simAuraRem.player[pickedKey] = 10.0
+            end
           end
           if def.appliesDoTs then
             simHasDoTs = true
@@ -1156,7 +1183,8 @@ function SpArc:BuildRotationQueue(maxSlots)
             simActive[pickedKey] = true
             simBurst = true
           end
-          if def.insanityGain then simInsanity = math.min(100, simInsanity + def.insanityGain) end
+          local maxIns = (SPELL_DEFS["RISING_SUN_KICK"] or SPELL_DEFS["TIGER_PALM"]) and 120 or 100
+          if def.insanityGain then simInsanity = math.min(maxIns, simInsanity + def.insanityGain) end
           if def.insanityCost and not (def.isSpender and pickedWasProc) then
             simInsanity = math.max(0, simInsanity - def.insanityCost)
           end
@@ -1215,7 +1243,7 @@ function SpArc:BuildRotationQueue(maxSlots)
             local curMW = simAuraStacks.player["MAELSTROM_WEAPON"] or 0
             SetSimAuraState("player", "MAELSTROM_WEAPON", math.min(10, curMW + 2), 30.0)
           end
-          if def.procOnly or def.isSpender or def.isExecute then
+          if def.procOnly or def.isExecute or (def.isSpender and not ((def.liveChargeCD and def.liveChargeCD > 0) or (def.baseCD and def.baseCD > 0))) then
             simCD[pickedKey] = 9999
             simReady[pickedKey] = false
             simUsable[pickedKey] = false
@@ -1256,8 +1284,9 @@ function SpArc:BuildRotationQueue(maxSlots)
 
         for spK, spD in pairs(SPELL_DEFS) do
           if spD.isSpender and spD.insanityCost then
-            local canAfford = simInsanity >= spD.insanityCost
+            local canAfford = (simInsanity >= spD.insanityCost) or (simProcs[spK] == true)
             simUsable[spK] = canAfford
+            simNoResource[spK] = not canAfford
             if canAfford and (not spD.baseCD or spD.baseCD <= 0) then
               simCD[spK] = 0
               simReady[spK] = true
@@ -1326,14 +1355,41 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   st.unitAuras.target = st.unitAuras.target or {}
   st.unitAuras.player = st.unitAuras.player or {}
 
+  local isProcConsumer = (SpArc.PROC_CONSUMER_AURA_SPELLS and SpArc.PROC_CONSUMER_AURA_SPELLS[defKey]) or false
   local aDur = (def.auraDuration and def.auraDuration > 0) and def.auraDuration or ((def.appliesDoTs and 21.0) or ((def.burstDuration and def.burstDuration > 0) and def.burstDuration) or 0)
-  if aDur > 0 then
+  if isProcConsumer then
+    st.unitAuras.player[defKey] = nil
+    for _, aID in ipairs(def.auraIDs or {}) do
+      st.unitAuras.player[aID] = nil
+      st.unitAuras.player[tostring(aID)] = nil
+    end
+    if defKey == "SPINNING_CRANE_KICK" then
+      st.unitAuras.player["DANCE_OF_CHI_JI"] = nil
+      st.unitAuras.player[325202] = nil
+      st.unitAuras.player["325202"] = nil
+    elseif defKey == "BLACKOUT_KICK" then
+      st.unitAuras.player["BLACKOUT_KICK_PROC"] = nil
+      st.unitAuras.player[116768] = nil
+      st.unitAuras.player["116768"] = nil
+      st.unitAuras.player["TEACHINGS_OF_THE_MONASTERY"] = nil
+      st.unitAuras.player[202090] = nil
+      st.unitAuras.player["202090"] = nil
+    elseif defKey == "VIVIFY" then
+      st.unitAuras.player["VIVACIOUS_VIVIFICATION"] = nil
+      st.unitAuras.player[392883] = nil
+      st.unitAuras.player["392883"] = nil
+    end
+  elseif aDur > 0 then
     local u = def.auraUnit or ((def.burstDuration and def.burstDuration > 0 and not def.appliesDoTs) and "player" or "target")
     local uMap = st.unitAuras[u]
     local prev = uMap[defKey]
     local remPrev = (prev and prev.untilTime and prev.untilTime > now) and math.min(aDur * 0.3, prev.untilTime - now) or 0
     local newUntil = now + aDur + remPrev
-    local entry = { untilTime = newUntil, stacks = math.max(1, (prev and prev.stacks) or 1) }
+    local nextStacks = math.max(1, (prev and prev.stacks) or 1)
+    if defKey == "TIGER_PALM" and prev and prev.untilTime and prev.untilTime > now then
+      nextStacks = math.min(4, (prev.stacks or 0) + 1)
+    end
+    local entry = { untilTime = newUntil, expiresAt = newUntil, stacks = nextStacks }
     uMap[defKey] = entry
     local aIDs = def.auraIDs or def.debuffIDs or def.ids
     if aIDs then
@@ -1355,8 +1411,9 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
     end
   end
 
+  local maxIns = (SPELL_DEFS["RISING_SUN_KICK"] or SPELL_DEFS["TIGER_PALM"]) and 120 or 100
   if def.insanityGain then
-    st.trackedInsanity = math.min(100, st.trackedInsanity + def.insanityGain)
+    st.trackedInsanity = math.min(maxIns, st.trackedInsanity + def.insanityGain)
   end
   local lastAudit = st.lastSpellAudit and st.lastSpellAudit[defKey]
   local castWasProc = (lastAudit and lastAudit.isProc) or false

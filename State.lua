@@ -231,6 +231,15 @@ local function FindMatchingOverrideID(baseID, candidateIDs)
   return nil
 end
 
+-- Spells whose AURA_ID on `player` represents a proc buff they CONSUME (rather than a self-buff they apply on cast)
+SpArc.PROC_CONSUMER_AURA_SPELLS = {
+  REGROWTH            = true,
+  VIVIFY              = true,
+  SPINNING_CRANE_KICK = true,
+  BLACKOUT_KICK       = true,
+  FEROCIOUS_BITE      = true,
+}
+
 local function EvaluateSpenderPowerUsability(defKey, def, isProc, hasSpellOverlayProc, assistedKey, gotCleanUsable, isUsable, usableSource)
   if not UnitPower then
     return gotCleanUsable, isUsable, isProc, usableSource
@@ -249,19 +258,22 @@ local function EvaluateSpenderPowerUsability(defKey, def, isProc, hasSpellOverla
   end
 
   local isAstral = (defKey == "STARSURGE" or defKey == "STARFALL" or SPELL_DEFS["STARSURGE"] ~= nil or SPELL_DEFS["STARFALL"] ~= nil)
-  local powerType = isAstral and 8 or 4
-  local defaultCost = isAstral and 40 or 80
+  local isChi = (not isAstral) and (SPELL_DEFS["RISING_SUN_KICK"] ~= nil or SPELL_DEFS["TIGER_PALM"] ~= nil or SPELL_DEFS["BLACKOUT_KICK"] ~= nil)
+  local powerType = isAstral and 8 or (isChi and 12 or 4)
+  local defaultCost = isAstral and 40 or (isChi and 40 or 80)
   local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or defaultCost
   local minRaw = isAstral and (cost - 5) or math.max(1, math.floor(cost / 20))
-  local freeOverlayAllowed = isAstral and (hasSpellOverlayProc or isProc) or (hasSpellOverlayProc and defKey == "FEROCIOUS_BITE")
-  local tagName = isAstral and "AstralPower" or "ComboPoints"
-  local trackedTag = isAstral and "TrackedAP" or "TrackedCP"
+  local freeOverlayAllowed = (isAstral and (hasSpellOverlayProc or isProc))
+    or ((hasSpellOverlayProc or isProc) and (defKey == "FEROCIOUS_BITE" or defKey == "BLACKOUT_KICK" or defKey == "SPINNING_CRANE_KICK"))
+  local tagName = isAstral and "AstralPower" or (isChi and "Chi" or "ComboPoints")
+  local trackedTag = isAstral and "TrackedAP" or (isChi and "TrackedChi" or "TrackedCP")
 
   local okP, rawP = pcall(UnitPower, "player", powerType)
   if okP and not IsSecret(rawP) and type(rawP) == "number" then
     if rawP < minRaw then
       if freeOverlayAllowed then
-        local procTag = isAstral and ("ProcOverlayFreeAstral(" .. tostring(rawP) .. "AP)") or ("ProcOverlayFreeSpender(" .. tostring(rawP) .. "CP)")
+        local procTag = isAstral and ("ProcOverlayFreeAstral(" .. tostring(rawP) .. "AP)")
+          or (isChi and ("ProcOverlayFreeChi(" .. tostring(rawP) .. "Chi)") or ("ProcOverlayFreeSpender(" .. tostring(rawP) .. "CP)"))
         return true, true, true, procTag
       end
       return true, false, false, tagName .. "(" .. tostring(rawP) .. "<" .. tostring(isAstral and cost or minRaw) .. ")"
@@ -320,7 +332,7 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
       overlayRaw = "sao(" .. tostring(spellID) .. ")"
     end
   end
-  if not isProc and def.auraUnit == "player" and (not def.burstDuration or def.burstDuration <= 0) and def.auraIDs and #def.auraIDs > 0 and def.auraIDs[1] ~= spellID and SpArc.GetUnitAuraState then
+  if not isProc and (SpArc.PROC_CONSUMER_AURA_SPELLS[defKey] or def.procOnly) and def.auraUnit == "player" and (not def.burstDuration or def.burstDuration <= 0) and def.auraIDs and #def.auraIDs > 0 and def.auraIDs[1] ~= spellID and SpArc.GetUnitAuraState then
     local aActive = SpArc:GetUnitAuraState("player", defKey, st.activeParsed, assistedKey, now)
     if aActive then
       isProc = true
@@ -659,8 +671,8 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     -- proves a spell is castable right now (never wipe underlying timers, and never let execute
     -- <20% HP overlays bypass an active execute cooldown like Shadow Word: Death)
     local sinceLastCast = now - (st.lastCastAt[defKey] or 0)
-    local allowProcCDReset = (not def.isExecute) and hasSpellOverlayProc and (sinceLastCast > 0.35)
-    local allowAssistCDReset = (assistedKey == defKey) and (sinceLastCast > 1.4)
+    local allowProcCDReset = (not def.isExecute) and ((def.baseCD or 0) < 25) and (not def.isBossSkill) and hasSpellOverlayProc and (sinceLastCast > 0.35)
+    local allowAssistCDReset = (assistedKey == defKey) and ((def.baseCD or 0) < 25) and (sinceLastCast > 1.4)
     if isOnCD and (allowProcCDReset or allowAssistCDReset) then
       isOnCD = false
       remSec = 0
@@ -820,7 +832,13 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
 
   local finalReady = (not isOnCD)
   local isKnownInBook = (def.isKnown == true) or (def.overrideOf and SPELL_DEFS[def.overrideOf] and SPELL_DEFS[def.overrideOf].isKnown == true) or false
-  local isUnavailable = (not SpArc.testMode) and (not isKnownInBook)
+  local pClass = nil
+  if _G.UnitClass then
+    local okC, _, cTag = pcall(_G.UnitClass, "player")
+    if okC and not IsSecret(cTag) then pClass = cTag end
+  end
+  local isForeignClassTest = SpArc.testMode and st.activeParsed and st.activeParsed.class and pClass and (st.activeParsed.class ~= pClass)
+  local isUnavailable = (not isForeignClassTest) and (not isKnownInBook)
   if isUnavailable then
     finalReady = false
     isUsable = false
@@ -943,6 +961,9 @@ SpArc.DEFAULT_ENERGY_COST = {
   EVISCERATE = 35,
   BLACK_POWDER = 35,
   SHRED = 40,
+  TIGER_PALM = 50,
+  DETOX = 20,
+  DISABLE = 15,
   RAKE = 35,
   SWIPE = 35,
   BRUTAL_SLASH = 25,
@@ -1290,6 +1311,12 @@ function SpArc:RefreshTrackedInsanity()
         st.trackedInsanity = math.min(100, ap)
         return
       end
+    elseif SPELL_DEFS["RISING_SUN_KICK"] or SPELL_DEFS["TIGER_PALM"] or SPELL_DEFS["BLACKOUT_KICK"] then
+      local okChi, chi = pcall(UnitPower, "player", 12)
+      if okChi and not IsSecret(chi) and type(chi) == "number" then
+        st.trackedInsanity = math.min(120, chi * 20)
+        return
+      end
     elseif not SPELL_DEFS["DEVOURING_PLAGUE"] then
       local okCP, cp = pcall(UnitPower, "player", 4)
       if okCP and not IsSecret(cp) and type(cp) == "number" then
@@ -1339,6 +1366,7 @@ local AOE_ASSIST_HINTS = {
   STARFALL         = 2,
   CRASH_LIGHTNING  = 2,
   CHAIN_LIGHTNING  = 3,
+  SPINNING_CRANE_KICK = 3,
 }
 
 local function IsUnitDummyOrInCombat(unit)
@@ -1355,13 +1383,11 @@ local function IsUnitDummyOrInCombat(unit)
       return true
     end
   end
-  if _G.UnitName then
-    local okN, nm = pcall(_G.UnitName, unit)
-    if okN and not IsSecret(nm) and type(nm) == "string" then
-      local low = SpArc.UTF8Lower(nm)
-      if low:find("манекен", 1, true) or low:find("dummy", 1, true) or low:find("тренировоч", 1, true) then
-        return true
-      end
+  -- Only count non-target training dummies if the player has actively tagged them with a debuff/DoT
+  if C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex then
+    local okD, dData = pcall(C_UnitAuras.GetDebuffDataByIndex, unit, 1, "PLAYER")
+    if okD and dData ~= nil then
+      return true
     end
   end
   return false
@@ -1691,6 +1717,19 @@ local NO_RANGE_CHECK_SPELLS = {
   THUNDERSTORM         = true,
   SPIRIT_WALK          = true,
   TOTEMIC_PROJECTION   = true,
+  FORTIFYING_BREW      = true,
+  TOUCH_OF_KARMA       = true,
+  VIVIFY               = true,
+  EXPEL_HARM           = true,
+  DIFFUSE_MAGIC        = true,
+  DAMPEN_HARM          = true,
+  INVOKE_XUEN          = true,
+  STORM_EARTH_AND_FIRE = true,
+  SPINNING_CRANE_KICK  = true,
+  SLICING_WINDS        = true,
+  LEG_SWEEP            = true,
+  CELESTIAL_CONDUIT    = true,
+  WHIRLING_DRAGON_PUNCH = true,
 }
 
 local CLASS_RANGE_FALLBACK_SPELLS = {
@@ -1700,6 +1739,7 @@ local CLASS_RANGE_FALLBACK_SPELLS = {
   PRIEST  = { 8092, 589, 34914, 15407 },
   DRUID   = { 5221, 1822, 22568, 1079, 8921, 93402, 190984, 194153, 78674 },
   SHAMAN  = { 17364, 60103, 188196, 188389 },
+  MONK    = { 100780, 100784, 107428, 116705 },
 }
 
 local function CheckBT4ButtonOutOfRange(btBtn)

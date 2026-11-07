@@ -88,6 +88,7 @@ local POWER_COLORS = {
   [6]  = { r = 0.15, g = 0.82, b = 0.98 }, -- Runic Power
   [8]  = { r = 0.35, g = 0.55, b = 0.98 }, -- Lunar Power
   [11] = { r = 0.12, g = 0.58, b = 0.98 }, -- Maelstrom
+  [12] = { r = 0.00, g = 1.00, b = 0.59 }, -- Chi
   [13] = { r = 0.65, g = 0.22, b = 0.96 }, -- Insanity
   [17] = { r = 0.80, g = 0.20, b = 0.90 }, -- Fury
   [18] = { r = 0.95, g = 0.45, b = 0.15 }, -- Pain
@@ -237,21 +238,6 @@ local function SuppressSingleBlizzFrame(f, lockShow)
   end
   pcall(f.Hide, f)
   pcall(f.SetParent, f, hiddenBlizzParent)
-  if lockShow and _G.hooksecurefunc and not hookedBlizzShow[f] then
-    hookedBlizzShow[f] = true
-    _G.hooksecurefunc(f, "Show", function(self)
-      if not (InCombatLockdown and InCombatLockdown()) and SpArc:IsUnitFramesEnabled() then
-        pcall(self.Hide, self)
-      end
-    end)
-    if f.SetShown then
-      _G.hooksecurefunc(f, "SetShown", function(self, shown)
-        if shown and not (InCombatLockdown and InCombatLockdown()) and SpArc:IsUnitFramesEnabled() then
-          pcall(self.Hide, self)
-        end
-      end)
-    end
-  end
 end
 
 local function SyncBlizzardUnitFramesSuppression()
@@ -716,6 +702,7 @@ local function CreateSpArcUnitFrame(frameName, unitToken, portraitSide, isCompac
 end
 
 -- Create all UnitFrames at load time
+SpArc.unitFrames = ufFrames
 ufFrames.player = CreateSpArcUnitFrame("SpArcUF_Player", "player", "LEFT", false)
 ufFrames.target = CreateSpArcUnitFrame("SpArcUF_Target", "target", "RIGHT", false)
 ufFrames.tot    = CreateSpArcUnitFrame("SpArcUF_ToT", "targettarget", nil, true)
@@ -723,16 +710,21 @@ ufFrames.focus  = CreateSpArcUnitFrame("SpArcUF_Focus", "focus", "LEFT", true)
 ufFrames.pet    = CreateSpArcUnitFrame("SpArcUF_Pet", "pet", nil, true)
 
 targetCastbarFrame = CreateStandaloneCastbar("SpArcUF_TargetCastbar", UIParent, true)
+ufFrames.targetCastbar = targetCastbarFrame
 
 for i = 1, 4 do
   partyFrames[i] = CreateSpArcUnitFrame("SpArcUF_Party" .. i, "party" .. i, "LEFT", false)
   partyFrames[i].isParty = true
   partyFrames[i].partyIndex = i
+  ufFrames["party" .. i] = partyFrames[i]
 end
+ufFrames.partyFrames = partyFrames
 
 for i = 1, 5 do
   bossFrames[i] = CreateSpArcUnitFrame("SpArcUF_Boss" .. i, "boss" .. i, nil, false)
+  ufFrames["boss" .. i] = bossFrames[i]
 end
+ufFrames.bossFrames = bossFrames
 
 ---------------------------------------------------------------------------------------
 --  4. LIVE UPDATERS (PORTRAIT, HEALTH/POWER, AURAS, CASTBARS)

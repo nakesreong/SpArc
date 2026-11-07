@@ -51,6 +51,7 @@ local st = SpArc.state
 
 local parentRoot = _G.SpArcHUDRoot or UIParent
 local resFrame = CreateFrame("Frame", "SpArcResourceBar", parentRoot)
+SpArc.resourceFrame = resFrame
 resFrame:SetSize(276, 16)
 resFrame:SetPoint("CENTER", UIParent, "CENTER", 0, -166)
 resFrame:SetFrameStrata("MEDIUM")

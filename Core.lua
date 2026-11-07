@@ -27,7 +27,7 @@ _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
 SpArc.VERSION = "2.9.6"
-SpArc.PROFILE_SCHEMA_VERSION = 37
+SpArc.PROFILE_SCHEMA_VERSION = 38
 
 local C_CVar = _G.C_CVar
 local issecretvalue = _G.issecretvalue
@@ -559,6 +559,9 @@ local DEFAULT_PRESET_BY_SPEC_ID = {
   [258] = "PRIEST_01_SHADOW_PVE",
   [259] = "ROGUE_01_ASSA_PVE",
   [263] = "SHAMAN_01_ENH_PVE",
+  [268] = "MONK_01_WW_PVE",
+  [269] = "MONK_01_WW_PVE",
+  [270] = "MONK_01_WW_PVE",
   [64]  = "MAGE_04_FROST_PVE",
   [71]  = "WARRIOR_02_ARGS_BOSS",
 }
@@ -568,6 +571,7 @@ local DEFAULT_PRESET_BY_CLASS = {
   DRUID   = "DRUID_02_BALANCE_PVE",
   ROGUE   = "ROGUE_01_ASSA_PVE",
   SHAMAN  = "SHAMAN_01_ENH_PVE",
+  MONK    = "MONK_01_WW_PVE",
   MAGE    = "MAGE_04_FROST_PVE",
   WARRIOR = "WARRIOR_02_ARGS_BOSS",
 }
@@ -606,6 +610,8 @@ local function InferProfileDefaultPresetID(profName, profObj)
       return "MAGE_04_FROST_PVE"
     elseif profName:find("Ниоч", 1, true) then
       return "SHAMAN_01_ENH_PVE"
+    elseif profName:find("Гитсутра", 1, true) then
+      return "MONK_01_WW_PVE"
     end
   end
   return SpArc:GetPlayerDefaultPresetID()
@@ -790,7 +796,9 @@ function SpArc:EnsureDB(forceReinit)
       if bp then
         db.presetOrder[#db.presetOrder + 1] = id
         local existing = preservedPresets[id]
-        if existing and existing.userModified and type(existing.md) == "string" and existing.md ~= "" then
+        -- If SHAMAN_01_ENH_PVE was overwritten with a MONK profile before MONK_01_WW_PVE existed, restore Shaman built-in
+        local isWrongClassOverwrite = (id == "SHAMAN_01_ENH_PVE" and existing and type(existing.md) == "string" and existing.md:find("CLASS:%s*MONK"))
+        if existing and existing.userModified and type(existing.md) == "string" and existing.md ~= "" and not isWrongClassOverwrite then
           db.presets[id] = existing
         else
           db.presets[id] = {
@@ -813,11 +821,18 @@ function SpArc:EnsureDB(forceReinit)
     end
 
     for pName, pObj in pairs(db.profiles or {}) do
-      if not pObj.activePresetID or not db.presets[pObj.activePresetID] then
+      if pName:find("Гитсутра", 1, true) then
+        pObj.activePresetID = "MONK_01_WW_PVE"
+        pObj.autoPresets = { PVE = "MONK_01_WW_PVE", BOSS = "MONK_01_WW_PVE", PVP = "MONK_01_WW_PVE" }
+      elseif not pObj.activePresetID or not db.presets[pObj.activePresetID] then
         local wantID = InferProfileDefaultPresetID(pName, pObj)
         pObj.activePresetID = wantID
         pObj.autoPresets = { PVE = wantID, BOSS = wantID, PVP = wantID }
       end
+    end
+    if tostring(db.activeProfile or ""):find("Гитсутра", 1, true) then
+      db.activePresetID = "MONK_01_WW_PVE"
+      db.autoPresets = { PVE = "MONK_01_WW_PVE", BOSS = "MONK_01_WW_PVE", PVP = "MONK_01_WW_PVE" }
     end
     db.profileSchemaVersion = SpArc.PROFILE_SCHEMA_VERSION
   end
@@ -1326,7 +1341,7 @@ function SpArc:RunDebugSelfTest(printToChat)
 
   -- 4. State contract
   check("State", type(SpArc.state) == "table" and type(SpArc.state.castState) == "table", "STATE_TABLE", "SpArc.state and castState must exist")
-  check("State", type(SpArc.EvaluateSpellState) == "function" and type(SpArc.IsRuleConditionMet) == "function", "FN_STATE", "State evaluation functions must exist")
+  check("State", type(SpArc.EvaluateSpellState) == "function" and type(SpArc.GetUnitAuraState) == "function", "FN_STATE", "State evaluation functions must exist")
 
   -- 5. Evaluator contract (dry-run BuildRotationQueue)
   check("Evaluator", type(SpArc.BuildRotationQueue) == "function", "FN_EVAL", "SpArc:BuildRotationQueue must exist")

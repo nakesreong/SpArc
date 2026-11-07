@@ -1463,6 +1463,153 @@ ELSE
 END IF
 ]])
 
+-- =====================================================================================
+--  8. MONK: WINDWALKER — UNIFIED PVE / BOSS / PVP (THE WAR WITHIN / MIDNIGHT 12.x)
+-- =====================================================================================
+AddPreset("MONK_01_WW_PVE", "MONK", "8. Монах: Танцующий с ветром (ВВ — СТ / АоЕ)", "PVE", [[
+# SpArc Profile: Windwalker Monk (Unified PvE / Boss / PvP — Midnight 12.x)
+CLASS: MONK
+SPEC: WINDWALKER
+MODE: PVE
+GCD: 1.0
+
+## SPELLS
+# --- Прерывания и Контроль (Interrupts & CC) ---
+- SPEAR_HAND_STRIKE: ID:116705 | CD:15 | USABLE:true | INTERRUPT:true | NAME:Рука-копье, Spear Hand Strike | ICON:ability_monk_spearhand
+- LEG_SWEEP: ID:119381 | CD:60 | USABLE:true | INTERRUPT:true | NAME:Круговой удар ногой, Leg Sweep | ICON:ability_monk_legsweep
+- PARALYSIS: ID:115078 | CD:45 | USABLE:true | PVP_SKILL:true | INTERRUPT:true | NAME:Паралич, Paralysis | ICON:ability_monk_paralysis
+- DISABLE: ID:116095 | CD:1.0 | USABLE:true | PVP_SKILL:true | NAME:Вывести из строя, Disable | ICON:ability_shockwave
+- GRAPPLE_WEAPON: ID:233759 | CD:45 | USABLE:true | PVP_SKILL:true | NAME:Выхватывание оружия, Grapple Weapon | ICON:ability_monk_grappleweapon
+- RING_OF_PEACE: ID:116844 | CD:45 | USABLE:true | PVP_SKILL:true | NAME:Круг мира, Ring of Peace | ICON:spell_monk_ringofpeace
+
+# --- Сейвы и Выживание (Defensives & Self-Heal) ---
+- TOUCH_OF_KARMA: ID:122470 | CD:90 | USABLE:true | AURA_ID:125174,122470 | AURA_UNIT:player | AURA_DUR:10 | NAME:Закон кармы, Touch of Karma | ICON:ability_monk_touchofkarma
+- FORTIFYING_BREW: ID:115203,243435 | CD:120 | USABLE:true | AURA_ID:120954,243435 | AURA_UNIT:player | AURA_DUR:15 | NAME:Укрепляющий отвар, Fortifying Brew | ICON:ability_monk_fortifyingale_new
+- DIFFUSE_MAGIC: ID:122783 | CD:90 | USABLE:true | AURA_ID:122783 | AURA_UNIT:player | AURA_DUR:6 | NAME:Распыление магии, Diffuse Magic | ICON:spell_monk_diffusemagic
+- DAMPEN_HARM: ID:122278 | CD:120 | USABLE:true | AURA_ID:122278 | AURA_UNIT:player | AURA_DUR:10 | NAME:Смягчение удара, Dampen Harm | ICON:ability_monk_dampenharm
+- EXPEL_HARM: ID:322101 | CD:15 | GAIN:20 | USABLE:true | NAME:Устранение вреда, Expel Harm | ICON:ability_monk_expelharm
+- VIVIFY: ID:116670 | CD:1.0 | USABLE:true | AURA_ID:392883 | AURA_UNIT:player | NAME:Оживить, Vivify | ICON:ability_monk_vivify
+- DETOX: ID:218164 | CD:8 | USABLE:true | NAME:Детоксикация, Detox | ICON:ability_rogue_imrovedrecuperate
+
+# --- Бурсты и Добивание (Major Cooldowns & Execute) ---
+- TOUCH_OF_DEATH: ID:322109 | CD:180 | EXECUTE:true | USABLE:true | NAME:Смертельное касание, Touch of Death | ICON:ability_monk_touchofdeath
+- INVOKE_XUEN: ID:123904 | CD:120 | BURST:20 | BOSS_SKILL:true | USABLE:true | AURA_ID:123904 | AURA_UNIT:player | AURA_DUR:20 | NAME:Призыв Сюэня, Белого Тигра, Invoke Xuen, the White Tiger | ICON:ability_monk_summontigerstatue
+- STORM_EARTH_AND_FIRE: ID:137639,221771 | CD:90 | CHARGES:2 | BURST:15 | BOSS_SKILL:true | USABLE:true | AURA_ID:137639 | AURA_UNIT:player | AURA_DUR:15 | NAME:Буря, земля и огонь, Storm, Earth, and Fire | ICON:spell_nature_giftofthewaterspirit
+- CELESTIAL_CONDUIT: ID:443028 | CD:90 | LOCK_CHANNEL:true | USABLE:true | AURA_ID:443028 | AURA_UNIT:player | AURA_DUR:4 | NAME:Небожитель-проводник, Celestial Conduit | ICON:inv_ability_conduitofthecelestialsmonk_celestialconduit
+
+# --- Основные удары и Спендеры Ци (Core Rotation & Chi Spenders) ---
+- STRIKE_OF_THE_WINDLORD: ID:392983 | CD:30 | SPENDER:true | COST:40 | USABLE:true | NAME:Удар Владыки Ветра, Strike of the Windlord | ICON:inv_hand_1h_artifactskywall_d_01
+- FISTS_OF_FURY: ID:113656 | CD:24 | SPENDER:true | COST:60 | LOCK_CHANNEL:true | USABLE:true | NAME:Неистовые кулаки, Fists of Fury | ICON:monk_ability_fistoffury
+- RISING_SUN_KICK: ID:107428 | CD:10 | SPENDER:true | COST:40 | USABLE:true | DEBUFF_ID:115804,107428 | AURA_UNIT:target | AURA_DUR:10 | NAME:Удар восходящего солнца, Rising Sun Kick | ICON:ability_monk_risingsunkick
+- WHIRLING_DRAGON_PUNCH: ID:152175 | CD:24 | PROC_ONLY:true | USABLE:true | NAME:Удар летящего дракона, Whirling Dragon Punch | ICON:ability_monk_hurricanestrike
+- SLICING_WINDS: ID:442515,442748 | CD:30 | USABLE:true | NAME:Рассекающие ветра, Slicing Winds | ICON:ability_skyreach_wind
+- SPINNING_CRANE_KICK: ID:101546 | CD:1.0 | SPENDER:true | COST:40 | USABLE:true | AURA_ID:325202 | AURA_UNIT:player | NAME:Танцующий журавль, Spinning Crane Kick | ICON:ability_monk_cranekick_new
+- BLACKOUT_KICK: ID:100784 | CD:1.0 | SPENDER:true | COST:20 | USABLE:true | AURA_ID:116768 | AURA_UNIT:player | NAME:Нокаутирующий удар, Blackout Kick | ICON:ability_monk_roundhousekick
+
+# --- Генераторы Ци и Филлер (Chi Builders & Filler) ---
+- TIGER_PALM: ID:100780 | CD:1.0 | GAIN:40 | USABLE:true | AURA_ID:202090 | AURA_UNIT:player | AURA_DUR:20 | NAME:Лапа тигра, Tiger Palm | ICON:ability_monk_tigerpalm
+- CRACKLING_JADE_LIGHTNING: ID:117952 | CD:1.0 | FILLER_INT:true | USABLE:true | AURA_ID:451433 | AURA_UNIT:player | NAME:Сверкающая нефритовая молния, Crackling Jade Lightning | ICON:ability_monk_cracklingjadelightning
+
+## AURAS
+- MARK_OF_THE_CRANE: ID:228287 | UNIT:target | DUR:15 | NAME:Метка журавля, Mark of the Crane
+- DANCE_OF_CHI_JI: ID:325202 | UNIT:player | DUR:15 | NAME:Танец Чи-Цзи, Dance of Chi-Ji
+- BLACKOUT_KICK_PROC: ID:116768 | UNIT:player | DUR:15 | NAME:Нокаутирующий удар!, Blackout Kick!
+- TEACHINGS_OF_THE_MONASTERY: ID:202090 | UNIT:player | DUR:20 | NAME:Учения монастыря, Teachings of the Monastery
+- VIVACIOUS_VIVIFICATION: ID:392883 | UNIT:player | DUR:10 | NAME:Бодрящее оживление, Vivacious Vivification
+- THE_EMPERORS_CAPACITOR: ID:393039,451433 | UNIT:player | DUR:20 | NAME:Конденсатор императора, The Emperor's Capacitor
+- MORTAL_WOUNDS: ID:115804 | UNIT:target | DUR:10 | NAME:Смертельные раны, Mortal Wounds
+
+## PROTECTED_CHANNELS
+- FISTS_OF_FURY
+- CELESTIAL_CONDUIT
+
+## INTERRUPTIBLE_CHANNELS
+- CRACKLING_JADE_LIGHTNING
+
+## NAMEPLATE_AURAS
+- 228287: 0.00, 1.00, 0.59 # Mark of the Crane (Метка журавля — Изумруд Монаха)
+- 115804: 0.95, 0.35, 0.15 # Rising Sun Kick / Mortal Wounds (Смертельные раны — Солнечный Оранж)
+- 119381: 1.00, 0.82, 0.15 # Leg Sweep (Круговой удар ногой — Золотой стан)
+- 115078: 0.35, 0.85, 1.00 # Paralysis (Паралич — Бирюзовый контроль)
+- 122470: 0.90, 0.20, 0.95 # Touch of Karma (Закон кармы — Пурпур)
+- 116095: 0.65, 0.75, 0.85 # Disable (Вывести из строя — Замедление)
+
+## EMERGENCY_SAVE
+IF player.hp_percent <= 35 AND READY(TOUCH_OF_KARMA) THEN
+    RETURN EMERGENCY(TOUCH_OF_KARMA)
+ELSE IF player.hp_percent <= 35 AND READY(FORTIFYING_BREW) THEN
+    RETURN EMERGENCY(FORTIFYING_BREW)
+ELSE IF player.hp_percent <= 45 AND READY(EXPEL_HARM) THEN
+    RETURN EMERGENCY(EXPEL_HARM)
+ELSE IF player.hp_percent <= 40 AND player.aura(VIVACIOUS_VIVIFICATION).rem > 0 AND READY(VIVIFY) THEN
+    RETURN EMERGENCY(VIVIFY)
+END IF
+
+## ROTATION_QUEUE
+# 1. Прерывания каста и Добивание (Interrupts & Touch of Death Execute)
+IF target.casting_interruptible AND READY(SPEAR_HAND_STRIKE) THEN
+    RETURN CAST(SPEAR_HAND_STRIKE)
+ELSE IF PVP AND target.casting_interruptible AND READY(LEG_SWEEP) THEN
+    RETURN CAST(LEG_SWEEP)
+ELSE IF READY(TOUCH_OF_DEATH) THEN
+    RETURN CAST(TOUCH_OF_DEATH)
+
+# 2. Бурсты на Боссе / Раре (Major Cooldowns)
+ELSE IF BOSS AND READY(INVOKE_XUEN) THEN
+    RETURN CAST(INVOKE_XUEN)
+ELSE IF BOSS AND READY(STORM_EARTH_AND_FIRE) THEN
+    RETURN CAST(STORM_EARTH_AND_FIRE)
+
+# 3. Удар летящего дракона и проки Небожителя
+ELSE IF PROC(WHIRLING_DRAGON_PUNCH) AND READY(WHIRLING_DRAGON_PUNCH) THEN
+    RETURN CAST(WHIRLING_DRAGON_PUNCH)
+ELSE IF READY(CELESTIAL_CONDUIT) THEN
+    RETURN CAST(CELESTIAL_CONDUIT)
+
+# 4. Бесплатный прок Танца Чи-Цзи и избежание оверкапа Ци (>= 5 Ци)
+ELSE IF (PROC(SPINNING_CRANE_KICK) OR player.aura(DANCE_OF_CHI_JI).rem > 0) AND READY(SPINNING_CRANE_KICK) THEN
+    RETURN CAST(SPINNING_CRANE_KICK)
+ELSE IF player.chi >= 5 AND READY(RISING_SUN_KICK) THEN
+    RETURN CAST(RISING_SUN_KICK)
+ELSE IF player.chi >= 5 AND READY(FISTS_OF_FURY) THEN
+    RETURN CAST(FISTS_OF_FURY)
+ELSE IF player.chi >= 5 AND enemies >= 3 AND READY(SPINNING_CRANE_KICK) THEN
+    RETURN CAST(SPINNING_CRANE_KICK)
+ELSE IF player.chi >= 5 AND READY(BLACKOUT_KICK) THEN
+    RETURN CAST(BLACKOUT_KICK)
+
+# 5. Главные спендеры Ци на КД (Удар Владыки Ветра -> Удар восходящего солнца -> Неистовые кулаки)
+ELSE IF READY(STRIKE_OF_THE_WINDLORD) THEN
+    RETURN CAST(STRIKE_OF_THE_WINDLORD)
+ELSE IF enemies <= 4 AND READY(RISING_SUN_KICK) THEN
+    RETURN CAST(RISING_SUN_KICK)
+ELSE IF READY(FISTS_OF_FURY) THEN
+    RETURN CAST(FISTS_OF_FURY)
+ELSE IF READY(RISING_SUN_KICK) THEN
+    RETURN CAST(RISING_SUN_KICK)
+ELSE IF READY(SLICING_WINDS) THEN
+    RETURN CAST(SLICING_WINDS)
+
+# 6. Сброс 4 стаков Учений монастыря и бесплатного прока Нокаутирующего удара
+ELSE IF player.aura(TEACHINGS_OF_THE_MONASTERY).stacks >= 4 AND READY(BLACKOUT_KICK) THEN
+    RETURN CAST(BLACKOUT_KICK)
+ELSE IF (PROC(BLACKOUT_KICK) OR player.aura(BLACKOUT_KICK_PROC).rem > 0) AND READY(BLACKOUT_KICK) THEN
+    RETURN CAST(BLACKOUT_KICK)
+
+# 7. АоЕ (3+ целей) vs СТ спендеры и генерация Ци через Лапу тигра
+ELSE IF enemies >= 3 AND player.chi >= 2 AND READY(SPINNING_CRANE_KICK) THEN
+    RETURN CAST(SPINNING_CRANE_KICK)
+ELSE IF player.chi <= 3 AND READY(TIGER_PALM) THEN
+    RETURN CAST(TIGER_PALM)
+ELSE IF READY(BLACKOUT_KICK) THEN
+    RETURN CAST(BLACKOUT_KICK)
+ELSE IF READY(EXPEL_HARM) THEN
+    RETURN CAST(EXPEL_HARM)
+ELSE
+    RETURN CAST(TIGER_PALM)
+END IF
+]])
+
 -- Legacy compatibility map for PVE / BOSS / PVP quick mode keys
 SpArc.DefaultMarkdownProfiles = {
   ["PVE"]  = SpArc.BuiltInPresets["PRIEST_01_SHADOW_PVE"].md,

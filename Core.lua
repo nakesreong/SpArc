@@ -1,6 +1,23 @@
 ---------------------------------------------------------------------------------------
---  SpArc/Core.lua — Core Namespace, Shared Helpers, Spell Catalog & SavedVariables
+--  SpArc/Core.lua — Core Namespace, Shared Helpers, Debug/Contract Engine & SavedVariables
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
+---------------------------------------------------------------------------------------
+--  @module Core
+--  @responsibility
+--    1. Initializes global `SpArc` / `SparkArc` namespace and schema version.
+--    2. Provides shared WoW 12.x Secret Value & string utilities (`IsSecret`, `SafeBool`, `Trim`, `UTF8Lower`, `ApplyCyrFont`).
+--    3. Manages SavedVariables (`SpArcDB`), ElvUI-style isolated character profiles, and `.MD` AST compilation cache.
+--    4. Provides the Universal Debug & Contract Verification Engine (`RecordModuleTick`, `AssertContract`, `SafeCall`, `RunDebugSelfTest`)
+--       used to detect regressions immediately during codebase refactoring.
+--  @techdebt [AUDIT-C1..C3]
+--    - [AUDIT-C1] `Trim`, `IsSecret`, `SafeGetCVar`/`SafeSetCVar`, and `CreateFlatBorder` are still duplicated locally
+--      in `Parser.lua`, `MacroGen.lua`, `CombatText.lua`, `Camera.lua`, `Nameplates.lua`, and `UnitFrames.lua`.
+--      Planned Refactor (Phase 1): Consolidate all shared utilities in `Core.lua` and delete local clones.
+--    - [AUDIT-C2] `InferProfileDefaultPresetID` and `EnsureDB` contain hardcoded character names ("Ньарлатхотеп", "Котастрофа", etc.)
+--      and fallback to `"PRIEST_01_SHADOW_PVE"`.
+--      Planned Refactor (Phase 2): Replace with dynamic `UnitClass("player")` + `GetSpecialization()` lookup.
+--    - [AUDIT-C3] One-off migration flags (`_bossPvpAutoMigrated`, `_shamanBuiltInPresetMigrated`, `_npAuraRulesFromMDV3`)
+--      clutter `EnsureDB()`. Planned Refactor (Phase 2): Move into a clean versioned migration table.
 ---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc or _G.SparkArc or {}
@@ -233,6 +250,7 @@ SpArc.DEFAULT_VISUAL = {
   resourceBarScale = 1.00,
   alwaysShowCDs = false,
   enableTelemetry = true,
+  enableDebugMode = true,
   showMinimapButton = true,
   minimapAngle = 205,
   enableArcHUD = true,
@@ -470,6 +488,11 @@ function SpArc:GetGameInteractKey()
   return "E"
 end
 
+---------------------------------------------------------------------------------------
+--  @function InferProfileDefaultPresetID
+--  @techdebt [AUDIT-C2] Hardcoded character name substring matching & Priest fallback.
+--            Scheduled for replacement in Refactoring Phase 2 with dynamic class/spec resolution.
+---------------------------------------------------------------------------------------
 local function InferProfileDefaultPresetID(profName, profObj)
   if type(profObj) == "table" and type(profObj.activePresetID) == "string" and profObj.activePresetID ~= "" then
     return profObj.activePresetID
@@ -778,6 +801,7 @@ function SpArc:EnsureDB(forceReinit)
   db.npAuraRules = activeProf.npAuraRules
 
   db.telemetryLog = db.telemetryLog or {}
+  db.debugLog = db.debugLog or {}
   db.lastSpellAudit = db.lastSpellAudit or {}
   cachedDB = db
   return db
@@ -1022,4 +1046,240 @@ function SpArc:RebuildParsedProfiles()
       end
     end
   end
+  SpArc:RecordModuleTick("Core", "RebuildParsedProfiles")
+end
+
+---------------------------------------------------------------------------------------
+--  UNIVERSAL DEBUG & CONTRACT VERIFICATION ENGINE (Refactoring Safety Net)
+---------------------------------------------------------------------------------------
+--  @purpose
+--    Tracks runtime health, tick counters, contract assertions, and error boundaries
+--    across all 15 SpArc modules. When `db.visual.enableDebugMode` is true, any broken
+--    contract or nil reference introduced during refactoring is immediately caught,
+--    recorded in `db.debugLog`, surfaced in `/sparc debug`, and alerted in chat
+--    (with rate-limiting so 60 FPS loops never spam).
+---------------------------------------------------------------------------------------
+SpArc.DEBUG_MODULES_ORDER = {
+  "Core",
+  "Parser",
+  "Scanner",
+  "State",
+  "Evaluator",
+  "HUD",
+  "ResourceBar",
+  "Camera",
+  "Telemetry",
+  "MacroGen",
+  "Nameplates",
+  "CombatText",
+  "EditMode",
+  "UnitFrames",
+  "ControlCenter",
+}
+
+SpArc.debugStats = SpArc.debugStats or {}
+local debugRateLimit = {}
+
+local function EnsureModuleDebugStat(moduleName)
+  moduleName = tostring(moduleName or "Unknown")
+  local st = SpArc.debugStats[moduleName]
+  if not st then
+    st = {
+      name = moduleName,
+      ticks = 0,
+      lastTickAt = 0,
+      errors = 0,
+      warnings = 0,
+      assertionsPassed = 0,
+      lastError = nil,
+      lastWarning = nil,
+      lastDetail = nil,
+      status = "IDLE",
+    }
+    SpArc.debugStats[moduleName] = st
+  end
+  return st
+end
+
+for _, mName in ipairs(SpArc.DEBUG_MODULES_ORDER) do
+  EnsureModuleDebugStat(mName)
+end
+
+function SpArc:IsDebugEnabled()
+  local db = cachedDB or _G.SpArcDB
+  if db and db.visual then
+    return db.visual.enableDebugMode ~= false
+  end
+  return true
+end
+
+local function AppendDebugLogEntry(level, moduleName, msg)
+  local db = cachedDB or _G.SpArcDB
+  if not db then return end
+  db.debugLog = db.debugLog or {}
+  local now = (_G.GetTime and _G.GetTime()) or 0
+  local entry = string.format("[%.1fs] [%s] [%s] %s", now, tostring(level), tostring(moduleName), tostring(msg))
+  table.insert(db.debugLog, 1, entry)
+  while #db.debugLog > 200 do
+    table.remove(db.debugLog)
+  end
+end
+
+function SpArc:RecordModuleTick(moduleName, detail)
+  local st = EnsureModuleDebugStat(moduleName)
+  st.ticks = (st.ticks or 0) + 1
+  st.lastTickAt = (_G.GetTime and _G.GetTime()) or 0
+  if detail then
+    st.lastDetail = tostring(detail)
+  end
+  if st.status == "IDLE" then
+    st.status = "OK"
+  end
+end
+
+function SpArc:DebugLog(moduleName, fmt, ...)
+  if not SpArc:IsDebugEnabled() then return end
+  local ok, msg = pcall(string.format, tostring(fmt or ""), ...)
+  if not ok then msg = tostring(fmt) end
+  AppendDebugLogEntry("INFO", moduleName, msg)
+end
+
+function SpArc:DebugWarn(moduleName, warnKey, fmt, ...)
+  local st = EnsureModuleDebugStat(moduleName)
+  st.warnings = (st.warnings or 0) + 1
+  local ok, msg = pcall(string.format, tostring(fmt or ""), ...)
+  if not ok then msg = tostring(fmt) end
+  st.lastWarning = msg
+  if st.status ~= "ERR" then
+    st.status = "WARN"
+  end
+  local now = (_G.GetTime and _G.GetTime()) or 0
+  local rKey = "W:" .. tostring(moduleName) .. ":" .. tostring(warnKey or msg)
+  if not debugRateLimit[rKey] or (now - debugRateLimit[rKey]) >= 10.0 then
+    debugRateLimit[rKey] = now
+    AppendDebugLogEntry("WARN", moduleName, msg)
+    if SpArc:IsDebugEnabled() then
+      print(string.format("|cffa335ee[SpArc DEBUG WARN]|r |cffffd100[%s]|r %s", tostring(moduleName), msg))
+    end
+  end
+end
+
+function SpArc:DebugError(moduleName, errKey, errMsg)
+  local st = EnsureModuleDebugStat(moduleName)
+  st.errors = (st.errors or 0) + 1
+  local msg = tostring(errMsg or "unknown error")
+  st.lastError = msg
+  st.status = "ERR"
+  local now = (_G.GetTime and _G.GetTime()) or 0
+  local rKey = "E:" .. tostring(moduleName) .. ":" .. tostring(errKey or msg)
+  if not debugRateLimit[rKey] or (now - debugRateLimit[rKey]) >= 8.0 then
+    debugRateLimit[rKey] = now
+    AppendDebugLogEntry("ERROR", moduleName, msg)
+    if SpArc:IsDebugEnabled() then
+      print(string.format("|cffff4040[SpArc DEBUG ERROR]|r |cffffd100[%s:%s]|r %s", tostring(moduleName), tostring(errKey or "?"), msg))
+    end
+  end
+end
+
+function SpArc:AssertContract(moduleName, condition, contractKey, fmt, ...)
+  local st = EnsureModuleDebugStat(moduleName)
+  if condition then
+    st.assertionsPassed = (st.assertionsPassed or 0) + 1
+    if st.status == "IDLE" then st.status = "OK" end
+    return true
+  end
+  SpArc:DebugWarn(moduleName, contractKey or "CONTRACT", fmt or ("Contract violation: " .. tostring(contractKey)), ...)
+  return false
+end
+
+function SpArc:SafeCall(moduleName, fnName, fn, ...)
+  if type(fn) ~= "function" then
+    SpArc:DebugError(moduleName, fnName or "SafeCall", "Attempted to call non-function (" .. type(fn) .. ")")
+    return false
+  end
+  local ok, r1, r2, r3, r4 = pcall(fn, ...)
+  if not ok then
+    SpArc:DebugError(moduleName, fnName or "SafeCall", r1)
+    return false
+  end
+  SpArc:RecordModuleTick(moduleName, fnName)
+  return true, r1, r2, r3, r4
+end
+
+function SpArc:RunDebugSelfTest(printToChat)
+  local db = SpArc:EnsureDB()
+  local passed = 0
+  local failed = 0
+  local function check(modName, cond, key, desc)
+    if SpArc:AssertContract(modName, cond, key, desc) then
+      passed = passed + 1
+    else
+      failed = failed + 1
+    end
+  end
+
+  -- 1. Core & SavedVariables contract
+  check("Core", type(db) == "table" and type(db.visual) == "table", "DB_VISUAL", "db.visual table must exist")
+  check("Core", type(db.presets) == "table" and type(db.presetOrder) == "table" and #db.presetOrder > 0, "DB_PRESETS", "db.presets and presetOrder must be non-empty")
+  check("Core", type(SpArc.SPELL_DEFS) == "table", "SPELL_DEFS_TABLE", "SpArc.SPELL_DEFS table must exist")
+
+  -- 2. Parser & Active Profile contract
+  check("Parser", type(SpArc.ParseMarkdownFSM) == "function", "FN_PARSE", "SpArc:ParseMarkdownFSM must be registered")
+  local activeProf = SpArc:SelectActiveParsedProfile()
+  check("Parser", type(activeProf) == "table" and type(activeProf.rules) == "table", "ACTIVE_AST", "Active parsed profile AST must contain rules table")
+  local defCount = 0
+  for _ in pairs(SpArc.SPELL_DEFS or {}) do defCount = defCount + 1 end
+  check("Parser", defCount > 0, "SPELL_DEFS_POPULATED", "SPELL_DEFS must have >0 spells after profile selection (got %d)", defCount)
+
+  -- 3. Scanner contract
+  check("Scanner", type(SpArc.ScanActionSlotsAndSpells) == "function", "FN_SCAN", "SpArc:ScanActionSlotsAndSpells must exist")
+  check("Scanner", type(SpArc.GetSlotKeybind) == "function" and type(SpArc.MatchSpellToDefKey) == "function", "SCAN_API", "Scanner keybind & spell matcher API must exist")
+
+  -- 4. State contract
+  check("State", type(SpArc.state) == "table" and type(SpArc.state.castState) == "table", "STATE_TABLE", "SpArc.state and castState must exist")
+  check("State", type(SpArc.EvaluateSpellState) == "function" and type(SpArc.IsRuleConditionMet) == "function", "FN_STATE", "State evaluation functions must exist")
+
+  -- 5. Evaluator contract (dry-run BuildRotationQueue)
+  check("Evaluator", type(SpArc.BuildRotationQueue) == "function", "FN_EVAL", "SpArc:BuildRotationQueue must exist")
+  local okQ, qRes, evalRes = SpArc:SafeCall("Evaluator", "SelfTest_BuildRotationQueue", SpArc.BuildRotationQueue, SpArc, 5)
+  check("Evaluator", okQ and type(qRes) == "table" and type(evalRes) == "table", "EVAL_QUEUE_RET", "BuildRotationQueue must return (queue, evaluated) tables")
+
+  -- 6. HUD contract
+  check("HUD", type(SpArc.ApplyVisualLayout) == "function" and _G.SpArcHUDRoot ~= nil, "HUD_ROOT", "SpArcHUDRoot and ApplyVisualLayout must exist")
+
+  -- 7. ResourceBar contract
+  check("ResourceBar", type(SpArc.UpdateResourceBar) == "function" and SpArc.resourceFrame ~= nil, "RES_FRAME", "SpArc.resourceFrame and UpdateResourceBar must exist")
+
+  -- 8. Camera contract
+  check("Camera", type(SpArc.UpdateCameraState) == "function" and _G.SpArcCamHoldButton ~= nil and _G.SpArcCamInteractButton ~= nil, "CAM_BUTTONS", "Secure camera buttons and UpdateCameraState must exist")
+
+  -- 9. Telemetry contract
+  check("Telemetry", type(SpArc.BuildTelemetryReportText) == "function" and type(SpArc.CaptureTelemetrySnapshot) == "function", "FN_TEL", "Telemetry snapshot & report functions must exist")
+
+  -- 10. MacroGen contract
+  check("MacroGen", type(SpArc.ScanSpellBookForMacros) == "function" and type(SpArc.GenerateClassMacros) == "function", "FN_MACROGEN", "MacroGen functions must exist")
+
+  -- 11. Nameplates contract
+  check("Nameplates", type(SpArc.RefreshAllNameplates) == "function" and type(SpArc.CompileNameplateAuraRules) == "function", "FN_NAMEPLATES", "Nameplates API must exist")
+
+  -- 12. CombatText contract
+  check("CombatText", type(SpArc.ApplyCombatTextSettings) == "function" and type(SpArc.SpawnMSBTText) == "function", "FN_COMBATTEXT", "CombatText & MSBT API must exist")
+
+  -- 13. EditMode contract
+  check("EditMode", type(SpArc.ToggleEditMode) == "function" and type(SpArc.RegisterEditMover) == "function", "FN_EDITMODE", "EditMode registry API must exist")
+
+  -- 14. UnitFrames contract
+  check("UnitFrames", type(SpArc.ApplyUnitFramesSettings) == "function" and type(SpArc.unitFrames) == "table", "UF_POOL", "UnitFrames table and ApplyUnitFramesSettings must exist")
+  check("UnitFrames", SpArc.unitFrames and SpArc.unitFrames.player ~= nil and SpArc.unitFrames.target ~= nil and SpArc.unitFrames.party1 ~= nil, "UF_FRAMES", "Player, Target, and Party1 UnitFrames must be constructed")
+
+  -- 15. ControlCenter contract
+  check("ControlCenter", type(SpArc.OpenControlCenter) == "function", "FN_CONTROLCENTER", "OpenControlCenter must exist")
+
+  local summary = string.format("Self-Test Complete: %d passed, %d failed across %d modules", passed, failed, #SpArc.DEBUG_MODULES_ORDER)
+  AppendDebugLogEntry(failed == 0 and "SELF-TEST OK" or "SELF-TEST WARN", "Core", summary)
+  if printToChat then
+    local badge = (failed == 0) and "|cff00ff96[OK]|r" or "|cffff4040[WARN]|r"
+    print(string.format("|cffa335ee[SpArc Debug]|r %s %s", badge, summary))
+  end
+  return passed, failed, summary
 end

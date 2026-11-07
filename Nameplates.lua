@@ -2,6 +2,24 @@
 --  SpArc/Nameplates.lua — Minimalist Windows Metro Tile Nameplates, Castbar & Aura Colors
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
 ---------------------------------------------------------------------------------------
+--  @module Nameplates
+--  @responsibility
+--    1. Attaches non-tainting Metro Tile overlays to Blizzard nameplates (`NAME_PLATE_UNIT_ADDED`).
+--    2. Compiles and evaluates `.MD` + user DoT/Aura color rules (`CompileNameplateAuraRules`).
+--    3. Renders WoW 12.x Secret-Value-safe health bars (`StatusBar:SetValue`), castbars
+--       (`SetTimerDuration` + event fallback), Quest NPC badges, and distance fade.
+--    4. Builds Tab 10 (`BuildNameplatesPage` / `RefreshNameplatesPage`) in the Control Center.
+--  @contract
+--    - NEVER hides or reparents the root `NamePlateN` secure frame in combat.
+--    - `SpArc:RefreshAllNameplates()` and `SpArc:CompileNameplateAuraRules()` must remain safe at any time.
+--  @techdebt [AUDIT-NP1..NP3]
+--    - [AUDIT-NP1] At 2,321 lines, `Nameplates.lua` is the largest file in `SpArc`, combining runtime
+--      nameplate rendering (lines 1–1871) with the Tab 10 Control Center UI builder (lines 1872–2321).
+--    - [AUDIT-NP2] Metro color constants (`COLOR_HOSTILE_RED`, `COLOR_NEUTRAL_YELLOW`, `COLOR_FRIENDLY_GREEN`,
+--      `COLOR_CAST_GOLD`, `COLOR_CAST_GREY`), `CreateFlatBorder`, reaction color resolution, and Secret-Value
+--      castbar rendering are duplicated between `Nameplates.lua` and `UnitFrames.lua`.
+--      Planned Refactor (Phase 1): Extract shared Metro UI & Secret-Value bar helpers into `Core.lua`.
+---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc
 local CreateFrame = _G.CreateFrame
@@ -1867,6 +1885,9 @@ npDriver:SetScript("OnUpdate", function(_, elapsed)
         end
       end
     end
+  end
+  if SpArc.RecordModuleTick then
+    SpArc:RecordModuleTick("Nameplates", "OnUpdate")
   end
 end)
 ---------------------------------------------------------------------------------------

@@ -1,12 +1,25 @@
--- =====================================================================================
---  SpArc — CombatText.lua (v2.9.5)
---  Module 11: MSBT Movable Scroll Zones, Tactile Haptic Numbers & Nameplate Distance Fade
+---------------------------------------------------------------------------------------
+--  SpArc/CombatText.lua — MSBT Movable Scroll Zones, Tactile Haptic Numbers & AoE Filter
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
--- =====================================================================================
+---------------------------------------------------------------------------------------
+--  @module CombatText
+--  @responsibility
+--    1. Renders MSBT-style movable incoming & outgoing parabolic scroll zones (`SpawnMSBTText`).
+--    2. Renders custom dimmed/compact overhead target damage numbers (`SpawnOverheadTargetText`).
+--    3. Dynamically suppresses periodic DoT tick spam in AoE packs (3+ active combat plates).
+--    4. Builds Tab 11 (`BuildCombatTextPage` / `RefreshCombatTextPage`) in the Control Center.
+--  @techdebt [AUDIT-CT1..CT3]
+--    - [AUDIT-CT1] Lines 10–36 & 60–67 re-implement `IsSecret`, `SafeGetCVar`, `SafeSetCVar`, and `ApplyMSBTFont`
+--      instead of using `SpArc.IsSecret`, `SpArc.SafeGetCVar`, `SpArc.SafeSetCVar`, and `SpArc.ApplyCyrFont`.
+--      Planned Refactor (Phase 1): Delegate to shared helpers in `Core.lua`.
+--    - [AUDIT-CT2] Tab 11 Group 3 (`M11_GRP_SCALE`) duplicates Nameplate distance fade (`npDistanceFade`,
+--      `npMaxDistance`, `npMinAlpha`) sliders that also exist on Tab 10 (`Nameplates.lua`).
+---------------------------------------------------------------------------------------
 
 local _G = _G
 local SpArc = _G.SpArc
 
+-- @techdebt [AUDIT-CT1]: Local duplicates of SpArc.IsSecret / CVar helpers; consolidate in Phase 1
 local issecretvalue = _G.issecretvalue or function() return false end
 local function IsSecret(v)
   return issecretvalue(v)
@@ -1143,6 +1156,9 @@ ctEventFrame:SetScript("OnUpdate", function(_, elapsed)
   ctAccum = 0
   if not SpArc:IsCombatTextEnabled() then return end
   SpArc:UpdateDynamicAoEPeriodicFilter(false)
+  if SpArc.RecordModuleTick then
+    SpArc:RecordModuleTick("CombatText", "OnUpdate")
+  end
   if SpArc.controlFrame and SpArc.controlFrame:IsShown() and SpArc.controlFrame.ui and SpArc.controlFrame.ui.m11StatusTxt then
     local ui = SpArc.controlFrame.ui
     if ui.m11StatusTxt:IsVisible() then

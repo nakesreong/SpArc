@@ -2,6 +2,20 @@
 --  SpArc/SpArc.lua — ElvUI-Style Modular Control Center UI, Minimap & Slash Commands
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
 ---------------------------------------------------------------------------------------
+--  @module ControlCenter
+--  @responsibility
+--    1. Provides ElvUI-style UI widget factories (`SetBackdropFlat`, `CreateElvButton`,
+--       `CreateElvGroupBox`, `CreateElvCheck`, `CreateElvSlider`).
+--    2. Builds and refreshes the 12-tab `SpArcControlCenter` window.
+--    3. Manages `SpArcMinimapButton`, Blizzard AddOn Settings canvas, and `/sparc` slash commands.
+--  @techdebt [AUDIT-UI1..UI2]
+--    - [AUDIT-UI1] `SpArc.lua` is 2,136 lines because Tabs 1..8 are built inline inside
+--      `OpenControlCenter()`, whereas Tabs 9..12 delegate to `Build*Page()` in their own modules.
+--      Planned Refactor (Phase 3): Extract UI widget factories (`UIWidgets.lua`) so all modules
+--      share them directly without passing `helpers` tables.
+--    - [AUDIT-UI2] `selectedPresetForEdit` (line 29) and `GetPlayerClassTag` fallback (line 44)
+--      hardcode `"PRIEST_01_SHADOW_PVE"` / `"PRIEST"`.
+---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc
 
@@ -1220,15 +1234,23 @@ local function OpenControlCenter(initialTab)
       ui.m7Title:SetPoint("TOPLEFT", 0, 0)
       ui.m7Title:SetTextColor(1, 0.85, 0.25, 1)
 
-      CreateElvCheck(p7, "MOD_ENABLE", "enableTelemetry", 0, -24, true, false)
+      local cTel = CreateElvCheck(p7, "MOD_ENABLE", "enableTelemetry", 0, -24, true, false)
+      cTel:SetWidth(160)
+      local cDbg = CreateElvCheck(p7, "CK_DEBUG_MODE", "enableDebugMode", 170, -24, false, false, function(val)
+        print(string.format(SpArc:L("MSG_DEBUG_TOGGLE"), val and SpArc:L("MSG_ON") or SpArc:L("MSG_OFF")))
+      end)
+      cDbg:SetWidth(630)
 
-      ui.snapBtn = CreateElvButton(p7, 195, 26, "")
+      ui.snapBtn = CreateElvButton(p7, 185, 26, "")
       ui.snapBtn:SetPoint("TOPLEFT", 0, -54)
 
-      ui.copyTelBtn = CreateElvButton(p7, 180, 26, "")
-      ui.copyTelBtn:SetPoint("LEFT", ui.snapBtn, "RIGHT", 8, 0)
+      ui.selfTestBtn = CreateElvButton(p7, 210, 26, "")
+      ui.selfTestBtn:SetPoint("LEFT", ui.snapBtn, "RIGHT", 8, 0)
 
-      ui.clearTelBtn = CreateElvButton(p7, 195, 26, "")
+      ui.copyTelBtn = CreateElvButton(p7, 175, 26, "")
+      ui.copyTelBtn:SetPoint("LEFT", ui.selfTestBtn, "RIGHT", 8, 0)
+
+      ui.clearTelBtn = CreateElvButton(p7, 185, 26, "")
       ui.clearTelBtn:SetPoint("LEFT", ui.copyTelBtn, "RIGHT", 8, 0)
 
       local telBoxFrame = CreateFrame("Frame", nil, p7, "BackdropTemplate")
@@ -1253,12 +1275,20 @@ local function OpenControlCenter(initialTab)
         pcall(SpArc.CaptureTelemetrySnapshot, SpArc, "MANUAL_SNAPSHOT")
         controlFrame:RefreshUI()
       end)
+      ui.selfTestBtn:SetScript("OnClick", function()
+        if SpArc.RunDebugSelfTest then
+          SpArc:RunDebugSelfTest(true)
+        end
+        pcall(SpArc.CaptureTelemetrySnapshot, SpArc, "SELFTEST_SNAPSHOT")
+        controlFrame:RefreshUI()
+      end)
       ui.copyTelBtn:SetScript("OnClick", function()
         ui.telEditBox:SetFocus()
         ui.telEditBox:HighlightText()
       end)
       ui.clearTelBtn:SetScript("OnClick", function()
         db.telemetryLog = {}
+        db.debugLog = {}
         db.capturedLuaErrors = {}
         if _G.BugSack and type(_G.BugSack.Reset) == "function" then
           pcall(_G.BugSack.Reset, _G.BugSack)
@@ -1723,11 +1753,17 @@ local function OpenControlCenter(initialTab)
 
       -- Module 7 refresh
       ui.snapBtn:SetText(SpArc:L("TEL_SNAP_BTN"))
+      if ui.selfTestBtn then
+        ui.selfTestBtn:SetText(SpArc:L("TEL_SELFTEST_BTN"))
+      end
       ui.copyTelBtn:SetText(SpArc:L("TEL_COPY_BTN"))
       ui.clearTelBtn:SetText(SpArc:L("TEL_CLEAR_BTN"))
       if ui.pages[7]:IsShown() then
         local okRep, repText = pcall(SpArc.BuildTelemetryReportText, SpArc)
         ui.telEditBox:SetText((okRep and repText) or "")
+      end
+      if SpArc.RecordModuleTick then
+        SpArc:RecordModuleTick("ControlCenter", "RefreshUI:Tab" .. tostring(currentTabIdx))
       end
 
       -- Module 8 (Profiles) refresh
@@ -2071,19 +2107,36 @@ if _G.C_Timer and _G.C_Timer.After then
     UpdateMinimapButtonPosition()
     SpArc:UpdateMinimapButtonVisibility()
     SpArc:ApplySmartBossTabBinding()
+    if SpArc.RunDebugSelfTest then
+      SpArc:RunDebugSelfTest(false)
+    end
   end)
 end
 
 _G.SLASH_SPARC1 = "/sparc"
 _G.SLASH_SPARC2 = "/sparkarc"
 _G.SlashCmdList["SPARC"] = function(msg)
-  local cmd = (msg or ""):match("^(%S*)")
+  local cmd, arg = (msg or ""):match("^(%S*)%s*(.-)$")
   cmd = (cmd or ""):lower()
+  arg = (arg or ""):lower()
   local db = SpArc:EnsureDB()
   if cmd == "test" then
     SpArc.testMode = not SpArc.testMode
     print(string.format(SpArc:L("MSG_TEST_TOGGLE"), SpArc.testMode and SpArc:L("MSG_ON") or SpArc:L("MSG_OFF")))
+  elseif cmd == "selftest" then
+    if SpArc.RunDebugSelfTest then
+      SpArc:RunDebugSelfTest(true)
+    end
   elseif cmd == "debug" or cmd == "tel" or cmd == "telemetry" then
+    if arg == "on" or arg == "off" then
+      db.visual.enableDebugMode = (arg == "on")
+      print(string.format(SpArc:L("MSG_DEBUG_TOGGLE"), db.visual.enableDebugMode and SpArc:L("MSG_ON") or SpArc:L("MSG_OFF")))
+      if controlFrame and controlFrame:IsShown() then controlFrame:RefreshUI() end
+      return
+    end
+    if SpArc.RunDebugSelfTest then
+      SpArc:RunDebugSelfTest(cmd == "debug")
+    end
     pcall(SpArc.CaptureTelemetrySnapshot, SpArc, "MANUAL_SNAPSHOT")
     OpenControlCenter(7)
   elseif cmd == "en" or cmd == "ru" then

@@ -1,6 +1,19 @@
 ---------------------------------------------------------------------------------------
---  SpArc/HUD.lua â€” Semicircle Rotation Arc, Cooldown Wings, Castbar & Smart Boss Tab
+--  SpArc/HUD.lua — Semicircle Rotation Arc, Cooldown Wings, Castbar & Smart Boss Tab
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
+---------------------------------------------------------------------------------------
+--  @module HUD
+--  @responsibility
+--    1. Renders the 3..6 icon Rotation Arc (Dome / Flat Line / Bowl), Left Saves Wing,
+--       Right Cooldowns Wing, Emergency Save Alert, and Dual-Direction Player Castbar.
+--    2. Animates tactical icon press feedback (`TriggerSpellPress`).
+--    3. Manages Smart Boss Tab-Targeting (`SpArcSmartTabButton`).
+--  @contract
+--    - `SpArcHUDRoot` drives the main HUD tick (`OnUpdate` at ~33Hz) and delegates
+--      secondary resource updates to `SpArc:UpdateResourceBar(now, showHUD)`.
+--  @techdebt [AUDIT-HUD1]
+--    - Line 439 checks `key == "REGROWTH"` (69369 Predatory Swiftness) directly inside
+--      generic `UpdateCooldownRow`. Move into a declarative `.MD` flag (`dimWithoutProc`) in Phase 2.
 ---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc
@@ -436,7 +449,8 @@ local function UpdateCooldownRow(boxes, spellKeys, states, now, gcdStart, gcdDur
           box.border:SetColorTexture(1.0, 0.12, 0.12, 0.96)
           box.glow:SetColorTexture(1.0, 0.08, 0.08, 0.45)
           box.keybind:SetTextColor(1.0, 0.30, 0.30, 1)
-        elseif key == "REGROWTH" and def and def.auraIDs and def.auraIDs[1] == 69369 then
+        -- @techdebt [AUDIT-HUD1]: Replace hardcoded REGROWTH 69369 check with declarative dimWithoutProc flag
+        elseif key == "REGROWTH" and defs and defs[key] and defs[key].auraIDs and defs[key].auraIDs[1] == 69369 then
           box.icon:SetAlpha(0.55)
           box.icon:SetVertexColor(0.75, 0.75, 0.80)
           box.border:SetColorTexture(0.22, 0.42, 0.30, 0.85)
@@ -1076,6 +1090,10 @@ rootFrame:SetScript("OnUpdate", function()
     emergencyBox.currentSlot = nil
     emergencyBox.currentKeybind = nil
     emergencyBox:Hide()
+  end
+
+  if SpArc.RecordModuleTick then
+    SpArc:RecordModuleTick("HUD", "OnUpdate")
   end
 end)
 

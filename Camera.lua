@@ -1,16 +1,20 @@
 ---------------------------------------------------------------------------------------
 --  SpArc/Camera.lua — Standalone Action Combat Camera (Mouselook) Module
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
---
---  Purpose:
---  Lightweight, rock-solid replacement for CombatMode with zero bloat:
---  • Holds camera in MouselookStart() automatically during gameplay.
---  • G = strictly onHold (unlocks cursor while held; locks immediately on release).
---  • ` = strictly onPress toggle (unlocks/locks permanently on press).
---  • Direct Mouselook click-casting (LMB/RMB + Shift/Ctrl/Alt -> Bartender4 :Keybind / ActionButton 1..8).
---  • Auto-unlocks cursor when bags, map, quests, menus, or ground-targeting spells are active.
---  • Forces CursorFreelookCentering=0 & CursorStickyCentering=0 so WoW 12.x never leaves
---    a visible stuck cursor jittering in the center of the screen.
+---------------------------------------------------------------------------------------
+--  @module Camera
+--  @responsibility
+--    1. Manages Mouselook lock/unlock (`MouselookStart`/`MouselookStop`) with zero cursor jitter.
+--    2. Binds `G` (onHold free cursor), `` ` `` (onPress toggle), and `E` (Target + Interact + OOC Auto-Unshift).
+--    3. Binds LMB/RMB (+Shift/Ctrl/Alt) to Bartender4 `:Keybind` / ActionButtons 1..8 during Mouselook.
+--    4. Auto-unlocks cursor when UI panels, bags, map, menus, or ground-targeting reticles are open.
+--  @contract
+--    - NEVER modifies override bindings or SecureActionButton attributes while `InCombatLockdown()` is true.
+--    - Always stops Mouselook before `ReloadUI` / `LOADING_SCREEN_ENABLED` so Win32 `ShowCursor` refcount stays balanced.
+--  @techdebt [AUDIT-CAM1..CAM2]
+--    - [AUDIT-CAM1] `SafeGetCVar` / `SafeSetCVar` are duplicated across `Camera.lua`, `CombatText.lua`, and `Nameplates.lua`.
+--      Planned Refactor (Phase 1): Move CVar helpers to `Core.lua`.
+--    - [AUDIT-CAM2] `SpArc:ClearPendingAutoUnshift()` (line 1250) is an empty no-op stub left over from an earlier design.
 ---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc
@@ -1690,6 +1694,9 @@ camDriver:SetScript("OnUpdate", function(_, elapsed)
   UpdateAutoUnshiftBindings(false)
   UpdateInteractBindingMode(false)
   SpArc:UpdateCameraState()
+  if SpArc.RecordModuleTick then
+    SpArc:RecordModuleTick("Camera", lastInteractMode or "OnUpdate")
+  end
 end)
 
 NeutralizeExternalCombatMode()

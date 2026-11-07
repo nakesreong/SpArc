@@ -1,6 +1,18 @@
 ---------------------------------------------------------------------------------------
---  SpArc/Telemetry.lua — SpellBook vs Bartender4 vs SpArc Telemetry Auditor
+--  SpArc/Telemetry.lua — SpellBook vs Bartender4 vs SpArc Telemetry & Debug Auditor
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
+---------------------------------------------------------------------------------------
+--  @module Telemetry
+--  @responsibility
+--    1. Captures real-time snapshots comparing `SpArc` queue decisions against live
+--       SpellBook (`C_Spell`) and Bartender4 (`BT4Button`) state.
+--    2. Collects Lua errors from `!BugGrabber` / `BugSack`.
+--    3. Formats the Module Health & Contract Verification table (`SpArc.debugStats`
+--       and `db.debugLog`) for `/sparc debug`.
+--  @techdebt [AUDIT-TEL1..TEL2]
+--    - [AUDIT-TEL1] `CORE_AUDIT_ORDER` (lines 28–42) is a hardcoded Shadow Priest spell list fallback.
+--    - [AUDIT-TEL2] `GetPrimaryResourceString` (lines 71–116) duplicates resource inspection logic
+--      from `ResourceBar.lua` and `State.lua`. Consolidate in Phase 2.
 ---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc
@@ -282,16 +294,69 @@ end
 
 function SpArc:BuildTelemetryReportText()
   local db = SpArc:EnsureDB()
+  if SpArc.RecordModuleTick then
+    SpArc:RecordModuleTick("Telemetry", "BuildTelemetryReportText")
+  end
   local isRU = SpArc:IsRU()
   local errs = CaptureBugGrabberErrors(db)
   local parsed = SpArc.SelectActiveParsedProfile and SpArc:SelectActiveParsedProfile() or nil
   local auditOrder = GetActiveAuditOrder(parsed)
   local lines = {}
+  local dbgOn = SpArc.IsDebugEnabled and SpArc:IsDebugEnabled()
   if isRU then
-    lines[#lines + 1] = "=== SPARC v" .. SpArc.VERSION .. " — ТЕЛЕМЕТРИЯ И СВЕРКА С КНИГОЙ ЗАКЛИНАНИЙ ==="
-    lines[#lines + 1] = "Сбор телеметрии: " .. ((db.visual and db.visual.enableTelemetry) and "ВКЛЮЧЕН (пишется в WTF/.../SavedVariables/SpArc.lua)" or "ВЫКЛЮЧЕН")
+    lines[#lines + 1] = "=== SPARC v" .. SpArc.VERSION .. " — ТЕЛЕМЕТРИЯ, ДЕБАГ-РАДАР И СВЕРКА С КНИГОЙ ЗАКЛИНАНИЙ ==="
+    lines[#lines + 1] = "Сбор телеметрии: " .. ((db.visual and db.visual.enableTelemetry) and "ВКЛЮЧЕН (WTF/.../SavedVariables/SpArc.lua)" or "ВЫКЛЮЧЕН")
+      .. "  |  Режим отладки (Debug Mode): " .. (dbgOn and "|cff00ff96ВКЛЮЧЕН|r" or "|cffff5555ВЫКЛЮЧЕН|r")
     lines[#lines + 1] = ""
-    lines[#lines + 1] = "--- 0. ПЕРЕХВАЧЕННЫЕ ОШИБКИ LUA (!BugGrabber / BugSack) ---"
+    lines[#lines + 1] = "--- 0A. ЗДОРОВЬЕ МОДУЛЕЙ И КОНТРАКТОВ (DEBUG MODE / РЕФАКТОРИНГ-РАДАР) ---"
+  else
+    lines[#lines + 1] = "=== SPARC v" .. SpArc.VERSION .. " — TELEMETRY, DEBUG RADAR & SPELLBOOK AUDITOR ==="
+    lines[#lines + 1] = "Telemetry Logging: " .. ((db.visual and db.visual.enableTelemetry) and "ENABLED (WTF/.../SavedVariables/SpArc.lua)" or "DISABLED")
+      .. "  |  Debug Mode: " .. (dbgOn and "|cff00ff96ENABLED|r" or "|cffff5555DISABLED|r")
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "--- 0A. MODULE HEALTH & CONTRACT VERIFICATION (DEBUG RADAR) ---"
+  end
+
+  local modOrder = SpArc.DEBUG_MODULES_ORDER or {}
+  local dStats = SpArc.debugStats or {}
+  for _, mName in ipairs(modOrder) do
+    local ms = dStats[mName]
+    if ms then
+      local stBadge = ms.status or "IDLE"
+      if stBadge == "OK" then
+        stBadge = "|cff00ff96OK  |r"
+      elseif stBadge == "WARN" then
+        stBadge = "|cffffd100WARN|r"
+      elseif stBadge == "ERR" then
+        stBadge = "|cffff4040ERR |r"
+      else
+        stBadge = "|cff888899IDLE|r"
+      end
+      local note = ms.lastError or ms.lastWarning or ms.lastDetail or "-"
+      lines[#lines + 1] = string.format(
+        "• %-14s [%s] Ticks:%-6d Checks:%-3d Warn:%-2d Err:%-2d | %s",
+        mName,
+        stBadge,
+        tonumber(ms.ticks) or 0,
+        tonumber(ms.assertionsPassed) or 0,
+        tonumber(ms.warnings) or 0,
+        tonumber(ms.errors) or 0,
+        tostring(note)
+      )
+    end
+  end
+
+  local dLog = db.debugLog or {}
+  if #dLog > 0 then
+    lines[#lines + 1] = isRU and "  Последние события Debug Log:" or "  Recent Debug Log Events:"
+    for i = 1, math.min(10, #dLog) do
+      lines[#lines + 1] = "    " .. tostring(dLog[i])
+    end
+  end
+  lines[#lines + 1] = ""
+
+  if isRU then
+    lines[#lines + 1] = "--- 0B. ПЕРЕХВАЧЕННЫЕ ОШИБКИ LUA (!BugGrabber / BugSack) ---"
     if #errs == 0 then
       lines[#lines + 1] = "(Ошибок Lua не зафиксировано)"
     else
@@ -302,10 +367,7 @@ function SpArc:BuildTelemetryReportText()
     lines[#lines + 1] = ""
     lines[#lines + 1] = "--- 1. ТЕКУЩЕЕ СОСТОЯНИЕ ПО КНИГЕ ЗАКЛИНАНИЙ И ПАНЕЛЯМ BARTENDER4 ---"
   else
-    lines[#lines + 1] = "=== SPARC v" .. SpArc.VERSION .. " — TELEMETRY & SPELLBOOK AUDITOR ==="
-    lines[#lines + 1] = "Telemetry Logging: " .. ((db.visual and db.visual.enableTelemetry) and "ENABLED (saved to WTF/.../SavedVariables/SpArc.lua)" or "DISABLED")
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = "--- 0. CAPTURED LUA ERRORS (!BugGrabber / BugSack) ---"
+    lines[#lines + 1] = "--- 0B. CAPTURED LUA ERRORS (!BugGrabber / BugSack) ---"
     if #errs == 0 then
       lines[#lines + 1] = "(No Lua errors recorded)"
     else

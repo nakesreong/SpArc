@@ -2,6 +2,18 @@
 --  SpArc/Parser.lua — Data-Driven Markdown (.md) Pseudocode FSM Compiler
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
 ---------------------------------------------------------------------------------------
+--  @module Parser
+--  @responsibility
+--    1. Compiles Markdown (`.MD`) rotation pseudocode into an executable AST (`parsed`):
+--       `spells`, `auras`, `rules`, `saves`, `cds`, `trackedDots`, `mdAuraRules`,
+--       `interruptibleChannels`, and `protectedChannels`.
+--  @contract
+--    - `SpArc:ParseMarkdownFSM(mdText)` MUST always return a valid table with non-nil
+--      `spells`, `auras`, `rules`, `saves`, `cds`, `trackedDots`, and `mdAuraRules` subtables.
+--  @techdebt [AUDIT-P2]
+--    - Local `Trim(s)` duplicates `SpArc.Trim(s)` (loaded before `Core.lua` in `.toc` order).
+--      Planned Refactor (Phase 1): Load `Core.lua` first in `SpArc.toc` and use `SpArc.Trim`.
+---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc or _G.SparkArc or {}
 _G.SpArc = SpArc
@@ -12,6 +24,7 @@ local tonumber = _G.tonumber
 local ipairs = _G.ipairs
 local pairs = _G.pairs
 
+-- @techdebt [AUDIT-P2]: Duplicate of SpArc.Trim (needed because Parser.lua loads before Core.lua in .toc)
 local function Trim(s)
   if not s then return "" end
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
@@ -465,6 +478,13 @@ function SpArc:ParseMarkdownFSM(mdText)
       r = col.r, g = col.g, b = col.b,
       fromMD = true,
     }
+  end
+
+  if SpArc.RecordModuleTick then
+    SpArc:RecordModuleTick("Parser", parsed.title or "ParseMarkdownFSM")
+  end
+  if SpArc.AssertContract then
+    SpArc:AssertContract("Parser", type(parsed.rules) == "table" and type(parsed.spells) == "table", "PARSE_AST", "ParseMarkdownFSM returned invalid AST structure")
   end
 
   return parsed

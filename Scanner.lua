@@ -2,6 +2,22 @@
 --  SpArc/Scanner.lua — Bartender4 Keybind, ActionSlot & Macro Scanner
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
 ---------------------------------------------------------------------------------------
+--  @module Scanner
+--  @responsibility
+--    1. Scans WoW ActionSlots (1..120), Bartender4 buttons (`BT4Button1..120`), and `/cast` macros
+--       to map each `.MD` spell definition (`SpArc.SPELL_DEFS[key]`) to its live ActionSlot (`def.slot`),
+--       formatted keybind badge (`def.keybind`), and live SpellBook status (`def.isKnown`, `def.liveSpellID`).
+--    2. Queries and stabilizes Blizzard's native Assisted Combat helper (`GetAssistedCombatNextKey`).
+--  @contract
+--    - `SpArc:ScanActionSlotsAndSpells(force)` populates `def.slot`, `def.keybind`, `def.isKnown`,
+--      `st.spellIDToSlot`, and `st.assistedSlots`.
+--  @techdebt [AUDIT-SC1..SC2]
+--    - [AUDIT-SC1] `MACRO_NAME_KEYBINDS` (lines 48–62) hardcodes Priest-specific macro names (`P1..P12`, `SP1..SP12`)
+--      and line 215 restricts `SLOT_DEFAULT_KEYBIND[slot]` fallback to `cls == "PRIEST"`.
+--      Planned Refactor (Phase 2): Generalize fallback keybind resolution for all classes when Mouselook Click-Cast is active.
+--    - [AUDIT-SC2] `AOE_ASSIST_KEYS` (lines 38–46) hardcodes specific AoE spell keys for Hysteresis stabilization.
+--      Planned Refactor (Phase 2): Derive AoE tag directly from `.MD` AST (`multi_target` / `aoe` rules).
+---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc
 
@@ -210,6 +226,7 @@ function SpArc:GetSlotKeybind(slot)
     end
   end
 
+  -- @techdebt [AUDIT-SC1]: Priest-only fallback to SLOT_DEFAULT_KEYBIND; generalize in Phase 2
   if _G.UnitClass then
     local okC, _, cls = pcall(_G.UnitClass, "player")
     if okC and not IsSecret(cls) and cls == "PRIEST" then
@@ -745,6 +762,13 @@ function SpArc:ScanActionSlotsAndSpells(force)
         end
       end
     end
+  end
+
+  if SpArc.RecordModuleTick then
+    SpArc:RecordModuleTick("Scanner", force and "ForceScan" or "Scan")
+  end
+  if SpArc.AssertContract then
+    SpArc:AssertContract("Scanner", type(st.spellIDToSlot) == "table", "SCAN_SLOT_MAP", "st.spellIDToSlot must be a table after ScanActionSlotsAndSpells")
   end
 end
 

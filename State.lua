@@ -2,6 +2,23 @@
 --  SpArc/State.lua — Spell Cooldown, Charges, Proc, DoT & Usability Evaluator
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
 ---------------------------------------------------------------------------------------
+--  @module State
+--  @responsibility
+--    1. Evaluates real-time spell readiness, cooldown remaining, charges, proc overlays,
+--       resource usability, and range (`EvaluateSpellState`, `IsSpellOutOfRange`).
+--    2. Provides the unified WeakAuras-style aura inspector (`GetUnitAuraState`, `GetPlayerAuraInfo`).
+--    3. Evaluates `.MD` rule conditions (`IsRuleConditionMet`).
+--  @contract
+--    - `SpArc:EvaluateSpellState(defKey)` returns 13 values:
+--      `(finalReady, remSec, durSec, startTime, isUsable, isProc, icon, keybind, charges, isUnavailable, isNoResource, resWaitSec, isOutOfRange)`
+--  @techdebt [AUDIT-ST1..ST4]
+--    - [AUDIT-ST1] `st.trackedInsanity` is overloaded across `State.lua`, `Evaluator.lua`, `ResourceBar.lua`, and `Telemetry.lua`
+--      to store Priest Insanity (0..100), Balance Astral Power (0..100), AND Rogue/Feral Combo Points scaled by *20 (`cp * 20`).
+--      Planned Refactor (Phase 2): Replace with a unified `SpArc:GetClassResourceState()` descriptor (`VALUE_0_100` vs `COMBO_POINTS`).
+--    - [AUDIT-ST2] `SpArc.DEFAULT_ENERGY_COST` (lines 905–932), `CLASS_RANGE_FALLBACK_SPELLS`, and hardcoded spell checks
+--      (`isVoidBlastOverride`, `AMBUSH`, `15473` Shadowform, `MOONKIN_FORM`/`CAT_FORM`/`BEAR_FORM`) live inside the generic engine.
+--      Planned Refactor (Phase 2): Move class metadata into declarative `.MD` attributes or a `ClassMetadata.lua` table.
+---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc
 
@@ -899,9 +916,14 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
     return false, remSec, durSec, startTime, false, false, def.liveIcon or def.fallbackIcon, def.keybind or "", 0, isUnavailable, false, 0, isOutOfRange
   end
 
+  if SpArc.RecordModuleTick then
+    SpArc:RecordModuleTick("State", defKey)
+  end
+
   return finalReady, remSec, durSec, startTime, isUsable, isProc, def.liveIcon or def.fallbackIcon, def.keybind or "", charges, isUnavailable, isNoResource, resWaitSec, isOutOfRange
 end
 
+-- @techdebt [AUDIT-ST2]: Hardcoded Energy costs for Rogue/Feral; move to declarative metadata in Phase 2
 SpArc.DEFAULT_ENERGY_COST = {
   MUTILATE = 50,
   AMBUSH = 50,

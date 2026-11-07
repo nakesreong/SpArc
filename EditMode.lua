@@ -3,6 +3,16 @@
 --                       & Universal Drag/Nudge Movers for All SpArc HUD Elements
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
 ---------------------------------------------------------------------------------------
+--  @module EditMode
+--  @responsibility
+--    1. Provides a unified drag & 1px/10px arrow-key nudge mover system (`RegisterEditMover`)
+--       for all SpArc HUD and UnitFrame widgets.
+--    2. Hooks Blizzard's native `EditModeManagerFrame` so opening "Редактировать" automatically
+--       unlocks all SpArc movers alongside Blizzard frames.
+--  @techdebt [AUDIT-EM1]
+--    - `SetMoverBackdrop` (line 38) duplicates `SetBackdropFlat` from `SpArc.lua`.
+--      Planned Refactor (Phase 1): Share flat backdrop helper via `Core.lua`.
+---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc
 
@@ -676,5 +686,8 @@ emWatcher:SetScript("OnEvent", function(_, event, arg1)
       SpArc:EnsureChatVisibleWithoutElvUI()
     end
     TryHookBlizzardEditMode()
+    if SpArc.RecordModuleTick then
+      SpArc:RecordModuleTick("EditMode", "PEW_Hooked:" .. tostring(#moverRegistry))
+    end
   end
 end)

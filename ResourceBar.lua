@@ -1,8 +1,24 @@
 ---------------------------------------------------------------------------------------
 --  SpArc/ResourceBar.lua — Modular Secondary & Class Resource Tracker (Under Castbar)
---                          Supports Combo Points (+Energy strip), Insanity, Arcane
---                          Charges, Freezing Stacks, Holy Power, Soul Shards, Rage, etc.
+--                          Supports Continuous 0..100 Scales (Insanity, Astral Power,
+--                          Rage, Mana, Focus) and Discrete Pips (Combo Points,
+--                          Maelstrom Weapon, Arcane Charges, Holy Power, Soul Shards).
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
+---------------------------------------------------------------------------------------
+--  @module ResourceBar
+--  @responsibility
+--    1. Resolves the active class/spec resource model (`BAR` 0..100 vs `PIPS` 1..10)
+--       and renders `SpArcResourceBar` underneath the player Castbar.
+--  @contract
+--    - `SpArc:UpdateResourceBar(now, hudActive)` updates `SpArc.resourceFrame` and
+--      never errors even when `UnitPower` returns a WoW 12.x Secret Value.
+--  @techdebt [AUDIT-RB1]
+--    - `ResolveActiveResourceMode()` and `QueryResourceData()` duplicate the resource
+--      queries already performed in `State.lua` (`RefreshTrackedInsanity`) and `Telemetry.lua`
+--      (`GetPrimaryResourceString`), and proliferate 12+ ad-hoc mode strings (`INSANITY`,
+--      `ASTRAL_POWER`, `MAELSTROM_WEAPON`, `COMBO_POINTS`, `FERAL_COMBO`, etc.).
+--      Planned Refactor (Phase 2): Unify into a single `SpArc:GetClassResourceState()` API
+--      with strictly two presentation archetypes: `SCALE` (0/100 bar) and `PIPS` (combo/stack pips).
 ---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc
@@ -597,6 +613,10 @@ function SpArc:UpdateResourceBar(now)
     else
       thresholdTick:Hide()
     end
+  end
+
+  if SpArc.RecordModuleTick then
+    SpArc:RecordModuleTick("ResourceBar", mode)
   end
 
   resFrame:Show()

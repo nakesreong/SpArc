@@ -14,6 +14,13 @@
 --                         • Automatically overflows to General (Account) Macros (up to 120)
 --                           when Character Macro slots are full.
 --                         • NEVER overwrites or deletes existing macros.
+--  @module MacroGen
+--  @contract
+--    - `SpArc:ScanSpellBookForMacros(opts)` scans `C_SpellBook` safely outside combat.
+--    - `SpArc:GenerateClassMacros(opts)` NEVER overwrites existing macros and aborts in combat.
+--  @techdebt [AUDIT-MG1]
+--    - `TrimStr(s)` (line 97) duplicates `SpArc.Trim(s)` with an `IsSecret(s)` guard.
+--      Planned Refactor (Phase 1): Merge secret-safe check directly into `SpArc.Trim`.
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
 ---------------------------------------------------------------------------------------
 local _G = _G
@@ -94,6 +101,7 @@ local SPEC_PREFIX_BY_ID = {
   [1473] = "ae", -- Augmentation Evoker
 }
 
+-- @techdebt [AUDIT-MG1]: Duplicate of SpArc.Trim; consolidate into Core.lua in Phase 1
 local function TrimStr(s)
   if not s or IsSecret(s) or type(s) ~= "string" then return "" end
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
@@ -586,6 +594,10 @@ function SpArc:ScanSpellBookForMacros(opts)
         end
       end
     end
+  end
+
+  if SpArc.RecordModuleTick then
+    SpArc:RecordModuleTick("MacroGen", "ScanSpellBook:" .. tostring(#entries))
   end
 
   return {

@@ -2,6 +2,29 @@
 --  SpArc/Evaluator.lua — Generic .MD FSM Condition Evaluator, Queue Builder & Events
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
 ---------------------------------------------------------------------------------------
+--  @module Evaluator
+--  @responsibility
+--    1. Synchronizes `SpArc.SPELL_DEFS` with the active `.MD` profile (`SyncSpellDefsFromProfile`).
+--    2. Evaluates `.MD` condition expressions (`IsRuleConditionMet`).
+--    3. Builds the 3..6 icon lookahead rotation queue (`BuildRotationQueue`) by combining
+--       Blizzard's Assisted Combat primary suggestion with `.MD` lookahead simulation.
+--    4. Handles live combat cast events (`RecordSpellCastSuccess` + `eventFrame`).
+--  @contract
+--    - `SpArc:BuildRotationQueue(maxLen)` MUST return `(queue, states)` where `queue` is an
+--      array of `1..maxLen` spell state objects and `states` is a dictionary by `defKey`.
+--  @techdebt [AUDIT-EV1..EV3]
+--    - [AUDIT-EV1] `BuildRotationQueue` (lines 1102–1175) and `RecordSpellCastSuccess` (lines 1278–1376)
+--      duplicate ~100 lines of spell-cast state transition logic (Aura application, Insanity/Energy cost,
+--      `grantsProc`, stack consumption/gain, and `MAELSTROM_WEAPON` +2/-10 stack math).
+--      Planned Refactor (Phase 2): Extract a single shared `ApplySpellCastTransition(stateAdapter, defKey, def)` function.
+--    - [AUDIT-EV2] Class-specific spell rules are hardcoded inside `Evaluator.lua`:
+--      • `MAELSTROM_WEAPON` stack builders/spenders (`STORMSTRIKE`, `LAVA_LASH`, `TEMPEST`, etc.)
+--      • `TIGERS_FURY` (+50 energy), `VOID_ERUPTION` + `POWER_INFUSION` shared macro keybind
+--      • `RAY_OF_FROST` / `CONVOKE_THE_SPIRITS` / `VOID_TORRENT` channel durations
+--      • `GARROTE` / `CRIMSON_TEMPEST` / `PICK_POCKET` target-change cooldown resets
+--      • `MOONKIN_FORM` / `SHADOWFORM` / `LIGHTNING_SHIELD` / `EARTH_SHIELD` OOC aura spoofing
+--      Planned Refactor (Phase 2): Move into declarative `.MD` spell properties.
+---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc
 
@@ -11,6 +34,7 @@ local UnitIsPlayer = _G.UnitIsPlayer
 local UnitIsDeadOrGhost = _G.UnitIsDeadOrGhost
 local UnitClassification = _G.UnitClassification
 local UnitLevel = _G.UnitLevel
+local UnitCastingInfo = _G.UnitCastingInfo
 local UnitChannelInfo = _G.UnitChannelInfo
 local UnitGUID = _G.UnitGUID
 local C_Spell = _G.C_Spell
@@ -1249,9 +1273,18 @@ function SpArc:BuildRotationQueue(maxSlots)
     end
   end
 
+  if SpArc.RecordModuleTick then
+    SpArc:RecordModuleTick("Evaluator", queue[1] and queue[1].key or "EmptyQueue")
+  end
+  if SpArc.AssertContract then
+    SpArc:AssertContract("Evaluator", type(queue) == "table" and type(states) == "table", "BUILD_QUEUE_RET", "BuildRotationQueue must return valid queue and states tables")
+  end
+
   return queue, states, parsed, activeChannelKey, shouldInterruptChannel, isProtectedChannel
 end
 
+-- @techdebt [AUDIT-EV1]: Shares ~100 lines of state-transition logic with BuildRotationQueue lookahead loop;
+--                        extract into unified ApplySpellCastTransition() in Phase 2.
 function SpArc:RecordSpellCastSuccess(defKey, now)
   st.lastAnyCastAt = now
   if not defKey then return end

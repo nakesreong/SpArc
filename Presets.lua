@@ -1,8 +1,16 @@
 ---------------------------------------------------------------------------------------
 --  SpArc/Presets.lua — Bilingual Localization System (EN / RU), AI Prompt Templates
---                      & 4 Active Class Rotation Profiles (Shadow Priest, Frost Mage,
---                      Assassination Rogue, Arms Warrior) with AoE & Misc Support.
+--                      & Built-In Class Rotation Profiles (.MD Pseudocode)
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
+---------------------------------------------------------------------------------------
+--  @module Presets
+--  @responsibility
+--    1. Provides bilingual localization table (`STRINGS.EN`, `STRINGS.RU`) and `SpArc:L(key)`.
+--    2. Stores the AI Prompt generator templates (`SpArc:GetAIPromptHeader()`, `SpArc:GetAIPromptTemplate()`).
+--    3. Defines `SpArc.BuiltInPresets` and `SpArc.BuiltInPresetOrder` for all supported specs.
+--  @techdebt [AUDIT-P1]
+--    - `STRINGS` (~630 lines) and `BuiltInPresets` (~800 lines) are co-located in one 1,457-line file.
+--      Planned Refactor: Split into `Locales.lua` and `Presets.lua` in Phase 3.
 ---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc or _G.SparkArc or {}
@@ -313,10 +321,13 @@ local STRINGS = {
     CK_TEST_MODE = "Test / Preview Mode (display full rotation arc, wings, and castbar right now)",
 
     TEL_HEADER = "|cffffd100Telemetry & Debugger:|r compares SpArc queue decisions against live SpellBook & Bartender4 state",
+    CK_DEBUG_MODE = "Debug Mode & Contract Assertions (alerts in chat when refactoring breaks module contracts)",
+    TEL_SELFTEST_BTN = "Run Module Self-Test",
     TEL_SNAP_BTN = "Capture Snapshot Now",
     TEL_COPY_BTN = "Select All (Ctrl+C)",
     TEL_CLEAR_BTN = "Clear Log & BugSack",
     TEL_TOGGLE = "Log ON",
+    MSG_DEBUG_TOGGLE = "|cffa335eeSpArc:|r Debug Mode & Contract Checks: %s",
 
     HUD_SAVE_ALERT = "SAVE!",
     HUD_CLIP_BANNER = "CLIP CAST!",
@@ -624,10 +635,13 @@ local STRINGS = {
     CK_TEST_MODE = "Тестовый режим (показать превью всей дуги, кастбара и крыльев прямо сейчас)",
 
     TEL_HEADER = "|cffffd100Телеметрия и Дебаг:|r сравнивает выбор SpArc с реальным ответом книги заклинаний и панелей Bartender4",
+    CK_DEBUG_MODE = "Режим отладки (Debug Mode): проверка контрактов модулей и алерты в чат при поломках рефакторинга",
+    TEL_SELFTEST_BTN = "Самодиагностика (Self-Test)",
     TEL_SNAP_BTN = "Снять слепок сейчас",
     TEL_COPY_BTN = "Выделить всё (Ctrl+C)",
     TEL_CLEAR_BTN = "Очистить лог и BugSack",
     TEL_TOGGLE = "Сбор ВКЛ",
+    MSG_DEBUG_TOGGLE = "|cffa335eeSpArc:|r Режим отладки и проверки контрактов: %s",
 
     HUD_SAVE_ALERT = "СЕЙВ!",
     HUD_CLIP_BANNER = "ПРЕРВИ КАСТ!",

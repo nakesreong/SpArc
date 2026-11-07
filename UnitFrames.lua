@@ -1,8 +1,23 @@
 ---------------------------------------------------------------------------------------
 --  SpArc/UnitFrames.lua — Standalone Circular-Portrait & Metro UnitFrames Suite
---                         (Player, Target, Target Castbar, ToT, Focus, Pet, Boss 1..5)
+--                         (Player, Target, Target Castbar, ToT, Focus, Pet, Party 1..4, Boss 1..5)
 --                         Designed to replace ElvUI UnitFrames with 0-Taint & High FPS
 --  Authors: Gemini (Tiger) & Anya (5cr3am1ng5oul)
+---------------------------------------------------------------------------------------
+--  @module UnitFrames
+--  @responsibility
+--    1. Creates `SecureUnitButtonTemplate` frames for `player`, `target`, `targettarget`,
+--       `focus`, `pet`, `party1..4` (+Brann Delves companion), and `boss1..5`.
+--    2. Suppresses Blizzard's default unit frames and `CompactPartyFrame` via `SpArcUFHiddenParent`.
+--    3. Renders Circular/Square portraits, WoW 12.x Secret-Value-safe health/power/cast bars,
+--       and target aura badges.
+--  @contract
+--    - NEVER calls `RegisterUnitWatch`, `UnregisterUnitWatch`, or `SetAttribute` while `InCombatLockdown()` is true.
+--  @techdebt [AUDIT-UF1..UF2]
+--    - [AUDIT-UF1] Shares Metro color constants, `CreateFlatBorder`, reaction color resolution,
+--      and Secret-Value castbar update logic with `Nameplates.lua`. Consolidate in Phase 1.
+--    - [AUDIT-UF2] [Арена Backlog] Add dispellable debuff border & icons on `party1..4`,
+--      enemy cast/target ping on party frames, and `arena1..3` enemy frames.
 ---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc
@@ -310,7 +325,7 @@ local function GetUnitBarColor(unit, colorMode, isDemo, demoIsHostile)
     end
     local _, pClass = UnitClass("player")
     local c = (pClass and not IsSecret(pClass) and RAID_CLASS_COLORS and RAID_CLASS_COLORS[pClass]) or nil
-    if c then return c.r, c.b and c.g or 0.55, c.b or 0.12 end
+    if c then return c.r, c.g, c.b end
     return 0.90, 0.55, 0.12
   end
   if not unit or not SafeBool(UnitExists, unit) then
@@ -1308,6 +1323,9 @@ function SpArc:UpdateUnitFrames(now)
   end
   if targetCastbarFrame then
     UpdateSingleCastbarWidget(targetCastbarFrame, "target", now, isDemo)
+  end
+  if SpArc.RecordModuleTick then
+    SpArc:RecordModuleTick("UnitFrames", isDemo and "DemoUpdate" or "LiveUpdate")
   end
 end
 

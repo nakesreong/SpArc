@@ -160,6 +160,12 @@ local function OpenControlCenter(initialTab)
       if editorHasUnsavedChanges and controlFrame.SaveCurrentEditorMD then
         controlFrame.SaveCurrentEditorMD(true)
       end
+      if not SpArc.editModeActive and SpArc.testMode then
+        SpArc.testMode = false
+        if SpArc.ApplyVisualLayout then SpArc:ApplyVisualLayout() end
+        if SpArc.ApplyUnitFramesSettings then SpArc:ApplyUnitFramesSettings() end
+        if SpArc.UpdateResourceBar and _G.GetTime then SpArc:UpdateResourceBar(_G.GetTime()) end
+      end
       SpArc.previewCrosshairInConfig = false
       if activeKeybindCapture and activeKeybindCapture.CancelCapture then
         activeKeybindCapture:CancelCapture()

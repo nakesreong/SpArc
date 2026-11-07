@@ -28,6 +28,9 @@ _G.SparkArcLoaded = true
 
 SpArc.VERSION = "2.9.6"
 SpArc.PROFILE_SCHEMA_VERSION = 38
+if SpArc.testMode == nil then
+  SpArc.testMode = false
+end
 
 local C_CVar = _G.C_CVar
 local issecretvalue = _G.issecretvalue

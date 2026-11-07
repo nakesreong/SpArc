@@ -445,7 +445,7 @@ function SpArc:SetEditMode(enabled, fromBlizzEditMode)
 
   SpArc.editModeActive = want
   if want then
-    savedTestModeBeforeEdit = SpArc.testMode
+    savedTestModeBeforeEdit = (SpArc.testMode == true)
     SpArc.testMode = true
     if SpArc.SetMSBTZonesUnlocked then
       SpArc:SetMSBTZonesUnlocked(true)
@@ -470,10 +470,12 @@ function SpArc:SetEditMode(enabled, fromBlizzEditMode)
     end
   else
     SelectMover(nil)
-    if savedTestModeBeforeEdit ~= nil then
-      SpArc.testMode = savedTestModeBeforeEdit
-      savedTestModeBeforeEdit = nil
+    if fromBlizzEditMode or not (_G.SpArcControlCenter and _G.SpArcControlCenter:IsShown()) then
+      SpArc.testMode = false
+    else
+      SpArc.testMode = (savedTestModeBeforeEdit == true)
     end
+    savedTestModeBeforeEdit = nil
     if SpArc.SetMSBTZonesUnlocked then
       SpArc:SetMSBTZonesUnlocked(false)
     end
@@ -493,8 +495,13 @@ function SpArc:SetEditMode(enabled, fromBlizzEditMode)
   if SpArc.UpdateCameraState then
     SpArc:UpdateCameraState()
   end
-  if SpArc.UpdateUnitFrames then
+  if SpArc.ApplyUnitFramesSettings then
+    SpArc:ApplyUnitFramesSettings()
+  elseif SpArc.UpdateUnitFrames then
     SpArc:UpdateUnitFrames()
+  end
+  if SpArc.UpdateResourceBar and _G.GetTime then
+    SpArc:UpdateResourceBar(_G.GetTime())
   end
   if SpArc.RefreshControlCenterUI then
     SpArc.RefreshControlCenterUI()

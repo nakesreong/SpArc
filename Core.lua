@@ -9,15 +9,10 @@
 --    3. Manages SavedVariables (`SpArcDB`), ElvUI-style isolated character profiles, and `.MD` AST compilation cache.
 --    4. Provides the Universal Debug & Contract Verification Engine (`RecordModuleTick`, `AssertContract`, `SafeCall`, `RunDebugSelfTest`)
 --       used to detect regressions immediately during codebase refactoring.
---  @techdebt [AUDIT-C1..C3]
---    - [AUDIT-C1] `Trim`, `IsSecret`, `SafeGetCVar`/`SafeSetCVar`, and `CreateFlatBorder` are still duplicated locally
---      in `Parser.lua`, `MacroGen.lua`, `CombatText.lua`, `Camera.lua`, `Nameplates.lua`, and `UnitFrames.lua`.
---      Planned Refactor (Phase 1): Consolidate all shared utilities in `Core.lua` and delete local clones.
---    - [AUDIT-C2] `InferProfileDefaultPresetID` and `EnsureDB` contain hardcoded character names ("Ньарлатхотеп", "Котастрофа", etc.)
---      and fallback to `"PRIEST_01_SHADOW_PVE"`.
---      Planned Refactor (Phase 2): Replace with dynamic `UnitClass("player")` + `GetSpecialization()` lookup.
---    - [AUDIT-C3] One-off migration flags (`_bossPvpAutoMigrated`, `_shamanBuiltInPresetMigrated`, `_npAuraRulesFromMDV3`)
---      clutter `EnsureDB()`. Planned Refactor (Phase 2): Move into a clean versioned migration table.
+--  @architecture
+--    - Loaded first in `SpArc.toc` so all downstream modules share `SpArc.Trim`,
+--      `SpArc.SafeGetCVar`/`SpArc.SafeSetCVar`, `SpArc.METRO_COLORS`, `SpArc.SetBackdropFlat`,
+--      `SpArc.CreateFlatBorder`, and `SpArc:GetPlayerDefaultPresetID()`.
 ---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc or _G.SparkArc or {}
@@ -27,7 +22,7 @@ _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
 SpArc.VERSION = "2.9.6"
-SpArc.PROFILE_SCHEMA_VERSION = 38
+SpArc.PROFILE_SCHEMA_VERSION = 39
 if SpArc.testMode == nil then
   SpArc.testMode = false
 end

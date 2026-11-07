@@ -10,9 +10,10 @@
 --  @contract
 --    - `SpArc:ParseMarkdownFSM(mdText)` MUST always return a valid table with non-nil
 --      `spells`, `auras`, `rules`, `saves`, `cds`, `trackedDots`, and `mdAuraRules` subtables.
---  @techdebt [AUDIT-P2]
---    - Local `Trim(s)` duplicates `SpArc.Trim(s)` (loaded before `Core.lua` in `.toc` order).
---      Planned Refactor (Phase 1): Load `Core.lua` first in `SpArc.toc` and use `SpArc.Trim`.
+--  @architecture
+--    - Uses shared `SpArc.Trim` from `Core.lua` (loaded first in `SpArc.toc`).
+--    - Supports both canonical `SPELL KEY = ...` / `AURA KEY = ...` lines and bulleted `- KEY: ...` syntax,
+--      plus `COMBO_STRIKES: true` header directive for non-repeating mastery rotations (e.g. Windwalker Monk).
 ---------------------------------------------------------------------------------------
 local _G = _G
 local SpArc = _G.SpArc or _G.SparkArc or {}
@@ -38,11 +39,18 @@ local function ParseCSVTokens(str)
   return list
 end
 
--- Parses a single `SPELL KEY = ...` or `AURA KEY = ...` line from .md pseudocode
-local function ParseSpellDefLine(line)
+-- Parses a single `SPELL KEY = ...` or `AURA KEY = ...` (or `- KEY: ...`) line from .md pseudocode
+local function ParseSpellDefLine(line, currentSection)
   local kind, key, rest = line:match("^(SPELL)%s+([A-Z0-9_]+)%s*=%s*(.+)$")
   if not kind then
     kind, key, rest = line:match("^(AURA)%s+([A-Z0-9_]+)%s*=%s*(.+)$")
+  end
+  if not kind then
+    local bKey, bRest = line:match("^%-%s*([A-Z][A-Z0-9_]+)%s*[:=]%s*(.+)$")
+    if bKey and bRest and (bRest:find("ID:", 1, true) or bRest:find("IDS:", 1, true)) then
+      kind = (currentSection == "AURAS") and "AURA" or "SPELL"
+      key, rest = bKey, bRest
+    end
   end
   if not key or not rest then return nil, nil, nil end
   local def = {
@@ -222,9 +230,14 @@ function SpArc:ParseMarkdownFSM(mdText)
 
   local spellBookOrder = {}
   local pendingCond = nil
+  local currentSection = ""
   for rawLine in mdText:gmatch("[^\r\n]+") do
     local line = Trim(rawLine)
     if line ~= "" and not line:match("^```") then
+      local secHdr = line:match("^##+%s*([A-Z0-9_]+)")
+      if secHdr then
+        currentSection = secHdr
+      end
       -- Metadata headers in comments or plain lines (with or without leading '#')
       local profTitle = line:match("^#*%s*PROFILE:%s*(.+)$") or line:match("^#*%s*TITLE:%s*(.+)$")
       if profTitle then parsed.title = Trim(profTitle) end
@@ -234,6 +247,11 @@ function SpArc:ParseMarkdownFSM(mdText)
       if profSpec then parsed.spec = Trim(profSpec) end
       local profMode = line:match("^#*%s*MODE:%s*([A-Z]+)")
       if profMode then parsed.mode = Trim(profMode) end
+      local comboFlag = line:match("^#*%s*COMBO_STRIKES:%s*([A-Za-z0-9]+)")
+      if comboFlag then
+        local cf = comboFlag:lower()
+        parsed.comboStrikes = (cf == "true" or cf == "1" or cf == "yes")
+      end
 
       local debuffHeaderOrBody = line:match("^#%s*TARGET_DEBUFF:%s*(.+)$") or line:match("^TARGET_DEBUFF:%s*(.+)$")
       if debuffHeaderOrBody then
@@ -267,7 +285,7 @@ function SpArc:ParseMarkdownFSM(mdText)
       end
 
       if not line:match("^#") then
-        local spKey, spDef, spKind = ParseSpellDefLine(line)
+        local spKey, spDef, spKind = ParseSpellDefLine(line, currentSection)
         if spKey and spDef then
           spellBookOrder[#spellBookOrder + 1] = spKey
           if spKind == "AURA" then

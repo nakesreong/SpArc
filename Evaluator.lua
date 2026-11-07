@@ -776,7 +776,13 @@ function SpArc:BuildRotationQueue(maxSlots)
   simCtx.auraRem = simAuraRem
   simCtx.auraStacks = simAuraStacks
 
-  local function IsSpellAllowedByToggles(spKey, stepIdx)
+  local isComboStrikes = (parsed and (parsed.comboStrikes == true or parsed.class == "MONK")) or false
+  local prevComboKey = nil
+  if isComboStrikes and not SpArc.testMode and st.lastComboStrikeKey and (now - (st.lastComboStrikeAt or 0)) < 10.0 then
+    prevComboKey = st.lastComboStrikeKey
+  end
+
+  local function IsSpellAllowedByToggles(spKey, stepIdx, ignoreComboStrikes)
     local d = SPELL_DEFS[spKey]
     if not d then return true end
     if d.isBossSkill and not simCtx.bossMode then
@@ -793,9 +799,14 @@ function SpArc:BuildRotationQueue(maxSlots)
         return false
       end
     end
+    -- Mastery: Combo Strikes (Windwalker Monk / COMBO_STRIKES: true) — never repeat the previous attack twice in a row
+    if isComboStrikes and not ignoreComboStrikes and prevComboKey and spKey == prevComboKey and not d.isInterrupt then
+      return false
+    end
     if stepIdx and stepIdx >= 2 then
       local isRepeatableBuilder = (stepIdx >= 3) and d.insanityGain and d.insanityGain > 0 and (not d.baseCD or d.baseCD <= 0) and (simInsanity < 40)
-      if not isRepeatableBuilder and (usedInQueue[spKey] or (d.overrideOf and usedInQueue[d.overrideOf])) then
+      local isComboStrikesWeave = isComboStrikes and (not d.baseCD or d.baseCD <= 1.5) and not d.isBossSkill and not (d.burstDuration and d.burstDuration > 0) and not d.procOnly
+      if not isRepeatableBuilder and not isComboStrikesWeave and (usedInQueue[spKey] or (d.overrideOf and usedInQueue[d.overrideOf])) then
         return false
       end
       if auraMap["MAELSTROM_WEAPON"] and (spKey == "TEMPEST" or spKey == "LIGHTNING_BOLT" or spKey == "CHAIN_LIGHTNING" or spKey == "ELEMENTAL_BLAST") then
@@ -952,10 +963,10 @@ function SpArc:BuildRotationQueue(maxSlots)
     end
   end
 
-  local function PickMatchingRule(stepIdx, onlyInterrupt, skipKey, noResMode)
+  local function PickMatchingRule(stepIdx, onlyInterrupt, skipKey, noResMode, ignoreComboStrikes)
     for _, rule in ipairs(parsed.rules) do
       local sp = rule.spell
-      if sp ~= skipKey and simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, stepIdx) then
+      if sp ~= skipKey and simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, stepIdx, ignoreComboStrikes) then
         local d = SPELL_DEFS[sp]
         local intOk = (not onlyInterrupt) or (d and d.isInterrupt)
         local resOk = (noResMode == "any")
@@ -994,6 +1005,7 @@ function SpArc:BuildRotationQueue(maxSlots)
           local isLowHpEmergency = (simCtx.playerHP <= 45) and (condStr:find("player.hp", 1, true) ~= nil or condStr:find("HP", 1, true) ~= nil)
           local isStealthOpener = simCtx.stealthed and (mdKey == "PICK_POCKET" or condStr:find("STEALTH", 1, true) ~= nil or condStr:find("stealthed", 1, true) ~= nil)
           local assistIsStaleOrOnCD = sA and ((not sA.isReady and (sA.remSec or 0) > 0.35) or sA.isNoResource or not sA.isUsable)
+          local assistBreaksComboStrikes = isComboStrikes and prevComboKey and (assistedKey == prevComboKey)
           local isHigherPriorityProc = false
           if sMD.isProc and sA and not sA.isProc and mdKey ~= assistedKey then
             for _, r in ipairs(parsed.rules) do
@@ -1005,7 +1017,7 @@ function SpArc:BuildRotationQueue(maxSlots)
               end
             end
           end
-          if isLowHpEmergency or isStealthOpener or assistIsStaleOrOnCD or isHigherPriorityProc then
+          if isLowHpEmergency or isStealthOpener or assistIsStaleOrOnCD or assistBreaksComboStrikes or isHigherPriorityProc then
             pickedKey = mdKey
             pickedRule = mdRule
           end
@@ -1014,7 +1026,7 @@ function SpArc:BuildRotationQueue(maxSlots)
 
       -- Primary Slot #1: Follow Blizzard Assisted Combat (C_AssistedCombat.GetNextCastSpell) when active
       if not pickedKey and not SpArc.testMode then
-        if assistedKey and SPELL_DEFS[assistedKey] and states[assistedKey] then
+        if assistedKey and SPELL_DEFS[assistedKey] and states[assistedKey] and not (isComboStrikes and prevComboKey and assistedKey == prevComboKey) then
           pickedKey = assistedKey
           local sA = states[assistedKey]
           local dA = SPELL_DEFS[assistedKey]
@@ -1116,6 +1128,11 @@ function SpArc:BuildRotationQueue(maxSlots)
         end
       end
 
+      -- Last-resort fallback if every alternate Combo Strike is on CD and 0 Chi is available
+      if not pickedKey and isComboStrikes then
+        pickedKey, pickedRule = PickMatchingRule(step, false, nil, step == 1 and "exclude" or "any", true)
+      end
+
       if pickedKey and states[pickedKey] and not states[pickedKey].isUnavailable then
         local s = states[pickedKey]
         local def = SPELL_DEFS[pickedKey]
@@ -1139,6 +1156,9 @@ function SpArc:BuildRotationQueue(maxSlots)
         usedInQueue[pickedKey] = true
         if def and def.overrideOf then
           usedInQueue[def.overrideOf] = true
+        end
+        if isComboStrikes and def and not def.isInterrupt and not (def.burstDuration and def.burstDuration > 0) then
+          prevComboKey = pickedKey
         end
 
         local pickedWasProc = simProcs[pickedKey]
@@ -1243,7 +1263,7 @@ function SpArc:BuildRotationQueue(maxSlots)
             local curMW = simAuraStacks.player["MAELSTROM_WEAPON"] or 0
             SetSimAuraState("player", "MAELSTROM_WEAPON", math.min(10, curMW + 2), 30.0)
           end
-          if def.procOnly or def.isExecute or (def.isSpender and not ((def.liveChargeCD and def.liveChargeCD > 0) or (def.baseCD and def.baseCD > 0))) then
+          if def.procOnly or def.isExecute or (def.isSpender and not ((def.liveChargeCD and def.liveChargeCD > 0) or (def.baseCD and def.baseCD > 0)) and not isComboStrikes) then
             simCD[pickedKey] = 9999
             simReady[pickedKey] = false
             simUsable[pickedKey] = false
@@ -1351,6 +1371,10 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   end
   local def = SPELL_DEFS[defKey]
   if not def then return end
+  if not def.isInterrupt and not (def.burstDuration and def.burstDuration > 0) then
+    st.lastComboStrikeKey = defKey
+    st.lastComboStrikeAt = now
+  end
   st.unitAuras = st.unitAuras or { target = {}, player = {} }
   st.unitAuras.target = st.unitAuras.target or {}
   st.unitAuras.player = st.unitAuras.player or {}

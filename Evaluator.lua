@@ -62,6 +62,21 @@ local MW_BUILDER_KEYS = {
   ICE_STRIKE      = true,
 }
 
+-- Survival Hunter "Tip of the Spear" (260286) builder/consumer lookup tables
+local TOTS_BUILDER_KEYS = {
+  KILL_COMMAND    = 1,
+  FLANKING_STRIKE = 2,
+}
+
+local TOTS_CONSUMER_KEYS = {
+  MONGOOSE_BITE     = true,
+  WILDFIRE_BOMB     = true,
+  FURY_OF_THE_EAGLE = true,
+  BUTCHERY          = true,
+  EXPLOSIVE_SHOT    = true,
+  KILL_SHOT         = true,
+}
+
 local IsSecret = SpArc.IsSecret
 local SafeBool = SpArc.SafeBool
 local SPELL_DEFS = SpArc.SPELL_DEFS
@@ -154,6 +169,10 @@ local SPEC_ID_TO_PRESETS = {
   [268] = { PVE = "MONK_01_WW_PVE",        BOSS = "MONK_01_WW_PVE",        PVP = "MONK_01_WW_PVE" },
   [269] = { PVE = "MONK_01_WW_PVE",        BOSS = "MONK_01_WW_PVE",        PVP = "MONK_01_WW_PVE" },
   [270] = { PVE = "MONK_01_WW_PVE",        BOSS = "MONK_01_WW_PVE",        PVP = "MONK_01_WW_PVE" },
+  -- HUNTER (Survival)
+  [253] = { PVE = "HUNTER_01_SURV_PVE",    BOSS = "HUNTER_01_SURV_PVE",    PVP = "HUNTER_01_SURV_PVE" },
+  [254] = { PVE = "HUNTER_01_SURV_PVE",    BOSS = "HUNTER_01_SURV_PVE",    PVP = "HUNTER_01_SURV_PVE" },
+  [255] = { PVE = "HUNTER_01_SURV_PVE",    BOSS = "HUNTER_01_SURV_PVE",    PVP = "HUNTER_01_SURV_PVE" },
 }
 
 local PRESET_SPEC_IDS = {
@@ -165,6 +184,7 @@ local PRESET_SPEC_IDS = {
   DRUID_02_BALANCE_PVE = 102,
   SHAMAN_01_ENH_PVE    = 263,
   MONK_01_WW_PVE       = 269,
+  HUNTER_01_SURV_PVE   = 255,
 }
 
 local lastValidSpecID = nil
@@ -363,9 +383,12 @@ local CTX_NUM_FIELDS = {
   ["energy"]                 = { field = "energy",      def = 100 },
   ["player.astral_power"]    = { field = "insanity",    def = 0 },
   ["player.insanity"]        = { field = "insanity",    def = 0 },
+  ["player.focus"]           = { field = "insanity",    def = 100 },
   ["player.power"]           = { field = "insanity",    def = 0 },
   ["ASTRAL_POWER"]           = { field = "insanity",    def = 0 },
   ["INSANITY"]               = { field = "insanity",    def = 0 },
+  ["FOCUS"]                  = { field = "insanity",    def = 100 },
+  ["focus"]                  = { field = "insanity",    def = 100 },
   ["player.hp_percent"]      = { field = "playerHP",    def = 100 },
   ["target.hp_percent"]      = { field = "targetHP",    def = 100 },
   ["target.freezing_stacks"] = { field = "STACKS",      def = 0 },
@@ -782,7 +805,7 @@ function SpArc:BuildRotationQueue(maxSlots)
     prevComboKey = st.lastComboStrikeKey
   end
 
-  local function IsSpellAllowedByToggles(spKey, stepIdx, ignoreComboStrikes)
+  local function IsSpellAllowedByToggles(spKey, stepIdx, ignoreComboStrikes, allowRepeatInQueue)
     local d = SPELL_DEFS[spKey]
     if not d then return true end
     if d.isBossSkill and not simCtx.bossMode then
@@ -806,7 +829,9 @@ function SpArc:BuildRotationQueue(maxSlots)
     if stepIdx and stepIdx >= 2 then
       local isRepeatableBuilder = (stepIdx >= 3) and d.insanityGain and d.insanityGain > 0 and (not d.baseCD or d.baseCD <= 0) and (simInsanity < 40)
       local isComboStrikesWeave = isComboStrikes and (not d.baseCD or d.baseCD <= 1.5) and not d.isBossSkill and not (d.burstDuration and d.burstDuration > 0) and not d.procOnly
-      if not isRepeatableBuilder and not isComboStrikesWeave and (usedInQueue[spKey] or (d.overrideOf and usedInQueue[d.overrideOf])) then
+      local isWeaveRepeat = allowRepeatInQueue and not d.isBossSkill and not (d.burstDuration and d.burstDuration > 0) and not d.isInterrupt and not d.procOnly
+        and ((not d.baseCD or d.baseCD <= 1.5) or ((simCharges[spKey] or 0) >= 1) or (simCD[spKey] and simCD[spKey] <= 0.05))
+      if not isRepeatableBuilder and not isComboStrikesWeave and not isWeaveRepeat and (usedInQueue[spKey] or (d.overrideOf and usedInQueue[d.overrideOf])) then
         return false
       end
       if auraMap["MAELSTROM_WEAPON"] and (spKey == "TEMPEST" or spKey == "LIGHTNING_BOLT" or spKey == "CHAIN_LIGHTNING" or spKey == "ELEMENTAL_BLAST") then
@@ -918,6 +943,10 @@ function SpArc:BuildRotationQueue(maxSlots)
         simAuraRem.player[aK] = math.max(0, rVal - dt)
       end
     end
+    if parsed and parsed.class == "HUNTER" then
+      simInsanity = math.min(100, (simInsanity or 0) + dt * 10)
+      simCtx.insanity = simInsanity
+    end
   end
 
   local function SetSimAuraState(u, aKey, newSt, newRem)
@@ -963,10 +992,10 @@ function SpArc:BuildRotationQueue(maxSlots)
     end
   end
 
-  local function PickMatchingRule(stepIdx, onlyInterrupt, skipKey, noResMode, ignoreComboStrikes)
+  local function PickMatchingRule(stepIdx, onlyInterrupt, skipKey, noResMode, ignoreComboStrikes, allowRepeatInQueue)
     for _, rule in ipairs(parsed.rules) do
       local sp = rule.spell
-      if sp ~= skipKey and simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, stepIdx, ignoreComboStrikes) then
+      if sp ~= skipKey and simReady[sp] and simUsable[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, stepIdx, ignoreComboStrikes, allowRepeatInQueue) then
         local d = SPELL_DEFS[sp]
         local intOk = (not onlyInterrupt) or (d and d.isInterrupt)
         local resOk = (noResMode == "any")
@@ -1128,9 +1157,19 @@ function SpArc:BuildRotationQueue(maxSlots)
         end
       end
 
+      -- Weave repeatable builders/spenders/multi-charge skills into remaining lookahead slots (#2..#N)
+      -- when all distinct ready spells have already been queued once, preferring alternation (sp ~= prevKey)
+      if not pickedKey and step >= 2 then
+        local prevKey = (qCount > 0 and queue[qCount] and queue[qCount].key) or nil
+        pickedKey, pickedRule = PickMatchingRule(step, false, prevKey, "any", false, true)
+        if not pickedKey then
+          pickedKey, pickedRule = PickMatchingRule(step, false, nil, "any", false, true)
+        end
+      end
+
       -- Last-resort fallback if every alternate Combo Strike is on CD and 0 Chi is available
       if not pickedKey and isComboStrikes then
-        pickedKey, pickedRule = PickMatchingRule(step, false, nil, step == 1 and "exclude" or "any", true)
+        pickedKey, pickedRule = PickMatchingRule(step, false, nil, step == 1 and "exclude" or "any", true, true)
       end
 
       if pickedKey and states[pickedKey] and not states[pickedKey].isUnavailable then
@@ -1263,7 +1302,24 @@ function SpArc:BuildRotationQueue(maxSlots)
             local curMW = simAuraStacks.player["MAELSTROM_WEAPON"] or 0
             SetSimAuraState("player", "MAELSTROM_WEAPON", math.min(10, curMW + 2), 30.0)
           end
-          if def.procOnly or def.isExecute or (def.isSpender and not ((def.liveChargeCD and def.liveChargeCD > 0) or (def.baseCD and def.baseCD > 0)) and not isComboStrikes) then
+          -- Survival Hunter: Tip of the Spear (260286) builder / consumer & Viper's Venom / Mongoose Fury
+          if TOTS_BUILDER_KEYS[pickedKey] then
+            local gainSt = TOTS_BUILDER_KEYS[pickedKey]
+            local curTots = simAuraStacks.player["TIP_OF_THE_SPEAR"] or simAuraStacks.player["260286"] or 0
+            SetSimAuraState("player", "TIP_OF_THE_SPEAR", math.min(3, curTots + gainSt), 10.0)
+          elseif TOTS_CONSUMER_KEYS[pickedKey] then
+            local curTots = simAuraStacks.player["TIP_OF_THE_SPEAR"] or simAuraStacks.player["260286"] or 0
+            if curTots > 0 then
+              local nextTots = math.max(0, curTots - 1)
+              SetSimAuraState("player", "TIP_OF_THE_SPEAR", nextTots, nextTots > 0 and 10.0 or 0)
+            end
+            if pickedKey == "MONGOOSE_BITE" then
+              SetSimAuraState("target", "SERPENT_STING", 1, 12.0)
+              local curMF = simAuraStacks.player["MONGOOSE_FURY"] or simAuraStacks.player["259388"] or 0
+              SetSimAuraState("player", "MONGOOSE_FURY", math.min(5, curMF + 1), 14.0)
+            end
+          end
+          if def.procOnly or def.isExecute or (def.isSpender and not ((def.liveChargeCD and def.liveChargeCD > 0) or (def.baseCD and def.baseCD > 0)) and not isComboStrikes and (not parsed or parsed.class ~= "HUNTER")) then
             simCD[pickedKey] = 9999
             simReady[pickedKey] = false
             simUsable[pickedKey] = false
@@ -1438,11 +1494,13 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
   local maxIns = (SPELL_DEFS["RISING_SUN_KICK"] or SPELL_DEFS["TIGER_PALM"]) and 120 or 100
   if def.insanityGain then
     st.trackedInsanity = math.min(maxIns, st.trackedInsanity + def.insanityGain)
+    st.lastFocusUpdateAt = now
   end
   local lastAudit = st.lastSpellAudit and st.lastSpellAudit[defKey]
   local castWasProc = (lastAudit and lastAudit.isProc) or false
   if def.insanityCost and not (def.isSpender and castWasProc) then
     st.trackedInsanity = math.max(0, st.trackedInsanity - def.insanityCost)
+    st.lastFocusUpdateAt = now
   end
   if defKey == "TIGERS_FURY" then
     local curE = (SpArc.GetPlayerEnergy and SpArc:GetPlayerEnergy(now)) or 100
@@ -1505,6 +1563,23 @@ function SpArc:RecordSpellCastSuccess(defKey, now)
       st.unitAuras.player[344179] = mwEntry
       st.unitAuras.player["344179"] = mwEntry
     end
+  end
+  if TOTS_BUILDER_KEYS[defKey] and st.unitAuras and st.unitAuras.player then
+    local gainSt = TOTS_BUILDER_KEYS[defKey]
+    local prevT = st.unitAuras.player["TIP_OF_THE_SPEAR"] or st.unitAuras.player[260286]
+    local curSt = (prevT and prevT.untilTime and prevT.untilTime > now and prevT.stacks) or 0
+    local tEntry = { untilTime = now + 10.0, expiresAt = now + 10.0, stacks = math.min(3, curSt + gainSt) }
+    st.unitAuras.player["TIP_OF_THE_SPEAR"] = tEntry
+    st.unitAuras.player[260286] = tEntry
+    st.unitAuras.player["260286"] = tEntry
+  elseif TOTS_CONSUMER_KEYS[defKey] and st.unitAuras and st.unitAuras.player then
+    local prevT = st.unitAuras.player["TIP_OF_THE_SPEAR"] or st.unitAuras.player[260286]
+    local curSt = (prevT and prevT.untilTime and prevT.untilTime > now and prevT.stacks) or 0
+    local nextSt = math.max(0, curSt - 1)
+    local tEntry = nextSt > 0 and { untilTime = prevT.untilTime, expiresAt = prevT.untilTime, stacks = nextSt } or nil
+    st.unitAuras.player["TIP_OF_THE_SPEAR"] = tEntry
+    st.unitAuras.player[260286] = tEntry
+    st.unitAuras.player["260286"] = tEntry
   end
   local maxCh = def.liveMaxCharges or def.maxCharges or 1
   if maxCh > 1 or (def.baseCD and def.baseCD > 0 and def.baseCD <= 30) then

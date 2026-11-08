@@ -22,7 +22,7 @@ _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
 SpArc.VERSION = "2.9.6"
-SpArc.PROFILE_SCHEMA_VERSION = 39
+SpArc.PROFILE_SCHEMA_VERSION = 40
 if SpArc.testMode == nil then
   SpArc.testMode = false
 end
@@ -554,6 +554,9 @@ end
 local DEFAULT_PRESET_BY_SPEC_ID = {
   [102] = "DRUID_02_BALANCE_PVE",
   [103] = "DRUID_01_FERAL_PVE",
+  [253] = "HUNTER_01_SURV_PVE",
+  [254] = "HUNTER_01_SURV_PVE",
+  [255] = "HUNTER_01_SURV_PVE",
   [258] = "PRIEST_01_SHADOW_PVE",
   [259] = "ROGUE_01_ASSA_PVE",
   [263] = "SHAMAN_01_ENH_PVE",
@@ -570,6 +573,7 @@ local DEFAULT_PRESET_BY_CLASS = {
   ROGUE   = "ROGUE_01_ASSA_PVE",
   SHAMAN  = "SHAMAN_01_ENH_PVE",
   MONK    = "MONK_01_WW_PVE",
+  HUNTER  = "HUNTER_01_SURV_PVE",
   MAGE    = "MAGE_04_FROST_PVE",
   WARRIOR = "WARRIOR_02_ARGS_BOSS",
 }
@@ -610,6 +614,8 @@ local function InferProfileDefaultPresetID(profName, profObj)
       return "SHAMAN_01_ENH_PVE"
     elseif profName:find("Гитсутра", 1, true) then
       return "MONK_01_WW_PVE"
+    elseif profName:find("Гитпулл", 1, true) then
+      return "HUNTER_01_SURV_PVE"
     end
   end
   return SpArc:GetPlayerDefaultPresetID()
@@ -822,15 +828,31 @@ function SpArc:EnsureDB(forceReinit)
       if pName:find("Гитсутра", 1, true) then
         pObj.activePresetID = "MONK_01_WW_PVE"
         pObj.autoPresets = { PVE = "MONK_01_WW_PVE", BOSS = "MONK_01_WW_PVE", PVP = "MONK_01_WW_PVE" }
+      elseif pName:find("Гитпулл", 1, true) or (pObj.activePresetID and pObj.activePresetID:find("^HUNTER_CUSTOM_", 1)) then
+        pObj.activePresetID = "HUNTER_01_SURV_PVE"
+        pObj.autoPresets = { PVE = "HUNTER_01_SURV_PVE", BOSS = "HUNTER_01_SURV_PVE", PVP = "HUNTER_01_SURV_PVE" }
       elseif not pObj.activePresetID or not db.presets[pObj.activePresetID] then
         local wantID = InferProfileDefaultPresetID(pName, pObj)
         pObj.activePresetID = wantID
         pObj.autoPresets = { PVE = wantID, BOSS = wantID, PVP = wantID }
       end
     end
+    for _, legacyHunterID in ipairs({ "HUNTER_CUSTOM_9", "HUNTER_CUSTOM_10" }) do
+      if db.presets[legacyHunterID] then
+        db.presets[legacyHunterID] = nil
+        for i = #db.presetOrder, 1, -1 do
+          if db.presetOrder[i] == legacyHunterID then
+            table.remove(db.presetOrder, i)
+          end
+        end
+      end
+    end
     if tostring(db.activeProfile or ""):find("Гитсутра", 1, true) then
       db.activePresetID = "MONK_01_WW_PVE"
       db.autoPresets = { PVE = "MONK_01_WW_PVE", BOSS = "MONK_01_WW_PVE", PVP = "MONK_01_WW_PVE" }
+    elseif tostring(db.activeProfile or ""):find("Гитпулл", 1, true) or tostring(db.activePresetID or ""):find("^HUNTER_CUSTOM_", 1) then
+      db.activePresetID = "HUNTER_01_SURV_PVE"
+      db.autoPresets = { PVE = "HUNTER_01_SURV_PVE", BOSS = "HUNTER_01_SURV_PVE", PVP = "HUNTER_01_SURV_PVE" }
     end
     db.profileSchemaVersion = SpArc.PROFILE_SCHEMA_VERSION
   end

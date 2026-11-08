@@ -259,6 +259,44 @@ local function EvaluateSpenderPowerUsability(defKey, def, isProc, hasSpellOverla
 
   local isAstral = (defKey == "STARSURGE" or defKey == "STARFALL" or SPELL_DEFS["STARSURGE"] ~= nil or SPELL_DEFS["STARFALL"] ~= nil)
   local isChi = (not isAstral) and (SPELL_DEFS["RISING_SUN_KICK"] ~= nil or SPELL_DEFS["TIGER_PALM"] ~= nil or SPELL_DEFS["BLACKOUT_KICK"] ~= nil)
+  local isFocus = (not isAstral) and (not isChi) and (
+    SPELL_DEFS["KILL_COMMAND"] ~= nil
+    or SPELL_DEFS["MONGOOSE_BITE"] ~= nil
+    or SPELL_DEFS["WILDFIRE_BOMB"] ~= nil
+    or (st.activeParsed and st.activeParsed.class == "HUNTER")
+  )
+  if isFocus then
+    local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or 30
+    local okF, rawF = pcall(UnitPower, "player", 2)
+    if okF and not IsSecret(rawF) and type(rawF) == "number" then
+      st.trackedInsanity = math.min(100, rawF)
+      st.lastFocusUpdateAt = GetTime()
+      if rawF < (cost - 5) and not isProc and assistedKey ~= defKey then
+        return true, false, false, "Focus(" .. tostring(rawF) .. "<" .. tostring(cost) .. ")"
+      end
+      return true, true, isProc, "Focus(" .. tostring(rawF) .. ">=" .. tostring(cost) .. ")"
+    end
+    -- In WoW 12.x, UnitPower("player", 2) is secret, while C_Spell.IsSpellUsable / IsUsableAction
+    -- returns a non-secret boolean that directly reflects whether the Hunter has >= 30 Focus!
+    if gotCleanUsable then
+      if isUsable then
+        if (st.trackedInsanity or 0) < cost then
+          st.trackedInsanity = math.max(cost, 60)
+        end
+      else
+        if (st.trackedInsanity or 0) >= cost then
+          st.trackedInsanity = math.max(0, cost - 10)
+        end
+      end
+      return gotCleanUsable, isUsable, isProc, usableSource
+    end
+    local trackedF = st.trackedInsanity or 100
+    if trackedF >= cost or isProc or assistedKey == defKey then
+      return true, true, isProc, "TrackedFocus(" .. tostring(math.floor(trackedF)) .. ">=" .. tostring(cost) .. ")"
+    end
+    return true, false, isProc, "TrackedFocus(" .. tostring(math.floor(trackedF)) .. "<" .. tostring(cost) .. ")"
+  end
+
   local powerType = isAstral and 8 or (isChi and 12 or 4)
   local defaultCost = isAstral and 40 or (isChi and 40 or 80)
   local cost = (def.insanityCost and def.insanityCost > 0) and def.insanityCost or defaultCost
@@ -872,14 +910,16 @@ function SpArc:EvaluateSpellState(defKey, assistedKey)
   local resWaitSec = 0
   local isPriestSpender = (defKey == "DEVOURING_PLAGUE") or (def.isSpender and SPELL_DEFS["DEVOURING_PLAGUE"] ~= nil)
   local isFreeProcSpender = (defKey == "FEROCIOUS_BITE" and isProc)
-  if isUsable and not isUnavailable and not isPriestSpender and not isFreeProcSpender then
+  if not isUnavailable and not isPriestSpender and not isFreeProcSpender then
     if bookNoPowerVal == true or (useSlotActionState and actNoManaVal == true) then
       isNoResource = true
-      resWaitSec = 2.6
-      usableSource = usableSource .. "+NoResource"
+      resWaitSec = 2.0
+      if not usableSource:find("NoResource", 1, true) then
+        usableSource = usableSource .. "+NoResource"
+      end
     end
     local eCost = SpArc.DEFAULT_ENERGY_COST and SpArc.DEFAULT_ENERGY_COST[defKey]
-    if eCost and UnitPower then
+    if isUsable and eCost and UnitPower then
       local okE, curE = pcall(UnitPower, "player", 3)
       if okE and not IsSecret(curE) and type(curE) == "number" then
         if curE < eCost then
@@ -1304,6 +1344,7 @@ function SpArc:GetPlayerEnergy(now)
 end
 
 function SpArc:RefreshTrackedInsanity()
+  local now = GetTime()
   if UnitPower then
     if SPELL_DEFS["STARSURGE"] or SPELL_DEFS["STARFALL"] then
       local okAP, ap = pcall(UnitPower, "player", 8)
@@ -1317,16 +1358,44 @@ function SpArc:RefreshTrackedInsanity()
         st.trackedInsanity = math.min(120, chi * 20)
         return
       end
-    elseif not SPELL_DEFS["DEVOURING_PLAGUE"] then
+    elseif SPELL_DEFS["KILL_COMMAND"] or SPELL_DEFS["MONGOOSE_BITE"] or SPELL_DEFS["WILDFIRE_BOMB"] or (st.activeParsed and st.activeParsed.class == "HUNTER") then
+      local okF, f = pcall(UnitPower, "player", 2)
+      if okF and not IsSecret(f) and type(f) == "number" then
+        st.trackedInsanity = math.min(100, f)
+        st.lastFocusUpdateAt = now
+        return
+      end
+      local inCombat = _G.UnitAffectingCombat and SafeBool(_G.UnitAffectingCombat, "player")
+      if not st.lastFocusUpdateAt or (not inCombat and (st.trackedInsanity or 0) <= 0) then
+        st.trackedInsanity = 100
+        st.lastFocusUpdateAt = now
+        return
+      end
+      if now > st.lastFocusUpdateAt then
+        local dt = math.min(10.0, now - st.lastFocusUpdateAt)
+        local regen = inCombat and 10.0 or 20.0
+        if _G.GetPowerRegen then
+          local okR, rVal = pcall(_G.GetPowerRegen)
+          if okR and not IsSecret(rVal) and type(rVal) == "number" and rVal > 1 then
+            regen = rVal
+          end
+        end
+        st.trackedInsanity = math.min(100, (st.trackedInsanity or 100) + dt * regen)
+        st.lastFocusUpdateAt = now
+      end
+      return
+    elseif SPELL_DEFS["ENVENOM"] or SPELL_DEFS["EVISCERATE"] or SPELL_DEFS["DISPATCH"] or SPELL_DEFS["FEROCIOUS_BITE"] or SPELL_DEFS["RIP"] or SPELL_DEFS["RUPTURE"] then
       local okCP, cp = pcall(UnitPower, "player", 4)
       if okCP and not IsSecret(cp) and type(cp) == "number" then
         st.trackedInsanity = math.min(100, cp * 20)
         return
       end
     end
-    local ok, p = pcall(UnitPower, "player", 13)
-    if ok and not IsSecret(p) and type(p) == "number" then
-      st.trackedInsanity = p
+    if SPELL_DEFS["DEVOURING_PLAGUE"] or (st.activeParsed and st.activeParsed.class == "PRIEST") then
+      local ok, p = pcall(UnitPower, "player", 13)
+      if ok and not IsSecret(p) and type(p) == "number" then
+        st.trackedInsanity = p
+      end
     end
   end
 end

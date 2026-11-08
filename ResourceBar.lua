@@ -66,14 +66,29 @@ local bgTex = resFrame:CreateTexture(nil, "BACKGROUND", nil, -1)
 bgTex:SetAllPoints(resFrame)
 bgTex:SetColorTexture(0.09, 0.09, 0.14, 0.90)
 
--- Continuous Bar Fill & Threshold Tick (Insanity, Rage, Astral Power, Energy, etc.)
+-- Continuous Bar Fill & Threshold Tick (Insanity, Rage, Astral Power, Energy, Focus, etc.)
+-- Uses C++ StatusBar so WoW 12.x Secret Values from UnitPower/UnitPowerMax render natively!
+local barStatusBar = CreateFrame("StatusBar", nil, resFrame)
+barStatusBar:SetAllPoints(resFrame)
+barStatusBar:SetFrameLevel(26)
+barStatusBar:SetStatusBarTexture(SpArc.FLAT_TEX or "Interface\\Buttons\\WHITE8x8")
+barStatusBar:SetMinMaxValues(0, 100)
+barStatusBar:SetValue(0)
+barStatusBar:SetStatusBarColor(0.55, 0.22, 0.92, 0.95)
+barStatusBar:Hide()
+
 local barFill = resFrame:CreateTexture(nil, "ARTWORK", nil, 0)
 barFill:SetPoint("TOPLEFT", resFrame, "TOPLEFT", 0, 0)
 barFill:SetPoint("BOTTOMLEFT", resFrame, "BOTTOMLEFT", 0, 0)
 barFill:SetWidth(1)
 barFill:SetColorTexture(0.55, 0.22, 0.92, 0.95)
+barFill:Hide()
 
-local thresholdTick = resFrame:CreateTexture(nil, "OVERLAY", nil, 2)
+local overlayFrame = CreateFrame("Frame", nil, resFrame)
+overlayFrame:SetAllPoints(resFrame)
+overlayFrame:SetFrameLevel(28)
+
+local thresholdTick = overlayFrame:CreateTexture(nil, "OVERLAY", nil, 2)
 thresholdTick:SetWidth(2)
 thresholdTick:SetPoint("TOP", resFrame, "TOPLEFT", 138, 1)
 thresholdTick:SetPoint("BOTTOM", resFrame, "BOTTOMLEFT", 138, -1)
@@ -115,6 +130,17 @@ subBarBg:SetHeight(4)
 subBarBg:SetColorTexture(0.05, 0.05, 0.08, 0.95)
 subBarBg:Hide()
 
+local subBarStatusBar = CreateFrame("StatusBar", nil, resFrame)
+subBarStatusBar:SetPoint("BOTTOMLEFT", resFrame, "BOTTOMLEFT", 0, 0)
+subBarStatusBar:SetPoint("BOTTOMRIGHT", resFrame, "BOTTOMRIGHT", 0, 0)
+subBarStatusBar:SetHeight(3)
+subBarStatusBar:SetFrameLevel(27)
+subBarStatusBar:SetStatusBarTexture(SpArc.FLAT_TEX or "Interface\\Buttons\\WHITE8x8")
+subBarStatusBar:SetMinMaxValues(0, 100)
+subBarStatusBar:SetValue(0)
+subBarStatusBar:SetStatusBarColor(1.0, 0.84, 0.22, 0.95)
+subBarStatusBar:Hide()
+
 local subBarFill = resFrame:CreateTexture(nil, "OVERLAY", nil, 1)
 subBarFill:SetPoint("BOTTOMLEFT", resFrame, "BOTTOMLEFT", 0, 0)
 subBarFill:SetHeight(3)
@@ -123,7 +149,7 @@ subBarFill:SetColorTexture(1.0, 0.84, 0.22, 0.95)
 subBarFill:Hide()
 
 -- Text Overlays
-local leftText = resFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local leftText = overlayFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 ApplyCyrFont(leftText, 11)
 leftText:SetPoint("LEFT", resFrame, "LEFT", 6, 1)
 leftText:SetJustifyH("LEFT")
@@ -131,7 +157,7 @@ leftText:SetTextColor(0.92, 0.92, 0.98, 0.95)
 leftText:SetShadowColor(0, 0, 0, 1)
 leftText:SetShadowOffset(1, -1)
 
-local rightText = resFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local rightText = overlayFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 ApplyCyrFont(rightText, 11)
 rightText:SetPoint("RIGHT", resFrame, "RIGHT", -6, 1)
 rightText:SetJustifyH("RIGHT")
@@ -168,7 +194,7 @@ local BAR_RESOURCE_BY_CLASS = {
   DRUID       = { powerType = 8,  r = 0.25, g = 0.58, b = 0.96, ru = "Астральная мощь", en = "Astral Power", threshold = 40 },
   DEATHKNIGHT = { powerType = 6,  r = 0.15, g = 0.75, b = 0.95, ru = "Сила рун",        en = "Runic Power" },
   DEMONHUNTER = { powerType = 17, r = 0.65, g = 0.20, b = 0.88, ru = "Гнев",            en = "Fury" },
-  HUNTER      = { powerType = 2,  r = 0.92, g = 0.52, b = 0.18, ru = "Концентрация",    en = "Focus" },
+  HUNTER      = { powerType = 2,  r = 0.92, g = 0.52, b = 0.18, ru = "Концентрация",    en = "Focus",        threshold = 30 },
   SHAMAN      = { powerType = 11, r = 0.18, g = 0.55, b = 0.96, ru = "Водоворот",       en = "Maelstrom" },
 }
 
@@ -204,6 +230,9 @@ local function ResolveResourceSpec(now)
     curCP = math.max(0, math.min(maxCP, curCP))
 
     local curEnergy = SafeReadPower(3)
+    if curEnergy == nil then
+      curEnergy = (SpArc.GetPlayerEnergy and SpArc:GetPlayerEnergy(now)) or 100
+    end
     local maxEnergy = SafeReadPowerMax(3, 100)
     if SpArc.testMode and (not curEnergy or curEnergy >= maxEnergy) then
       curEnergy = math.floor(30 + ((now * 28) % 70))
@@ -222,6 +251,8 @@ local function ResolveResourceSpec(now)
       r2 = 1.00, g2 = 0.80, b2 = 0.16,
       subCur = curEnergy,
       subMax = maxEnergy,
+      subPowerType = 3,
+      subLabelPrefix = isRU and "Энергия" or "Energy",
       leftLabel = label,
       rightLabel = string.format("%d / %d", curCP, maxCP),
     }
@@ -306,7 +337,15 @@ local function ResolveResourceSpec(now)
   local pipCfg = PIP_RESOURCE_BY_CLASS[classTag]
   if pipCfg then
     local maxP = math.max(pipCfg.max, math.min(MAX_PIPS, SafeReadPowerMax(pipCfg.powerType, pipCfg.max)))
-    local curP = SafeReadPower(pipCfg.powerType) or 0
+    local curP = SafeReadPower(pipCfg.powerType)
+    if curP == nil then
+      if classTag == "MONK" then
+        curP = math.floor(((st.trackedInsanity or 0) + 5) / 20)
+      else
+        curP = 0
+      end
+    end
+    curP = math.max(0, math.min(maxP, curP))
     if SpArc.testMode and curP == 0 then curP = (math.floor(now) % maxP) + 1 end
     return {
       mode = "PIPS",
@@ -330,6 +369,7 @@ local function ResolveResourceSpec(now)
     local readyPlague = (curIns >= 50)
     return {
       mode = "BAR",
+      powerType = 13,
       cur = curIns,
       max = maxIns,
       threshold = 50,
@@ -345,10 +385,15 @@ local function ResolveResourceSpec(now)
   -- 6. BAR (0..100): Standard Continuous Scale Classes (Warrior, Guardian/Balance Druid, DK, DH, Hunter, Ele Shaman)
   local barCfg = (classTag == "DRUID" and specID == 104) and BAR_RESOURCE_BY_CLASS.WARRIOR or BAR_RESOURCE_BY_CLASS[classTag] or BAR_RESOURCE_BY_CLASS.SHAMAN
   local maxB = SafeReadPowerMax(barCfg.powerType, 100)
-  local curB = SafeReadPower(barCfg.powerType) or 0
+  local curB = SafeReadPower(barCfg.powerType)
+  if curB == nil then
+    curB = st.trackedInsanity or (classTag == "HUNTER" and 100 or 0)
+  end
+  curB = math.max(0, math.min(maxB, curB))
   if SpArc.testMode and curB == 0 then curB = math.floor((now * 20) % 100) end
   return {
     mode = "BAR",
+    powerType = barCfg.powerType,
     cur = curB,
     max = maxB,
     threshold = barCfg.threshold,
@@ -422,6 +467,7 @@ function SpArc:UpdateResourceBar(now)
   rightText:SetText(info.rightLabel or "")
 
   if info.mode == "PIPS" then
+    barStatusBar:Hide()
     barFill:Hide()
     thresholdTick:Hide()
     bgTex:SetColorTexture(0.05, 0.05, 0.08, 0.70)
@@ -463,17 +509,30 @@ function SpArc:UpdateResourceBar(now)
     end
 
     if hasSubBar then
-      local eFrac = math.max(0.01, math.min(1.0, info.subCur / info.subMax))
       subBarBg:Show()
-      subBarFill:SetWidth(totalW * eFrac)
-      if info.subCur < 35 then
-        subBarFill:SetColorTexture(0.45, 0.65, 0.95, 0.95)
+      subBarFill:Hide()
+      subBarStatusBar:SetMinMaxValues(0, math.max(1, info.subMax or 100))
+      subBarStatusBar:SetValue(math.max(0, math.min(info.subMax or 100, info.subCur or 0)))
+      if (info.subCur or 100) < 35 then
+        subBarStatusBar:SetStatusBarColor(0.45, 0.65, 0.95, 0.95)
       else
-        subBarFill:SetColorTexture(1.0, 0.84, 0.22, 0.95)
+        subBarStatusBar:SetStatusBarColor(1.0, 0.84, 0.22, 0.95)
       end
-      subBarFill:Show()
+      if not SpArc.testMode and info.subPowerType and UnitPower and UnitPowerMax then
+        local okC, rawSubCur = pcall(UnitPower, "player", info.subPowerType)
+        local okM, rawSubMax = pcall(UnitPowerMax, "player", info.subPowerType)
+        if okC and okM and rawSubCur ~= nil and rawSubMax ~= nil then
+          pcall(subBarStatusBar.SetMinMaxValues, subBarStatusBar, 0, rawSubMax)
+          pcall(subBarStatusBar.SetValue, subBarStatusBar, rawSubCur)
+          if info.subLabelPrefix then
+            pcall(leftText.SetFormattedText, leftText, "%s: %d", info.subLabelPrefix, rawSubCur)
+          end
+        end
+      end
+      subBarStatusBar:Show()
     else
       subBarBg:Hide()
+      subBarStatusBar:Hide()
       subBarFill:Hide()
     end
   else
@@ -481,15 +540,29 @@ function SpArc:UpdateResourceBar(now)
       pipFrames[i]:Hide()
     end
     subBarBg:Hide()
+    subBarStatusBar:Hide()
     subBarFill:Hide()
+    barFill:Hide()
     bgTex:SetColorTexture(0.09, 0.09, 0.14, 0.90)
 
     local maxV = math.max(1, info.max or 100)
     local curV = math.max(0, math.min(maxV, info.cur or 0))
-    local frac = math.max(0.01, math.min(1.0, curV / maxV))
-    barFill:SetWidth(totalW * frac)
-    barFill:SetColorTexture(info.r or 0.56, info.g or 0.20, info.b or 0.92, 0.96)
-    barFill:Show()
+    barStatusBar:SetStatusBarColor(info.r or 0.56, info.g or 0.20, info.b or 0.92, 0.96)
+    barStatusBar:SetMinMaxValues(0, maxV)
+    barStatusBar:SetValue(curV)
+
+    -- In WoW 12.x (Midnight), UnitPower returns Secret Values on Focus / Insanity / Astral Power / Rage.
+    -- Passing rawCur and rawMax directly to C++ StatusBar and FontString:SetFormattedText renders exact live values!
+    if not SpArc.testMode and info.powerType and UnitPower and UnitPowerMax then
+      local okC, rawCur = pcall(UnitPower, "player", info.powerType)
+      local okM, rawMax = pcall(UnitPowerMax, "player", info.powerType)
+      if okC and okM and rawCur ~= nil and rawMax ~= nil then
+        pcall(barStatusBar.SetMinMaxValues, barStatusBar, 0, rawMax)
+        pcall(barStatusBar.SetValue, barStatusBar, rawCur)
+        pcall(rightText.SetFormattedText, rightText, "%d / %d", rawCur, rawMax)
+      end
+    end
+    barStatusBar:Show()
 
     if info.glowBorder then
       outerBorder:SetColorTexture(0.95, 0.30, 1.0, 0.98)
@@ -509,7 +582,7 @@ function SpArc:UpdateResourceBar(now)
   end
 
   if SpArc.RecordModuleTick then
-    SpArc:RecordModuleTick("ResourceBar", mode)
+    SpArc:RecordModuleTick("ResourceBar", info.mode or "BAR")
   end
 
   resFrame:Show()

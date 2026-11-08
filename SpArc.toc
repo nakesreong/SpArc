@@ -1,9 +1,9 @@
 ## Interface: 120107, 120105, 120100, 120001, 110207
-## Title: |cffa335eeSpArc|r — FSM Rotation Arc, Metro Nameplates, MSBT & Combat HUD
-## Notes: Data-driven Markdown (.md) Rotation Queue, Metro DoT Nameplates with Distance Fade, Movable MSBT Scroll Zones, Dual Castbar, Macro Generator & Action Combat Camera. AI-Ready (Gemini / ChatGPT).
-## Notes-ruRU: Очередь ротации на базе .MD псевдокода, неймплейты Metro с авто-трекингом дотов и фейдингом по дальности, подвижные зоны MSBT, кастбар, макросогенератор и Боевая Камера.
+## Title: |cffa335eeSpArc|r — FSM Rotation Arc, UnitFrames, Nameplates, MSBT & Camera
+## Notes: Markdown (.md) Rotation Queue, UnitFrames (Player/Target/Party/Boss), Metro Nameplates with Smart Tab-Targeting, MSBT Scroll Zones & Action Combat Camera.
+## Notes-ruRU: Очередь ротации на базе .MD псевдокода, юнитфреймы (Игрок/Цель/Группа/Боссы), неймплейты Metro с умным Таб-таргетингом, зоны MSBT и Боевая Камера.
 ## Author: Gemini (Tiger) | QA & Vision: Anya (5cr3am1ng5oul)
-## Version: v2.9.6
+## Version: v2.9.7
 ## X-Credits: Special thanks for the inspiration to the creators of MSBT, Plater, WeakAuras, Hekili, Combat Mode & ElvUI
 ## IconTexture: 1386548
 ## DefaultState: enabled

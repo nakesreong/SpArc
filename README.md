@@ -1,6 +1,6 @@
 # SpArc — FSM Rotation Queue, UnitFrames, Metro Nameplates, MSBT & Action Camera
 
-**Version:** 2.9.7  
+**Version:** 2.9.8  
 **Authors:** Gemini (Tiger) & Anya (5cr3am1ng5oul)  
 **Compatibility:** World of Warcraft: Retail / Midnight (`12.0.1`, `12.1.5`, `12.1.7`) & The War Within (`11.2.7`)  
 **Source Repository:** [https://github.com/nakesreong/SpArc](https://github.com/nakesreong/SpArc)  
@@ -19,9 +19,9 @@
 
 ## Core Modules (All-in-One)
 
-* **1. Hybrid Rotation Queue & `.MD` Compiler:** Slot `#1` syncs with Blizzard's Assisted Combat (`+` instant `.md` Interrupts, Stealth Openers, and `COMBO_STRIKES` checks), while Slots `#2..#5` simulate cooldowns, charges, procs, and resources ahead of time. Includes curated `.md` presets (Shadow Priest, Frost Mage, Assassination Rogue, Arms Warrior, Feral & Balance Druid, Enhancement Shaman, Windwalker Monk, Survival Hunter) and unlimited custom `.md` profiles.
+* **1. Hybrid Rotation Queue & `.MD` Compiler:** Slot `#1` syncs with Blizzard's Assisted Combat (`+` instant `.md` Interrupts, `OVERRIDE_ASSIST` Boss/Rare Bursts, Stealth Openers, and `COMBO_STRIKES` checks), while Slots `#2..#5` simulate cooldowns, charges, procs, and resources ahead of time. Includes curated `.md` presets (Shadow Priest, Frost Mage, Assassination Rogue, Arms Warrior, Feral & Balance Druid, Enhancement Shaman, Windwalker Monk, Survival Hunter) and unlimited custom `.md` profiles.
 * **2. Rotation Arc, Castbar & Resource Bar:** Customizable 3–6 icon arc (`+180°` dome to `-180°` bowl) flanked by **Defensive Saves (`TRACK_SAVES`)**, **Burst Cooldowns (`TRACK_CDS`)**, a **Dual-Direction Castbar** with Channel Clip Alerts, and an auto-detected **Class Resource Bar** (`BAR 0..100` & `PIPS 1..10`).
-* **3. UnitFrames Suite:** Clean dark-graphite unitframes (`Player`, `Target`, `Target-of-Target`, `Focus`, `Pet`, `Party 1–4`, `Boss 1–5`) with circular portraits or flat Metro bars, role badges, aura trackers, range fade, and 1-click Blizzard/ElvUI frame suppression.
+* **3. UnitFrames Suite & Bundled Open-Source Fonts (`Roboto` / `PT Sans Narrow`):** Clean dark-graphite unitframes (`Player`, `Target`, `Target-of-Target`, `Focus`, `Pet`, `Party 1–4`, `Boss 1–5`) with circular portraits or flat Metro bars, role badges, aura trackers, range fade, 1-click Blizzard/ElvUI frame suppression, and bundled open-source Cyrillic/Latin fonts (`Roboto Bold`, `Roboto Medium`, `Roboto Condensed`, `PT Sans Narrow`).
 * **4. Metro Nameplates & Smart Tab-Targeting:** Flat nameplates that auto-sync DoT colors from your `.md` preset, stack on packs, fade by distance (`20–60 yd`), filter out guardian/minor pets on `Tab`, and highlight priority **Boss / InterruptCasting `[TAB!]`** targets.
 * **5. Movable MSBT Scroll Zones & Combat Text:** Drag-and-drop **Incoming** and **Outgoing** scroll arcs (`Outward Arc`, `Straight Up`, `Fountain Wave`) with AoE tick filtering and clean target-overhead numbers.
 * **6. Action Combat Camera & Edit Mode:** Mouselook lock with `onHold` (`G`), `onPress` (`` ` ``), and `Interact` (`E`) keys, crosshair `@mouseover`/`@cursor` targeting, safe out-of-combat form/shield/imbue cancel, and native **Blizzard Edit Mode** drag movers.
@@ -55,6 +55,7 @@ SPELL MONGOOSE_BITE = ID:186270,259387 | NAME:"Raptor Strike","Mongoose Bite" | 
 TRACK_SAVES: EXHILARATION, SURVIVAL_OF_THE_FITTEST, ASPECT_OF_THE_TURTLE
 TRACK_CDS: COORDINATED_ASSAULT, FURY_OF_THE_EAGLE, WILDFIRE_BOMB
 TRACK_DOTS: WILDFIRE_BOMB, SERPENT_STING
+OVERRIDE_ASSIST: COORDINATED_ASSAULT, SPEARHEAD
 
 ## ROTATION_QUEUE
 IF target.casting_interruptible AND READY(MUZZLE) THEN

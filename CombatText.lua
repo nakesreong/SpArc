@@ -46,10 +46,14 @@ local demoStreamAccum = 0
 local demoStep = 0
 
 local function ApplyMSBTFont(fs, size, outline)
+  if SpArc and SpArc.ApplyCyrFont then
+    SpArc.ApplyCyrFont(fs, size, outline or "OUTLINE")
+    return
+  end
   local flags = outline or "OUTLINE"
   if not fs:SetFont(CYR_FONT, size, flags) then
     if not fs:SetFont(STD_FONT, size, flags) then
-      fs:SetFont( STANDARD_TEXT_FONT or STD_FONT, size, flags)
+      fs:SetFont(STANDARD_TEXT_FONT or STD_FONT, size, flags)
     end
   end
 end

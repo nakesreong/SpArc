@@ -36,17 +36,179 @@ local type = _G.type
 local table = _G.table
 local string = _G.string
 
-local FONT_PATH = (_G.GameFontNormal and select(1, _G.GameFontNormal:GetFont()))
-  or (_G.StandardTextFont and select(1, _G.StandardTextFont:GetFont()))
-  or "Fonts\\FRIZQT___CYR.TTF"
+local FALLBACK_CYR_FONT = "Fonts\\FRIZQT___CYR.TTF"
 
-function SpArc.ApplyCyrFont(fs, size)
-  if not fs then return end
-  local fPath = (_G.GameFontNormal and select(1, _G.GameFontNormal:GetFont())) or FONT_PATH
-  local ok = fs:SetFont(fPath, size, "OUTLINE")
-  if not ok then
-    fs:SetFont("Fonts\\FRIZQT___CYR.TTF", size, "OUTLINE")
+SpArc.FONT_OPTIONS_ORDER = {
+  "ROBOTO_BOLD",
+  "ROBOTO_MEDIUM",
+  "ROBOTO_CONDENSED",
+  "PT_SANS_NARROW",
+  "BLIZZARD",
+}
+
+SpArc.FONT_PATHS = {
+  ROBOTO_BOLD      = "Interface\\AddOns\\SpArc\\Fonts\\Roboto-Bold.ttf",
+  ROBOTO_MEDIUM    = "Interface\\AddOns\\SpArc\\Fonts\\Roboto-Medium.ttf",
+  ROBOTO_CONDENSED = "Interface\\AddOns\\SpArc\\Fonts\\RobotoCondensed.ttf",
+  PT_SANS_NARROW   = "Interface\\AddOns\\SpArc\\Fonts\\PTSansNarrow.ttf",
+  BLIZZARD         = FALLBACK_CYR_FONT,
+}
+
+SpArc.FONT_SHORT_LABELS = {
+  ROBOTO_BOLD      = "Roboto Bold",
+  ROBOTO_MEDIUM    = "Roboto Medium",
+  ROBOTO_CONDENSED = "Roboto Cond",
+  PT_SANS_NARROW   = "PT Sans (ElvUI)",
+  BLIZZARD         = "WoW Default",
+}
+
+local registeredFontStrings = setmetatable({}, { __mode = "k" })
+local originalGlobalFontSpecs = {}
+
+local GLOBAL_FONT_OBJECTS = {
+  "SystemFont_NamePlate",
+  "SystemFont_NamePlateFixed",
+  "SystemFont_LargeNamePlate",
+  "SystemFont_LargeNamePlateFixed",
+  "SystemFont_NamePlateCastBar",
+  "GameFontNormal",
+  "GameFontNormalSmall",
+  "GameFontNormalLarge",
+  "GameFontHighlight",
+  "GameFontHighlightSmall",
+  "GameFontHighlightLarge",
+  "GameFontDisable",
+  "GameFontDisableSmall",
+  "NumberFontNormal",
+  "NumberFontNormalSmall",
+  "NumberFontNormalSmallGray",
+  "NumberFontNormalLarge",
+  "NumberFont_Shadow_Small",
+  "NumberFont_Shadow_Med",
+  "NumberFont_OutlineThick_Mono_Small",
+  "NumberFont_Outline_Med",
+  "NumberFont_Outline_Large",
+  "SystemFont_Shadow_Small",
+  "SystemFont_Shadow_Med1",
+  "SystemFont_Shadow_Med2",
+  "SystemFont_Shadow_Med3",
+  "SystemFont_Shadow_Large",
+  "SystemFont_Outline_Small",
+  "SystemFont_Small",
+  "SystemFont_Med1",
+  "SystemFont_Med2",
+  "SystemFont_Med3",
+  "TextStatusBarText",
+  "GameTooltipHeaderText",
+  "GameTooltipText",
+  "GameTooltipTextSmall",
+}
+
+function SpArc:GetActiveFontKey()
+  local db = _G.SpArcDB
+  local fKey = db and db.visual and db.visual.uiFont
+  if fKey and SpArc.FONT_PATHS[fKey] then
+    return fKey
   end
+  return "ROBOTO_BOLD"
+end
+
+function SpArc:GetActiveFontPath()
+  local fKey = SpArc:GetActiveFontKey()
+  return SpArc.FONT_PATHS[fKey] or SpArc.FONT_PATHS.ROBOTO_BOLD
+end
+
+function SpArc:GetActiveFontLabel()
+  local fKey = SpArc:GetActiveFontKey()
+  return SpArc.FONT_SHORT_LABELS[fKey] or "Roboto Bold"
+end
+
+local function ApplyFontToRegion(fs, size, flags)
+  if not fs or not fs.SetFont then return end
+  local fPath = SpArc:GetActiveFontPath()
+  local useSize = tonumber(size) or 12
+  local useFlags = flags or "OUTLINE"
+  local ok = fs:SetFont(fPath, useSize, useFlags)
+  if not ok then
+    ok = fs:SetFont(SpArc.FONT_PATHS.ROBOTO_BOLD, useSize, useFlags)
+    if not ok then
+      fs:SetFont(FALLBACK_CYR_FONT, useSize, useFlags)
+    end
+  end
+  if fs.SetShadowColor and fs.SetShadowOffset then
+    pcall(fs.SetShadowColor, fs, 0, 0, 0, 0.90)
+    pcall(fs.SetShadowOffset, fs, 1, -1)
+  end
+end
+
+function SpArc.ApplyCyrFont(fs, size, flags)
+  if not fs then return end
+  registeredFontStrings[fs] = {
+    size = tonumber(size) or 12,
+    flags = flags or "OUTLINE",
+  }
+  ApplyFontToRegion(fs, size, flags)
+end
+
+function SpArc:ApplyGlobalFonts()
+  local db = _G.SpArcDB
+  if db and db.visual and db.visual.uiReplaceGlobalFonts == false then
+    return
+  end
+  local fPath = SpArc:GetActiveFontPath()
+  _G.STANDARD_TEXT_FONT = fPath
+  _G.UNIT_NAME_FONT     = fPath
+  _G.DAMAGE_TEXT_FONT   = fPath
+  _G.NAMEPLATE_FONT     = fPath
+  for _, objName in ipairs(GLOBAL_FONT_OBJECTS) do
+    local fObj = _G[objName]
+    if fObj and fObj.GetFont and fObj.SetFont then
+      if not originalGlobalFontSpecs[objName] then
+        local okG, origFile, origSize, origFlags = pcall(fObj.GetFont, fObj)
+        if okG and type(origSize) == "number" and origSize > 0 then
+          originalGlobalFontSpecs[objName] = {
+            file = origFile,
+            size = origSize,
+            flags = origFlags or "",
+          }
+        end
+      end
+      local spec = originalGlobalFontSpecs[objName]
+      if spec then
+        pcall(fObj.SetFont, fObj, fPath, spec.size, spec.flags)
+      end
+    end
+  end
+end
+
+function SpArc:ApplyAllFonts()
+  SpArc:ApplyGlobalFonts()
+  for fs, meta in pairs(registeredFontStrings) do
+    if fs and type(meta) == "table" then
+      ApplyFontToRegion(fs, meta.size, meta.flags)
+    end
+  end
+  if SpArc.RefreshAllNameplates then
+    SpArc:RefreshAllNameplates()
+  end
+  if SpArc.ApplyUnitFramesSettings then
+    SpArc:ApplyUnitFramesSettings()
+  end
+end
+
+function SpArc:CycleFontFamily()
+  local db = SpArc:EnsureDB()
+  local curKey = SpArc:GetActiveFontKey()
+  local nextKey = SpArc.FONT_OPTIONS_ORDER[1]
+  for i, k in ipairs(SpArc.FONT_OPTIONS_ORDER) do
+    if k == curKey then
+      nextKey = SpArc.FONT_OPTIONS_ORDER[(i % #SpArc.FONT_OPTIONS_ORDER) + 1]
+      break
+    end
+  end
+  db.visual.uiFont = nextKey
+  SpArc:ApplyAllFonts()
+  return nextKey
 end
 
 function SpArc.IsSecret(v)
@@ -332,10 +494,12 @@ SpArc.DEFAULT_VISUAL = {
   autoUnshiftOutOfCombat = true,
   keepFormsInInstances = true,
   enableNameplates = true,
+  uiFont = "ROBOTO_BOLD",
+  uiReplaceGlobalFonts = true,
   npWidth = 140,
   npHeight = 30,
   npCastHeight = 14,
-  npFontSize = 11,
+  npFontSize = 12,
   npShowQuestNPCs = true,
   npShowFriendlyNPCs = false,
   npShowNeutralNPCs = true,
@@ -387,7 +551,7 @@ SpArc.DEFAULT_VISUAL = {
   ufWidth = 176,
   ufHeight = 28,
   ufPortraitSize = 48,
-  ufFontSize = 11,
+  ufFontSize = 12,
   ufTargetCastHeight = 16,
   ufPlayerX = -260,
   ufPlayerY = -145,
@@ -940,7 +1104,25 @@ function SpArc:EnsureDB(forceReinit)
   db.telemetryLog = db.telemetryLog or {}
   db.debugLog = db.debugLog or {}
   db.lastSpellAudit = db.lastSpellAudit or {}
+  if not db._robotoFontMigratedV1 then
+    for _, pObj in pairs(db.profiles or {}) do
+      if type(pObj) == "table" and type(pObj.visual) == "table" then
+        pObj.visual.uiFont = pObj.visual.uiFont or "ROBOTO_BOLD"
+        if pObj.visual.uiReplaceGlobalFonts == nil then
+          pObj.visual.uiReplaceGlobalFonts = true
+        end
+        if (tonumber(pObj.visual.npFontSize) or 11) <= 11 then
+          pObj.visual.npFontSize = 12
+        end
+        if (tonumber(pObj.visual.ufFontSize) or 11) <= 11 then
+          pObj.visual.ufFontSize = 12
+        end
+      end
+    end
+    db._robotoFontMigratedV1 = true
+  end
   cachedDB = db
+  SpArc:ApplyGlobalFonts()
   return db
 end
 

@@ -212,7 +212,7 @@ local function OpenControlCenter(initialTab)
     closeBtn:SetPoint("RIGHT", topBar, "RIGHT", -10, 0)
     closeBtn:SetScript("OnClick", function() controlFrame:Hide() end)
 
-    local langBtn = CreateElvButton(topBar, 92, 26, "")
+    local langBtn = CreateElvButton(topBar, 82, 26, "")
     langBtn:SetPoint("RIGHT", closeBtn, "LEFT", -6, 0)
     langBtn:SetScript("OnClick", function()
       local cur = SpArc:GetActiveLang()
@@ -222,8 +222,18 @@ local function OpenControlCenter(initialTab)
     end)
     ui.langBtn = langBtn
 
-    local fixCursorTopBtn = CreateElvButton(topBar, 125, 26, "")
-    fixCursorTopBtn:SetPoint("RIGHT", langBtn, "LEFT", -6, 0)
+    local fontTopBtn = CreateElvButton(topBar, 154, 26, "")
+    fontTopBtn:SetPoint("RIGHT", langBtn, "LEFT", -6, 0)
+    fontTopBtn:SetScript("OnClick", function()
+      if SpArc.CycleFontFamily then
+        SpArc:CycleFontFamily()
+      end
+      controlFrame:RefreshUI()
+    end)
+    ui.fontTopBtn = fontTopBtn
+
+    local fixCursorTopBtn = CreateElvButton(topBar, 118, 26, "")
+    fixCursorTopBtn:SetPoint("RIGHT", fontTopBtn, "LEFT", -6, 0)
     fixCursorTopBtn:SetScript("OnClick", function()
       if SpArc.FlushHardwareCursor then
         SpArc:FlushHardwareCursor(true)
@@ -1565,6 +1575,10 @@ local function OpenControlCenter(initialTab)
         ui.footerCreditsTxt:SetText(SpArc:L("FOOTER_CREDITS"))
       end
       ui.langBtn:SetText(SpArc:L("LANG_BTN"))
+      if ui.fontTopBtn then
+        local fLbl = (SpArc.GetActiveFontLabel and SpArc:GetActiveFontLabel()) or "Roboto Bold"
+        ui.fontTopBtn:SetText((SpArc:IsRU() and "Шрифт: |cffffd100" or "Font: |cffffd100") .. fLbl .. "|r")
+      end
       ui.fixCursorTopBtn:SetText(SpArc:L("TOP_FIX_CURSOR"))
       ui.testHudTopBtn:SetText(string.format(SpArc:L("TOP_TEST_HUD"), SpArc.testMode and SpArc:L("MSG_ON") or SpArc:L("MSG_OFF")))
       ui.testHudTopBtn:SetSelected(SpArc.testMode and true or false)
@@ -2112,6 +2126,9 @@ end
 CreateSpArcMinimapButton()
 RegisterSpArcBlizzardSettings()
 SpArc:ApplySmartBossTabBinding()
+if SpArc.ApplyAllFonts then
+  SpArc:ApplyAllFonts()
+end
 if _G.C_Timer and _G.C_Timer.After then
   _G.C_Timer.After(1.0, function()
     CreateSpArcMinimapButton()
@@ -2119,6 +2136,9 @@ if _G.C_Timer and _G.C_Timer.After then
     UpdateMinimapButtonPosition()
     SpArc:UpdateMinimapButtonVisibility()
     SpArc:ApplySmartBossTabBinding()
+    if SpArc.ApplyAllFonts then
+      SpArc:ApplyAllFonts()
+    end
     if SpArc.RunDebugSelfTest then
       SpArc:RunDebugSelfTest(false)
     end

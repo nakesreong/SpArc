@@ -1212,14 +1212,16 @@ local function ApplyMetroGeometryToPlate(metro)
   local w = tonumber(vis.npWidth) or 140
   local h = tonumber(vis.npHeight) or 30
   local cbH = tonumber(vis.npCastHeight) or 14
-  local fSize = tonumber(vis.npFontSize) or 11
-  if metro._appliedW == w and metro._appliedH == h and metro._appliedCbH == cbH and metro._appliedFSize == fSize then
+  local fSize = tonumber(vis.npFontSize) or 12
+  local fKey = (SpArc.GetActiveFontKey and SpArc:GetActiveFontKey()) or "ROBOTO_BOLD"
+  if metro._appliedW == w and metro._appliedH == h and metro._appliedCbH == cbH and metro._appliedFSize == fSize and metro._appliedFontKey == fKey then
     return
   end
   metro._appliedW = w
   metro._appliedH = h
   metro._appliedCbH = cbH
   metro._appliedFSize = fSize
+  metro._appliedFontKey = fKey
   metro:SetSize(w, h)
   metro.classBox:SetSize(h, h)
   local qSize = math.max(18, math.min(26, h - 4))
@@ -1228,10 +1230,10 @@ local function ApplyMetroGeometryToPlate(metro)
   metro.castBar.iconBox:SetSize(cbH, cbH)
   ApplyCyrFont(metro.nameText, fSize)
   if metro.levelText then
-    ApplyCyrFont(metro.levelText, math.max(8, fSize - 1))
+    ApplyCyrFont(metro.levelText, math.max(9, fSize - 1))
   end
-  ApplyCyrFont(metro.hpText, math.max(8, fSize - 1))
-  local cbFont = math.max(8, math.min(12, cbH - 4))
+  ApplyCyrFont(metro.hpText, math.max(9, fSize - 1))
+  local cbFont = math.max(9, math.min(12, cbH - 3))
   ApplyCyrFont(metro.castBar.spellText, cbFont)
   ApplyCyrFont(metro.castBar.timeText, cbFont)
 end
@@ -1386,7 +1388,7 @@ UpdateMetroHealthAndColor = function(metro, now)
     pcall(metro.healthBar.SetValue, metro.healthBar, hp)
     if not IsSecret(hp) and not IsSecret(maxHp) and type(hp) == "number" and type(maxHp) == "number" and maxHp > 0 then
       local pct = math.floor((hp / maxHp) * 100 + 0.5)
-      if (metro.plateCategory == "FRIENDLY_PLAYER" or metro.plateCategory == "FRIENDLY_NPC") and pct >= 100 then
+      if pct >= 100 then
         metro.hpText:SetText("")
       else
         metro.hpText:SetText(pct .. "%")

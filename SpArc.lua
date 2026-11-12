@@ -1692,6 +1692,7 @@ local function OpenControlCenter(initialTab)
           dotLabels[#dotLabels + 1] = string.format("%s (%d)", d.key or "?", d.primaryID or 0)
         end
         local noneStr = SpArc:L("NONE_STR")
+        local overList = selParsed.overrideAssistList or {}
         ui.detailsText:SetText(string.format(
           SpArc:L("DETAILS_BODY"),
           SpArc:GetPresetDisplayTitle(selPr),
@@ -1699,6 +1700,7 @@ local function OpenControlCenter(initialTab)
           #(selParsed.rules or {}),
           (#(selParsed.saves or {}) > 0 and table.concat(selParsed.saves, ", ") or noneStr),
           (#(selParsed.cds or {}) > 0 and table.concat(selParsed.cds, ", ") or noneStr),
+          (#overList > 0 and table.concat(overList, ", ") or noneStr),
           (#dotLabels > 0 and table.concat(dotLabels, ", ") or noneStr),
           (#intList > 0 and table.concat(intList, ", ") or noneStr),
           (#protList > 0 and table.concat(protList, ", ") or noneStr)
@@ -1899,13 +1901,15 @@ local function UpdateMinimapButtonPosition()
   local parent = minimapBtn:GetParent()
   -- Do not override position if ElvUI_WindTools MinimapButtons or another bar has adopted the button
   if (parent and parent ~= _G.Minimap) or minimapBtn.isSkinned or minimapBtn.original then
+    if minimapBtn.frameDecor then minimapBtn.frameDecor:Hide() end
     return
   end
+  if minimapBtn.frameDecor then minimapBtn.frameDecor:Show() end
   local db = SpArc:EnsureDB()
   local angle = math.rad(tonumber(db.visual and db.visual.minimapAngle) or 205)
   local okW, rawW = pcall(_G.Minimap.GetWidth, _G.Minimap)
   local mmW = (okW and type(rawW) == "number" and not IsSecret(rawW) and rawW > 0) and rawW or 140
-  local radius = (mmW / 2) + 8
+  local radius = (mmW / 2) + 6
   local x = math.cos(angle) * radius
   local y = math.sin(angle) * radius
   minimapBtn:ClearAllPoints()
@@ -1926,43 +1930,52 @@ local function CreateSpArcMinimapButton()
   if minimapBtn or not _G.Minimap then return end
   local btn = CreateFrame("Button", "SpArcMinimapButton", _G.Minimap)
   minimapBtn = btn
-  btn:SetSize(28, 28)
+  btn:SetSize(32, 32)
   btn:SetFrameStrata("MEDIUM")
   btn:SetFrameLevel(8)
   btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   btn:RegisterForDrag("LeftButton")
 
-  -- Keep ONLY the main icon texture as a direct region of btn so WindTools MinimapButtons
-  -- skins the icon cleanly instead of stretching solid background/border textures over ARTWORK!
+  -- Keep ONLY the main icon texture as a direct region of btn so WindTools MinimapButtons / HidingBar
+  -- skins the icon cleanly, while our circular ring/background live on a child frame!
   local frameDecor = CreateFrame("Frame", nil, btn)
   frameDecor:SetAllPoints(btn)
-  frameDecor:SetFrameLevel(math.max(1, btn:GetFrameLevel() - 1))
+  frameDecor:SetFrameLevel(btn:GetFrameLevel())
+  btn.frameDecor = frameDecor
 
   local bg = frameDecor:CreateTexture(nil, "BACKGROUND")
-  bg:SetAllPoints(frameDecor)
-  bg:SetColorTexture(0.06, 0.04, 0.10, 0.95)
-
-  local border = frameDecor:CreateTexture(nil, "BORDER")
-  border:SetPoint("TOPLEFT", frameDecor, "TOPLEFT", -1, 1)
-  border:SetPoint("BOTTOMRIGHT", frameDecor, "BOTTOMRIGHT", 1, -1)
-  border:SetColorTexture(0.75, 0.30, 1.0, 0.90)
-  btn.border = border
+  bg:SetSize(25, 25)
+  bg:SetPoint("CENTER", frameDecor, "CENTER", 0, 0)
+  bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+  bg:SetVertexColor(0.08, 0.05, 0.14, 0.95)
+  btn.bg = bg
 
   local icon = btn:CreateTexture(nil, "ARTWORK")
-  icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 2, -2)
-  icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -2, 2)
+  icon:SetSize(21, 21)
+  icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
   icon:SetTexture(1386548)
   icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  if btn.CreateMaskTexture and icon.AddMaskTexture then
+    local mask = btn:CreateMaskTexture()
+    mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    mask:SetAllPoints(icon)
+    icon:AddMaskTexture(mask)
+    btn.iconMask = mask
+  end
   btn.icon = icon
 
-  local label = btn:CreateFontString(nil, "OVERLAY")
-  ApplyCyrFont(label, 9)
-  label:SetPoint("BOTTOM", btn, "BOTTOM", 0, 1)
-  label:SetTextColor(1, 0.85, 0.25, 1)
-  label:SetText("SpArc")
+  local ringFrame = CreateFrame("Frame", nil, frameDecor)
+  ringFrame:SetAllPoints(frameDecor)
+  ringFrame:SetFrameLevel(btn:GetFrameLevel() + 2)
+  local border = ringFrame:CreateTexture(nil, "OVERLAY")
+  border:SetSize(54, 54)
+  border:SetPoint("TOPLEFT", ringFrame, "TOPLEFT", 0, 0)
+  border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+  btn.border = border
+
+  btn:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight", "ADD")
 
   btn:SetScript("OnEnter", function(self)
-    if self.border then self.border:SetColorTexture(1.0, 0.82, 0.20, 1.0) end
     if _G.GameTooltip then
       _G.GameTooltip:SetOwner(self, "ANCHOR_LEFT")
       _G.GameTooltip:AddLine(string.format(SpArc:L("MM_TT_TITLE"), SpArc.VERSION))
@@ -1973,8 +1986,7 @@ local function CreateSpArcMinimapButton()
       _G.GameTooltip:Show()
     end
   end)
-  btn:SetScript("OnLeave", function(self)
-    if self.border then self.border:SetColorTexture(0.75, 0.30, 1.0, 0.90) end
+  btn:SetScript("OnLeave", function()
     if _G.GameTooltip then _G.GameTooltip:Hide() end
   end)
 

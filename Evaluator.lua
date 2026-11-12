@@ -93,6 +93,7 @@ function SpArc:SyncSpellDefsFromProfile(parsed, presetID)
   end
   for k, spDef in pairs(parsed.spells) do
     if not SPELL_DEFS[k] or changed then
+      spDef.overrideAssist = spDef.overrideAssist or (parsed.overrideAssist and parsed.overrideAssist[k]) or false
       SPELL_DEFS[k] = spDef
       changed = true
     else
@@ -127,6 +128,7 @@ function SpArc:SyncSpellDefsFromProfile(parsed, presetID)
       dst.isBossSkill = spDef.isBossSkill
       dst.isPvPSkill = spDef.isPvPSkill
       dst.isInterrupt = spDef.isInterrupt
+      dst.overrideAssist = spDef.overrideAssist or (parsed.overrideAssist and parsed.overrideAssist[k]) or false
     end
   end
   if changed then
@@ -1021,6 +1023,23 @@ function SpArc:BuildRotationQueue(maxSlots)
       -- Priority 0: Interrupts from .MD if target is actively casting an interruptible spell
       if simCtx.targetCastingInterruptible then
         pickedKey, pickedRule = PickMatchingRule(1, true, nil, "exclude")
+      end
+
+      -- Priority 0.5: .MD OVERRIDE_ASSIST rules (e.g. Boss/Rare Bursts & priority cooldowns configured in .MD to override Blizzard Helper)
+      if not pickedKey and not SpArc.testMode then
+        for _, rule in ipairs(parsed.rules) do
+          local sp = rule.spell
+          local d = SPELL_DEFS[sp]
+          local isOver = (d and d.overrideAssist == true) or (parsed.overrideAssist and parsed.overrideAssist[sp] == true)
+          if isOver and simReady[sp] and simUsable[sp] and not simNoResource[sp] and IsSpellBoundOnBar(sp) and IsSpellAllowedByToggles(sp, 1) then
+            local s = states[sp]
+            if s and not s.isOutOfRange and not s.isUnavailable and SpArc:EvalSingleCondition(rule.cond, simHasDoTs, simReady, simUsable, simProcs, simStacks, simCharges, simBurst, simActive, simCtx) then
+              pickedKey = sp
+              pickedRule = rule
+              break
+            end
+          end
+        end
       end
 
       -- Smart Arbiter ("Trust Blizzard Helper, but override when it lags or lies"):

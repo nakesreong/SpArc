@@ -175,6 +175,8 @@ local function ParseSpellDefLine(line, currentSection)
         def.hastedCD = (val:lower() == "true" or val == "1")
       elseif prop == "ONCE_PER_QUEUE" or prop == "NO_CONSECUTIVE" then
         def.oncePerQueue = (val:lower() == "true" or val == "1")
+      elseif prop == "OVERRIDE_ASSIST" or prop == "OVERRIDE_BLIZZ" or prop == "OVERRIDE_BLIZZARD" or prop == "FORCE_SLOT1" then
+        def.overrideAssist = (val:lower() == "true" or val == "1")
       end
     end
   end
@@ -214,6 +216,8 @@ function SpArc:ParseMarkdownFSM(mdText)
     auras = {},
     interruptibleChannels = {},
     protectedChannels = {},
+    overrideAssist = {},
+    overrideAssistList = {},
     targetDebuffIDs = {},
     targetDebuffNames = {},
     rules = {},
@@ -307,6 +311,12 @@ function SpArc:ParseMarkdownFSM(mdText)
             if spDef.lockChannel then
               parsed.protectedChannels[spKey] = true
             end
+            if spDef.overrideAssist then
+              if not parsed.overrideAssist[spKey] then
+                parsed.overrideAssist[spKey] = true
+                parsed.overrideAssistList[#parsed.overrideAssistList + 1] = spKey
+              end
+            end
             if spDef.debuffIDs then
               for _, did in ipairs(spDef.debuffIDs) do
                 parsed.targetDebuffIDs[#parsed.targetDebuffIDs + 1] = did
@@ -358,6 +368,24 @@ function SpArc:ParseMarkdownFSM(mdText)
             for token in dotsList:gmatch("([A-Z0-9_]+)") do
               if token ~= "NONE" then
                 parsed.dots[#parsed.dots + 1] = token
+              end
+            end
+          end
+
+          local overList = line:match("^OVERRIDE_ASSIST:%s*(.+)$")
+            or line:match("^OVERRIDE_BLIZZ:%s*(.+)$")
+            or line:match("^OVERRIDE_BLIZZARD:%s*(.+)$")
+            or line:match("^FORCE_SLOT1:%s*(.+)$")
+          if overList then
+            for token in overList:gmatch("([A-Z0-9_]+)") do
+              if token ~= "NONE" then
+                if not parsed.overrideAssist[token] then
+                  parsed.overrideAssist[token] = true
+                  parsed.overrideAssistList[#parsed.overrideAssistList + 1] = token
+                end
+                if parsed.spells[token] then
+                  parsed.spells[token].overrideAssist = true
+                end
               end
             end
           end

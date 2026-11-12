@@ -1799,6 +1799,13 @@ local NO_RANGE_CHECK_SPELLS = {
   LEG_SWEEP            = true,
   CELESTIAL_CONDUIT    = true,
   WHIRLING_DRAGON_PUNCH = true,
+  EXHILARATION         = true,
+  ASPECT_OF_THE_TURTLE = true,
+  SURVIVAL_OF_THE_FITTEST = true,
+  MEND_PET             = true,
+  FEIGN_DEATH          = true,
+  ASPECT_OF_THE_EAGLE  = true,
+  COORDINATED_ASSAULT  = true,
 }
 
 local CLASS_RANGE_FALLBACK_SPELLS = {
@@ -1809,6 +1816,7 @@ local CLASS_RANGE_FALLBACK_SPELLS = {
   DRUID   = { 5221, 1822, 22568, 1079, 8921, 93402, 190984, 194153, 78674 },
   SHAMAN  = { 17364, 60103, 188196, 188389 },
   MONK    = { 100780, 100784, 107428, 116705 },
+  HUNTER  = { 186270, 259387, 187707, 259495, 259489 },
 }
 
 local function CheckBT4ButtonOutOfRange(btBtn)

@@ -22,7 +22,7 @@ _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
 SpArc.VERSION = "2.9.7"
-SpArc.PROFILE_SCHEMA_VERSION = 40
+SpArc.PROFILE_SCHEMA_VERSION = 41
 if SpArc.testMode == nil then
   SpArc.testMode = false
 end
@@ -453,10 +453,15 @@ function SpArc:IsTargetBossOrRare(unit)
     return false
   end
   -- 1. Classification: worldboss, rareelite, rare (explicitly NOT "elite", because dungeon packs are all elite)
+  local isElite = false
   if _G.UnitClassification then
     local okC, classif = pcall(_G.UnitClassification, unit)
-    if okC and not SpArc.IsSecret(classif) and (classif == "worldboss" or classif == "rareelite" or classif == "rare") then
-      return true
+    if okC and not SpArc.IsSecret(classif) then
+      if classif == "worldboss" or classif == "rareelite" or classif == "rare" then
+        return true
+      elseif classif == "elite" then
+        isElite = true
+      end
     end
   end
   -- 2. Skull level (-1)
@@ -467,12 +472,19 @@ function SpArc:IsTargetBossOrRare(unit)
     end
   end
   -- 3. Active encounter boss frames (boss1..boss8) so dungeon/raid bosses are detected without triggering on normal elite packs
-  if _G.UnitIsUnit and _G.UnitExists then
+  if _G.UnitExists then
+    local anyBossUnitExists = false
     for i = 1, 8 do
       local bUnit = "boss" .. i
-      if SpArc.SafeBool(_G.UnitExists, bUnit) and SpArc.SafeBool(_G.UnitIsUnit, unit, bUnit) then
-        return true
+      if SpArc.SafeBool(_G.UnitExists, bUnit) then
+        anyBossUnitExists = true
+        if _G.UnitIsUnit and SpArc.SafeBool(_G.UnitIsUnit, unit, bUnit) then
+          return true
+        end
       end
+    end
+    if isElite and (anyBossUnitExists or (_G.IsEncounterInProgress and SpArc.SafeBool(_G.IsEncounterInProgress))) then
+      return true
     end
   end
   return false
@@ -494,6 +506,9 @@ function SpArc:IsBossRotationEnabled()
   local db = SpArc:EnsureDB()
   if not (db and db.visual and db.visual.enableBossRotation ~= false) then
     return false
+  end
+  if db.mode == "BOSS" then
+    return true
   end
   return SpArc:IsTargetBossOrRare("target")
 end

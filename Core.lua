@@ -490,7 +490,8 @@ SpArc.DEFAULT_VISUAL = {
   macroGenIncludeClass = true,
   macroGenIncludeSpec = true,
   macroGenTemplate = "#showtooltip\n/stopmacro [flying]\n/cast [@target] spell",
-  smartBossTab = true,
+  smartBossTab = false,
+  smartTabPlayers = false,
   autoUnshiftOutOfCombat = true,
   keepFormsInInstances = true,
   enableNameplates = true,
@@ -1121,6 +1122,15 @@ function SpArc:EnsureDB(forceReinit)
     end
     db._robotoFontMigratedV1 = true
   end
+  if not db._smartTabDefaultOffV1 then
+    for _, pObj in pairs(db.profiles or {}) do
+      if type(pObj) == "table" and type(pObj.visual) == "table" then
+        pObj.visual.smartBossTab = false
+        pObj.visual.smartTabPlayers = false
+      end
+    end
+    db._smartTabDefaultOffV1 = true
+  end
   cachedDB = db
   SpArc:ApplyGlobalFonts()
   return db
@@ -1180,6 +1190,7 @@ local function ApplyAllActiveProfileSubsystems()
   end
   if SpArc.ApplyVisualLayout then SpArc:ApplyVisualLayout() end
   if SpArc.ApplyCombatCameraBindings then SpArc:ApplyCombatCameraBindings() end
+  if SpArc.ApplySmartBossTabBinding then SpArc:ApplySmartBossTabBinding() end
   if SpArc.UpdateCameraState then SpArc:UpdateCameraState() end
   if SpArc.UpdateMinimapButtonVisibility then SpArc:UpdateMinimapButtonVisibility() end
   if SpArc.ApplyCombatTextSettings then SpArc:ApplyCombatTextSettings() end

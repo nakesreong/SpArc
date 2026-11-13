@@ -571,11 +571,12 @@ local function EnsureBaseCameraCVars()
   -- so @mouseover and @cursor macros hit the exact crosshair position without unhiding the OS cursor.
   pcall(C_CVar.SetCVar, "CursorStickyCentering", "0")
   SyncCursorCenteredYPos(false)
-  -- Keep SoftTarget Interact, Enemy & Friend active so E / interact key both targets and interacts smoothly
+  -- Keep SoftTarget Interact active so E / interact key interacts smoothly,
+  -- but keep SoftTargetEnemy = 0 so Blizzard Action Targeting never auto-targets random players/mobs in front of the camera!
   pcall(C_CVar.SetCVar, "SoftTargetInteract", "3")
   pcall(C_CVar.SetCVar, "SoftTargetInteractArc", "2")
   pcall(C_CVar.SetCVar, "SoftTargetInteractRange", "20")
-  pcall(C_CVar.SetCVar, "SoftTargetEnemy", "1")
+  pcall(C_CVar.SetCVar, "SoftTargetEnemy", "0")
   pcall(C_CVar.SetCVar, "SoftTargetFriend", "0")
   pcall(C_CVar.SetCVar, "interactKeyWarningTutorial", "1")
 end
@@ -1344,14 +1345,30 @@ local function ComputeDesiredInteractMode()
     return "INTERACT"
   end
 
-  -- 3. When pointing directly at a LIVE PLAYER under crosshair that is not already our target, target them on E.
-  --    (Never trigger on non-player units so companions like Brann or unselectable object helper units never hijack E!)
+  -- 3. When pointing directly at a LIVE FRIENDLY PLAYER under crosshair that is not already our target, target them on E.
+  --    (Never target attackable/hostile players in the open world on E unless Smart-Target Players is explicitly enabled for Arena/BG,
+  --     so Hunter pets never run off to attack random War Mode players!)
   if UnitExists and SafeBool(UnitExists, "mouseover") and UnitIsPlayer and SafeBool(UnitIsPlayer, "mouseover") then
     local isDead = UnitIsDead and SafeBool(UnitIsDead, "mouseover")
     if not isDead then
-      local alreadyTarget = UnitExists and SafeBool(UnitExists, "target") and UnitIsUnit and SafeBool(UnitIsUnit, "target", "mouseover")
-      if not alreadyTarget then
-        return "TARGET"
+      local canAtk = UnitCanAttack and SafeBool(UnitCanAttack, "player", "mouseover")
+      local allowPlayerTarget = not canAtk
+      if canAtk then
+        local db = SpArc:EnsureDB()
+        if db and db.visual and db.visual.smartTabPlayers == true then
+          if _G.IsInInstance then
+            local okI, _, instType = pcall(_G.IsInInstance)
+            if okI and (instType == "arena" or instType == "pvp") then
+              allowPlayerTarget = true
+            end
+          end
+        end
+      end
+      if allowPlayerTarget then
+        local alreadyTarget = UnitExists and SafeBool(UnitExists, "target") and UnitIsUnit and SafeBool(UnitIsUnit, "target", "mouseover")
+        if not alreadyTarget then
+          return "TARGET"
+        end
       end
     end
   end

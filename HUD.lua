@@ -1099,7 +1099,7 @@ rootFrame:SetScript("OnUpdate", function()
 end)
 
 ---------------------------------------------------------------------------------------
---     SMART PRIORITY TAB-TARGETING (BOSS > ELITE > PLAYER > ADD, SKIP PLAYER PETS)  --
+--     SMART PRIORITY TAB-TARGETING (OFF BY DEFAULT; SEPARATE ARENA/BG PLAYER OPT)   --
 ---------------------------------------------------------------------------------------
 local smartTabBtn = CreateFrame("Button", "SpArcSmartTabButton", UIParent, "SecureActionButtonTemplate")
 smartTabBtn:RegisterForClicks("AnyDown")
@@ -1109,6 +1109,24 @@ local BOSS_TARGET_LINE = "/target [@boss1,harm,nodead][@boss2,harm,nodead][@boss
 local DEFAULT_PVE_TAB_MACRO = "/targetenemy\n" .. BOSS_TARGET_LINE
 local DEFAULT_PVP_TAB_MACRO = "/targetenemyplayer\n" .. BOSS_TARGET_LINE
 smartTabBtn:SetAttribute("macrotext", DEFAULT_PVE_TAB_MACRO)
+
+local function IsInArenaOrBattleground()
+  if _G.IsInInstance then
+    local okI, inInst, instType = pcall(_G.IsInInstance)
+    if okI and inInst and (instType == "arena" or instType == "pvp") then
+      return true
+    end
+  end
+  return false
+end
+
+local function GetSmartTabFlags()
+  local db = SpArc:EnsureDB()
+  local v = db and db.visual
+  local pveTab = (v and v.smartBossTab == true) or false
+  local pvpPlayers = (v and v.smartTabPlayers == true) or false
+  return pveTab, pvpPlayers, IsInArenaOrBattleground()
+end
 
 local function IsUnitPlayerPetOrTotem(unit)
   if not unit or SafeBool(_G.UnitIsPlayer, unit) then
@@ -1131,7 +1149,7 @@ local function IsUnitPlayerPetOrTotem(unit)
   return false
 end
 
-local function EvaluateUnitTabPriority(unit)
+local function EvaluateUnitTabPriority(unit, pveTab, pvpPlayers, inPvPInstance)
   if not unit or not SafeBool(UnitExists, unit) or SafeBool(UnitIsDeadOrGhost, unit) then
     return nil
   end
@@ -1142,80 +1160,68 @@ local function EvaluateUnitTabPriority(unit)
   if IsUnitPlayerPetOrTotem(unit) then
     return 0
   end
-  local baseScore = 200
+  local unitInCombat = SafeBool(UnitAffectingCombat, unit)
   if SafeBool(_G.UnitIsPlayer, unit) then
-    baseScore = 400
+    -- Never smart-target enemy players unless the Arena/BG player option is enabled and we are in Arena/BG
+    if not pvpPlayers or not inPvPInstance then
+      return nil
+    end
+    return unitInCombat and 435 or 400
+  end
+
+  if not pveTab then
+    return nil
+  end
+
+  local isBossUnit = unit:match("^boss%d+$") or (_G.UnitIsBossMob and SafeBool(_G.UnitIsBossMob, unit))
+  -- Never smart-target peaceful/unengaged open-world NPCs that are not in combat!
+  if not unitInCombat and not isBossUnit then
+    return nil
+  end
+
+  local baseScore = 200
+  if isBossUnit then
+    baseScore = 500
   else
-    if unit:match("^boss%d+$") or (_G.UnitIsBossMob and SafeBool(_G.UnitIsBossMob, unit)) then
-      baseScore = 500
-    else
-      local classif = nil
-      if _G.UnitClassification then
-        local okC, c = pcall(_G.UnitClassification, unit)
-        if okC and not IsSecret(c) and type(c) == "string" then
-          classif = c
-        end
-      end
-      local uLvl = nil
-      if _G.UnitLevel then
-        local okL, l = pcall(_G.UnitLevel, unit)
-        if okL and not IsSecret(l) and type(l) == "number" then
-          uLvl = l
-        end
-      end
-      if classif == "worldboss" or uLvl == -1 then
-        baseScore = 500
-      elseif _G.UnitIsQuestBoss and SafeBool(_G.UnitIsQuestBoss, unit) then
-        baseScore = 360
-      elseif classif == "rareelite" then
-        baseScore = 340
-      elseif classif == "elite" then
-        baseScore = 320
-      elseif classif == "rare" then
-        baseScore = 310
-      elseif classif == "minus" or classif == "trivial" then
-        baseScore = 100
-      else
-        baseScore = 200
+    local classif = nil
+    if _G.UnitClassification then
+      local okC, c = pcall(_G.UnitClassification, unit)
+      if okC and not IsSecret(c) and type(c) == "string" then
+        classif = c
       end
     end
+    local uLvl = nil
+    if _G.UnitLevel then
+      local okL, l = pcall(_G.UnitLevel, unit)
+      if okL and not IsSecret(l) and type(l) == "number" then
+        uLvl = l
+      end
+    end
+    if classif == "worldboss" or uLvl == -1 then
+      baseScore = 500
+    elseif _G.UnitIsQuestBoss and SafeBool(_G.UnitIsQuestBoss, unit) then
+      baseScore = 360
+    elseif classif == "rareelite" then
+      baseScore = 340
+    elseif classif == "elite" then
+      baseScore = 320
+    elseif classif == "rare" then
+      baseScore = 310
+    elseif classif == "minus" or classif == "trivial" then
+      baseScore = 100
+    else
+      baseScore = 200
+    end
   end
-  if SafeBool(UnitAffectingCombat, unit) then
+  if unitInCombat then
     baseScore = baseScore + 35
   end
   return baseScore
 end
 
 local function BuildContextualCombatTabMacro()
-  local inPvPInstance = false
-  if _G.IsInInstance then
-    local okI, _, instType = pcall(_G.IsInInstance)
-    if okI and (instType == "arena" or instType == "pvp") then
-      inPvPInstance = true
-    end
-  end
-  if inPvPInstance then
-    return DEFAULT_PVP_TAB_MACRO
-  end
-  -- Also check if hostile enemy players are currently on nameplates (War Mode / Duels / World PvP)
-  local metroMap = SpArc.GetActiveMetroUnits and SpArc:GetActiveMetroUnits() or nil
-  local sawEnemyPlayer = false
-  local sawHighBoss = false
-  if type(metroMap) == "table" then
-    for u, metro in pairs(metroMap) do
-      if metro and SafeBool(UnitExists, u) and not SafeBool(UnitIsDeadOrGhost, u) and SafeBool(UnitCanAttack, "player", u) then
-        if SafeBool(_G.UnitIsPlayer, u) then
-          sawEnemyPlayer = true
-        else
-          local sc = EvaluateUnitTabPriority(u)
-          if sc and sc >= 500 then
-            sawHighBoss = true
-          end
-        end
-      end
-    end
-  end
-  if sawEnemyPlayer and not sawHighBoss then
+  local _, pvpPlayers, inPvPInstance = GetSmartTabFlags()
+  if pvpPlayers and inPvPInstance then
     return DEFAULT_PVP_TAB_MACRO
   end
   return DEFAULT_PVE_TAB_MACRO
@@ -1224,11 +1230,14 @@ end
 local lastPriorityTokenIdx = 0
 
 local function PickBestOutOfLockdownTabMacro()
-  -- 1. Hard boss1..boss5 check first
-  for i = 1, 5 do
-    local bUnit = "boss" .. i
-    if SafeBool(UnitExists, bUnit) and not SafeBool(UnitIsDeadOrGhost, bUnit) and SafeBool(UnitCanAttack, "player", bUnit) then
-      return DEFAULT_PVE_TAB_MACRO
+  local pveTab, pvpPlayers, inPvPInstance = GetSmartTabFlags()
+  -- 1. Hard boss1..boss5 check first when PvE Smart-Tab is on
+  if pveTab then
+    for i = 1, 5 do
+      local bUnit = "boss" .. i
+      if SafeBool(UnitExists, bUnit) and not SafeBool(UnitIsDeadOrGhost, bUnit) and SafeBool(UnitCanAttack, "player", bUnit) then
+        return DEFAULT_PVE_TAB_MACRO
+      end
     end
   end
 
@@ -1245,7 +1254,7 @@ local function PickBestOutOfLockdownTabMacro()
   for i = 1, 40 do
     local npUnit = "nameplate" .. i
     if metroMap[npUnit] and SafeBool(UnitExists, npUnit) then
-      local sc = EvaluateUnitTabPriority(npUnit)
+      local sc = EvaluateUnitTabPriority(npUnit, pveTab, pvpPlayers, inPvPInstance)
       if sc ~= nil then
         if sc == 0 then
           sawPetOrTotem = true
@@ -1258,7 +1267,7 @@ local function PickBestOutOfLockdownTabMacro()
     end
   end
 
-  -- If there is a Boss/Elite standing among weaker adds, or real targets standing alongside Player Pets/Totems:
+  -- If there is a Boss/Elite standing among weaker adds (or Arena/BG players alongside Pets/Totems):
   if bestTier > 0 and (bestTier >= 310 or sawPetOrTotem) and (bestTier > minNonZeroTier or sawPetOrTotem) then
     local topUnits = {}
     for _, c in ipairs(candidates) do
@@ -1269,7 +1278,6 @@ local function PickBestOutOfLockdownTabMacro()
     if #topUnits == 1 then
       return "/target [@" .. topUnits[1] .. ",harm,nodead]\n" .. BOSS_TARGET_LINE
     elseif #topUnits > 1 then
-      -- If currently targeting one of the top-priority units, cycle to the next top-priority unit
       local picked = topUnits[1]
       for idx, u in ipairs(topUnits) do
         if _G.UnitIsUnit and SafeBool(_G.UnitIsUnit, u, "target") then
@@ -1309,16 +1317,16 @@ function SpArc:ApplySmartBossTabBinding()
   if _G.InCombatLockdown and _G.InCombatLockdown() then
     return
   end
-  local db = SpArc:EnsureDB()
-  local enabled = (not db.visual) or (db.visual.smartBossTab ~= false)
+  local pveTab, pvpPlayers, inPvPInstance = GetSmartTabFlags()
+  local activePvPNow = pvpPlayers and inPvPInstance
+  local enabled = pveTab or activePvPNow
   if _G.ClearOverrideBindings then
     pcall(_G.ClearOverrideBindings, smartTabBtn)
   end
   if enabled then
-    -- Tune WoW's C++ TargetNearest scoring engine to prioritize Enemy Players over Pets (3) and lock to In-Combat units (1)
     if _G.C_CVar and _G.C_CVar.SetCVar then
       pcall(_G.C_CVar.SetCVar, "TargetNearestUseNew", "1")
-      pcall(_G.C_CVar.SetCVar, "TargetPriorityPvp", "3")
+      pcall(_G.C_CVar.SetCVar, "TargetPriorityPvp", activePvPNow and "3" or "1")
       pcall(_G.C_CVar.SetCVar, "TargetPriorityCombatLock", "1")
       pcall(_G.C_CVar.SetCVar, "TargetPriorityCombatLockHighlight", "1")
     end
@@ -1339,9 +1347,13 @@ smartTabEventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 smartTabEventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 smartTabEventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 smartTabEventFrame:RegisterEvent("INSTANCE_ENCOUNTER_ENGAGE_UNIT")
-smartTabEventFrame:SetScript("OnEvent", function()
+smartTabEventFrame:SetScript("OnEvent", function(_, event)
   if _G.InCombatLockdown and _G.InCombatLockdown() then
     return
   end
-  smartTabBtn:SetAttribute("macrotext", BuildContextualCombatTabMacro())
+  if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" or event == "PLAYER_REGEN_ENABLED" then
+    SpArc:ApplySmartBossTabBinding()
+  else
+    smartTabBtn:SetAttribute("macrotext", BuildContextualCombatTabMacro())
+  end
 end)

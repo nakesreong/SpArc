@@ -21,7 +21,7 @@ _G.SparkArc = SpArc
 _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
-SpArc.VERSION = "2.9.8"
+SpArc.VERSION = "2.9.9"
 SpArc.PROFILE_SCHEMA_VERSION = 41
 if SpArc.testMode == nil then
   SpArc.testMode = false

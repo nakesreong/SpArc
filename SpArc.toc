@@ -3,7 +3,7 @@
 ## Notes: Markdown (.md) Rotation Queue, UnitFrames (Player/Target/Party/Boss), Metro Nameplates with Smart Tab-Targeting, MSBT Scroll Zones & Action Combat Camera.
 ## Notes-ruRU: Очередь ротации на базе .MD псевдокода, юнитфреймы (Игрок/Цель/Группа/Боссы), неймплейты Metro с умным Таб-таргетингом, зоны MSBT и Боевая Камера.
 ## Author: Gemini (Tiger) | QA & Vision: Anya (5cr3am1ng5oul)
-## Version: v2.9.8
+## Version: v2.9.9
 ## X-Credits: Special thanks for the inspiration to the creators of MSBT, Plater, WeakAuras, Hekili, Combat Mode & ElvUI
 ## IconTexture: 1386548
 ## DefaultState: enabled

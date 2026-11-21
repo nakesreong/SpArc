@@ -1083,7 +1083,7 @@ local function UpdateUnitFrameAuras(f, now, isDemo)
     return
   end
 
-  if not exists or not (C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex) then
+  if not exists or SafeBool(UnitIsDeadOrGhost, unit) then
     HideAllFrameAuras(f)
     return
   end
@@ -1126,20 +1126,59 @@ local function UpdateUnitFrameAuras(f, now, isDemo)
   for k in pairs(reusableSeenInstIDs) do reusableSeenInstIDs[k] = nil end
   for k in pairs(reusableSeenSpellIDs) do reusableSeenSpellIDs[k] = nil end
 
-  for idx = 1, 16 do
-    if shown >= maxIcons then break end
-    local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, unit, idx, "HARMFUL|PLAYER")
-    if not ok or type(aura) ~= "table" then break end
-    if aura.auraInstanceID and not IsSecret(aura.auraInstanceID) then
-      reusableSeenInstIDs[aura.auraInstanceID] = true
-    elseif aura.spellId and not IsSecret(aura.spellId) then
-      reusableSeenSpellIDs[aura.spellId] = true
+  if C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex then
+    for idx = 1, 16 do
+      if shown >= maxIcons then break end
+      local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, unit, idx, "HARMFUL|PLAYER")
+      if not ok or type(aura) ~= "table" then break end
+      if aura.auraInstanceID and not IsSecret(aura.auraInstanceID) then
+        reusableSeenInstIDs[aura.auraInstanceID] = true
+      end
+      if aura.spellId and not IsSecret(aura.spellId) then
+        reusableSeenSpellIDs[aura.spellId] = true
+      end
+      shown = shown + 1
+      ApplyAuraToBox(f, f.auraIcons[shown], shown, unit, aura, false, 0.74, 0.34, 1.00, now, true)
     end
-    shown = shown + 1
-    ApplyAuraToBox(f, f.auraIcons[shown], shown, unit, aura, false, 0.74, 0.34, 1.00, now, true)
   end
 
-  if shown < maxIcons then
+  -- WoW 12.x (`Midnight`) Secret-Value Combat Fallback:
+  -- In 12.x combat, `C_UnitAuras.GetDebuffDataByIndex` throws/returns 0 on secret unit auras.
+  -- Pull active player-applied DoTs & debuffs directly from SpArc's per-nameplate / per-unit cast tracker!
+  if shown == 0 and SpArc.GetTrackedAurasForUnit then
+    local tracked = SpArc:GetTrackedAurasForUnit(unit, now)
+    if type(tracked) == "table" then
+      for i = 1, #tracked do
+        if shown >= maxIcons then break end
+        local entry = tracked[i]
+        if entry and entry.id and not reusableSeenSpellIDs[entry.id] then
+          reusableSeenSpellIDs[entry.id] = true
+          shown = shown + 1
+          local box = f.auraIcons[shown]
+          PositionUnitAuraIcon(f, box, shown)
+          box._unit = nil
+          box._auraInstanceID = nil
+          box._spellID = entry.id
+          box._isHelpful = false
+          pcall(box.icon.SetTexture, box.icon, entry.icon or 136207)
+          if entry.stacks and entry.stacks > 1 then
+            box.count:SetText(tostring(entry.stacks))
+          else
+            box.count:SetText("")
+          end
+          local rem = SpArc.ApplyAuraCooldownWidget(box.cd, box.timeText, nil, nil, now, entry.start, entry.dur)
+          if rem and rem > 0 and rem < 4.5 then
+            box:SetBackdropBorderColor(1.00, 0.36, 0.20, 1.0)
+          else
+            box:SetBackdropBorderColor(0.74, 0.34, 1.00, 1.0)
+          end
+          box:Show()
+        end
+      end
+    end
+  end
+
+  if C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex and shown < maxIcons then
     for idx = 1, 16 do
       if shown >= maxIcons then break end
       local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, unit, idx, "HARMFUL")

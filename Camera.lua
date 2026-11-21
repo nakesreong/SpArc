@@ -201,12 +201,19 @@ local UNLOCK_FRAME_WATCHLIST = {
   "HousingModelPreviewFrame",
   "HousingCatalogFrame",
   "HousingEditorFrame",
-  "HousingControlsFrame",
   "HousingPlotSettingsFrame",
   "HousingPermissionSettingsFrame",
-  -- SpArc, MountCollector, Details, BugSack
+  -- SpArc, MountCollector, BeastCollector, TitleCollector, Details, BugSack
   "SpArcControlCenter",
   "MountCollectorFrame",
+  "MountCollectorRadarFrame",
+  "MountCollectorCopyPopup",
+  "MountCollectorDebugFrame",
+  "MountCollectorSetAttemptsFrame",
+  "BeastCollectorFrame",
+  "BeastCollectorCopyPopup",
+  "TitleCollectorMainFrame",
+  "TitleCollectorCopyPopup",
   "BugSackFrame",
   "DetailsOptionsWindow",
   "DetailsBreakdownWindow",
@@ -648,10 +655,10 @@ function SpArc:FlushHardwareCursor(useGxRestart)
   end
   ForceCleanCursorCVars()
   if C_CVar and C_CVar.SetCVar then
+    if useGxRestart then
+      pcall(C_CVar.SetCVar, "gxCursor", "0")
+    end
     pcall(C_CVar.SetCVar, "gxCursor", "1")
-  end
-  if useGxRestart and _G.RestartGx then
-    pcall(_G.RestartGx)
   end
 end
 
@@ -831,6 +838,11 @@ local function IsAnyWatchedFrameVisible()
         or fName:find("^ArkInventory")
         or fName:find("^BarberShop")
         or fName:find("^CharCustomize")
+        or fName:find("^MountCollector")
+        or fName:find("^BeastCollector")
+        or fName:find("^TitleCollector")
+        or fName:find("^SpArc")
+        or fName:find("^MAWM")
       ) then
         local f = _G[fName]
         if f and f.IsVisible and SafeBool(f.IsVisible, f) then

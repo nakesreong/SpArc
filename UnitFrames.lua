@@ -48,6 +48,8 @@ local IsResting = _G.IsResting
 local InCombatLockdown = _G.InCombatLockdown
 local RegisterUnitWatch = _G.RegisterUnitWatch
 local UnregisterUnitWatch = _G.UnregisterUnitWatch
+local RegisterStateDriver = _G.RegisterStateDriver
+local UnregisterStateDriver = _G.UnregisterStateDriver
 local C_UnitAuras = _G.C_UnitAuras
 local RAID_CLASS_COLORS = _G.RAID_CLASS_COLORS
 local CLASS_ICON_TCOORDS = _G.CLASS_ICON_TCOORDS
@@ -111,6 +113,7 @@ if SpArc.RegisterStrings then
     M12_COLOR_CLASS = "Class & Reaction Color",
     M12_COLOR_DARK = "Dark Obsidian",
     CK_UF_HIDE_BLIZZ = "Hide default Blizzard Player / Target / Focus frames",
+    CK_UF_HIDE_OOC = "Auto-hide UnitFrames out of combat, without target & on mount",
     CK_UF_POWER = "Show Power / Mana Bar along bottom",
     CK_UF_TGT_CAST = "Show Target Castbar below Target",
     CK_UF_TGT_AURAS = "Show Target DoTs / Debuffs / Buffs",
@@ -159,6 +162,7 @@ if SpArc.RegisterStrings then
     M12_COLOR_CLASS = "Цвет класса и реакции",
     M12_COLOR_DARK = "Тёмный обсидиан",
     CK_UF_HIDE_BLIZZ = "Скрывать стандартные фреймы Blizzard (Игрок, Цель, Фокус, Группа, Боссы)",
+    CK_UF_HIDE_OOC = "Скрывать юнитфреймы вне боя без цели и на маунте",
     CK_UF_POWER = "Полоска маны / ресурса снизу",
     CK_UF_TGT_CAST = "Кастбар цели под фреймом цели",
     CK_UF_TGT_AURAS = "Доты, дебаффы и баффы над Целью",
@@ -778,11 +782,6 @@ local function CreateSpArcUnitFrame(frameName, unitToken, portraitSide, isCompac
     f.attachedCastbar = cb
   end
 
-  if RegisterUnitWatch and not (InCombatLockdown and InCombatLockdown()) then
-    pcall(RegisterUnitWatch, f)
-    f._unitWatchRegistered = true
-  end
-
   _G.ClickCastFrames = _G.ClickCastFrames or {}
   _G.ClickCastFrames[f] = true
 
@@ -1366,13 +1365,37 @@ local function UpdateSingleUnitFrame(f, now, isDemo)
 end
 
 ---------------------------------------------------------------------------------------
---  5. LAYOUT, GEOMETRY & UNIT WATCH SYNCHRONIZATION
+--  5. LAYOUT, GEOMETRY & RESTRICTED VISIBILITY STATE DRIVER
 ---------------------------------------------------------------------------------------
-local function SyncUnitFrameWatchState(f, shouldEnable, forceDemoShow)
+local function BuildUnitFrameVisibilityMacro(unit, hideIdle)
+  if not unit then return "hide" end
+  if unit:find("^boss") then
+    return "[@" .. unit .. ",exists] show; hide"
+  end
+  if not hideIdle then
+    if unit == "player" then
+      return "show"
+    end
+    return "[@" .. unit .. ",exists] show; hide"
+  end
+  if unit == "player" then
+    return "[combat] show; [mounted][flying][vehicleui][overridebar] hide; [@target,exists] show; hide"
+  elseif unit == "target" or unit == "targettarget" then
+    return "[@" .. unit .. ",noexists] hide; [combat] show; [mounted][flying][vehicleui][overridebar] hide; show"
+  end
+  return "[@" .. unit .. ",noexists] hide; [combat] show; [mounted][flying][vehicleui][overridebar] hide; [@target,exists] show; hide"
+end
+
+local function SyncUnitFrameWatchState(f, shouldEnable, forceDemoShow, hideIdle)
   if not f then return end
   local inLockdown = InCombatLockdown and InCombatLockdown()
   if not shouldEnable then
     if not inLockdown then
+      if f._visDriverActive and UnregisterStateDriver then
+        pcall(UnregisterStateDriver, f, "visibility")
+        f._visDriverActive = false
+        f._appliedVisMacro = nil
+      end
       if f._unitWatchRegistered and UnregisterUnitWatch then
         pcall(UnregisterUnitWatch, f)
         f._unitWatchRegistered = false
@@ -1386,6 +1409,11 @@ local function SyncUnitFrameWatchState(f, shouldEnable, forceDemoShow)
 
   if forceDemoShow then
     if not inLockdown then
+      if f._visDriverActive and UnregisterStateDriver then
+        pcall(UnregisterStateDriver, f, "visibility")
+        f._visDriverActive = false
+        f._appliedVisMacro = nil
+      end
       if f._unitWatchRegistered and UnregisterUnitWatch then
         pcall(UnregisterUnitWatch, f)
         f._unitWatchRegistered = false
@@ -1394,14 +1422,20 @@ local function SyncUnitFrameWatchState(f, shouldEnable, forceDemoShow)
     end
   else
     if not inLockdown then
-      if not f._unitWatchRegistered and RegisterUnitWatch then
+      if f._unitWatchRegistered and UnregisterUnitWatch then
+        pcall(UnregisterUnitWatch, f)
+        f._unitWatchRegistered = false
+      end
+      if RegisterStateDriver then
+        local visMacro = BuildUnitFrameVisibilityMacro(f.unit, hideIdle)
+        if not f._visDriverActive or f._appliedVisMacro ~= visMacro then
+          pcall(RegisterStateDriver, f, "visibility", visMacro)
+          f._visDriverActive = true
+          f._appliedVisMacro = visMacro
+        end
+      elseif RegisterUnitWatch and not f._unitWatchRegistered then
         pcall(RegisterUnitWatch, f)
         f._unitWatchRegistered = true
-      end
-      if SafeBool(UnitExists, f.unit) then
-        f:Show()
-      else
-        f:Hide()
       end
     end
   end
@@ -1496,16 +1530,17 @@ function SpArc:ApplyUnitFramesSettings()
     ApplyCyrFont(targetCastbarFrame.timeText, cbf)
   end
 
-  SyncUnitFrameWatchState(ufFrames.player, enabled, isDemo)
-  SyncUnitFrameWatchState(ufFrames.target, enabled, isDemo)
-  SyncUnitFrameWatchState(ufFrames.tot,    enabled and (v.ufShowToT ~= false), isDemo)
-  SyncUnitFrameWatchState(ufFrames.focus,  enabled and (v.ufShowFocus ~= false), isDemo)
-  SyncUnitFrameWatchState(ufFrames.pet,    enabled and (v.ufShowPet ~= false), isDemo)
+  local hideIdle = (v.ufHideOutOfCombat ~= false)
+  SyncUnitFrameWatchState(ufFrames.player, enabled, isDemo, hideIdle)
+  SyncUnitFrameWatchState(ufFrames.target, enabled, isDemo, hideIdle)
+  SyncUnitFrameWatchState(ufFrames.tot,    enabled and (v.ufShowToT ~= false), isDemo, hideIdle)
+  SyncUnitFrameWatchState(ufFrames.focus,  enabled and (v.ufShowFocus ~= false), isDemo, hideIdle)
+  SyncUnitFrameWatchState(ufFrames.pet,    enabled and (v.ufShowPet ~= false), isDemo, hideIdle)
   for i = 1, 4 do
-    SyncUnitFrameWatchState(partyFrames[i], enabled and (v.ufShowParty ~= false), isDemo and i <= 2)
+    SyncUnitFrameWatchState(partyFrames[i], enabled and (v.ufShowParty ~= false), isDemo and i <= 2, hideIdle)
   end
   for i = 1, 5 do
-    SyncUnitFrameWatchState(bossFrames[i], enabled and (v.ufShowBoss ~= false), isDemo and i <= 2)
+    SyncUnitFrameWatchState(bossFrames[i], enabled and (v.ufShowBoss ~= false), isDemo and i <= 2, hideIdle)
   end
 
   SpArc:UpdateUnitFrames()
@@ -1540,7 +1575,11 @@ function SpArc:UpdateUnitFrames(now)
     end
   end
   if targetCastbarFrame then
-    UpdateSingleCastbarWidget(targetCastbarFrame, "target", now, isDemo)
+    if not isDemo and ufFrames.target and not ufFrames.target:IsShown() then
+      if targetCastbarFrame:IsShown() then targetCastbarFrame:Hide() end
+    else
+      UpdateSingleCastbarWidget(targetCastbarFrame, "target", now, isDemo)
+    end
   end
   if SpArc.RecordModuleTick then
     SpArc:RecordModuleTick("UnitFrames", isDemo and "DemoUpdate" or "LiveUpdate")
@@ -1800,7 +1839,7 @@ function SpArc:BuildUnitFramesPage(page, ui, helpers)
   end)
 
   -- Group 1: Portrait Style, Color Mode & Frame Toggles
-  local grpStyle = RegisterGroupBox(page, "M12_GRP_STYLE", 0, -56, 640, 200)
+  local grpStyle = RegisterGroupBox(page, "M12_GRP_STYLE", 0, -56, 640, 222)
 
   ui.m12PortLbl = grpStyle:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   ApplyCyrFont(ui.m12PortLbl, 11)
@@ -1875,8 +1914,10 @@ function SpArc:BuildUnitFramesPage(page, ui, helpers)
   AddUFCheck("CK_UF_PARTY_DEBUFFS",  "ufShowPartyDebuffs",  282, -146, 255)
   AddUFCheck("CK_UF_BOSS_AURAS",     "ufShowBossAuras",     548, -146, 255)
 
+  AddUFCheck("CK_UF_HIDE_OOC",       "ufHideOutOfCombat",   16,  -172, 520)
+
   -- Group 2: Geometry & Typography Sliders
-  local grpGeo = RegisterGroupBox(page, "M12_GRP_GEO", 0, -266, 640, 186)
+  local grpGeo = RegisterGroupBox(page, "M12_GRP_GEO", 0, -288, 640, 166)
   CreateElvSlider(grpGeo, "SL_UF_WIDTH",     "ufWidth",            120, 280, 2, 16,  -12, 190, function() SpArc:ApplyUnitFramesSettings() end)
   CreateElvSlider(grpGeo, "SL_UF_HEIGHT",    "ufHeight",           18,  48,  1, 224, -12, 190, function() SpArc:ApplyUnitFramesSettings() end)
   CreateElvSlider(grpGeo, "SL_UF_PORT_SIZE", "ufPortraitSize",     32,  76,  2, 432, -12, 190, function() SpArc:ApplyUnitFramesSettings() end)
@@ -1886,7 +1927,7 @@ function SpArc:BuildUnitFramesPage(page, ui, helpers)
   CreateElvSlider(grpGeo, "SL_UF_OOC_ALPHA", "ufOocAlpha",         0.20, 1.00, 0.05, 432, -72, 190, function() SpArc:ApplyUnitFramesSettings() end)
 
   -- Group 3: Coordinates Sliders
-  local grpPos = RegisterGroupBox(page, "M12_GRP_POS", 0, -462, 640, 180)
+  local grpPos = RegisterGroupBox(page, "M12_GRP_POS", 0, -464, 640, 166)
   CreateElvSlider(grpPos, "SL_UF_PLAYER_X", "ufPlayerX",     -800, 800, 2, 16,  -12, 190, function() SpArc:ApplyUnitFramesSettings() end)
   CreateElvSlider(grpPos, "SL_UF_PLAYER_Y", "ufPlayerY",     -500, 500, 2, 224, -12, 190, function() SpArc:ApplyUnitFramesSettings() end)
   CreateElvSlider(grpPos, "SL_UF_TCAST_X",  "ufTargetCastX", -800, 800, 2, 432, -12, 190, function() SpArc:ApplyUnitFramesSettings() end)

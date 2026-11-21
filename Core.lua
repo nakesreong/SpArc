@@ -755,6 +755,7 @@ SpArc.DEFAULT_VISUAL = {
   ctFontSize = 16,
   enableUnitFrames = true,
   ufHideBlizzard = true,
+  ufHideOutOfCombat = true,
   ufPortraitStyle = "CIRCLE",
   ufColorMode = "CLASS",
   ufShowPowerBar = true,

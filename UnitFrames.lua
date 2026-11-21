@@ -43,8 +43,6 @@ local UnitHealthMax = _G.UnitHealthMax
 local UnitPower = _G.UnitPower
 local UnitPowerMax = _G.UnitPowerMax
 local UnitPowerType = _G.UnitPowerType
-local UnitCastingDuration = _G.UnitCastingDuration
-local UnitChannelDuration = _G.UnitChannelDuration
 local SetPortraitTexture = _G.SetPortraitTexture
 local IsResting = _G.IsResting
 local InCombatLockdown = _G.InCombatLockdown
@@ -66,19 +64,18 @@ local ApplyCyrFont = SpArc.ApplyCyrFont
 local IsSecret = SpArc.IsSecret
 local SafeBool = SpArc.SafeBool
 local DEFAULT_VISUAL = SpArc.DEFAULT_VISUAL
+local DISPEL_COLORS = SpArc.DISPEL_COLORS
 
 local FLAT_TEX = SpArc.FLAT_TEX
 local PORTRAIT_MASK_TEX = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local CLASS_ICONS_TEX = SpArc.CLASS_ICONS_TEX
 
--- Shared Metro Reaction & Cast Colors (from Core.lua)
+-- Shared Metro Reaction Colors (from Core.lua)
 local METRO_COLORS = SpArc.METRO_COLORS
 local COLOR_HOSTILE_RED    = METRO_COLORS.HOSTILE_RED
 local COLOR_NEUTRAL_YELLOW = METRO_COLORS.NEUTRAL_YELLOW
 local COLOR_FRIENDLY_GREEN = METRO_COLORS.FRIENDLY_GREEN
 local COLOR_OBSIDIAN_DARK  = METRO_COLORS.OBSIDIAN_DARK
-local COLOR_CAST_GOLD      = METRO_COLORS.CAST_GOLD
-local COLOR_CAST_GREY      = METRO_COLORS.CAST_GREY
 
 local POWER_COLORS = {
   [0]  = { r = 0.12, g = 0.52, b = 0.98 }, -- Mana
@@ -114,7 +111,10 @@ if SpArc.RegisterStrings then
     CK_UF_HIDE_BLIZZ = "Hide default Blizzard Player / Target / Focus frames",
     CK_UF_POWER = "Show Power / Mana Bar along bottom",
     CK_UF_TGT_CAST = "Show Target Castbar below Target",
-    CK_UF_TGT_AURAS = "Show Target DoTs / Buffs above Target",
+    CK_UF_TGT_AURAS = "Show Target DoTs / Debuffs / Buffs",
+    CK_UF_PLAYER_DEBUFFS = "Show Debuffs above Player Frame",
+    CK_UF_PARTY_DEBUFFS = "Show Debuffs & Dispel Glow on Party",
+    CK_UF_BOSS_AURAS = "Show DoTs & Debuffs on Boss / Focus",
     CK_UF_TOT = "Show Target of Target (ToT)",
     CK_UF_FOCUS = "Show Focus Frame (+ Castbar)",
     CK_UF_PET = "Show Pet Frame",
@@ -159,7 +159,10 @@ if SpArc.RegisterStrings then
     CK_UF_HIDE_BLIZZ = "Скрывать стандартные фреймы Blizzard (Игрок, Цель, Фокус, Группа, Боссы)",
     CK_UF_POWER = "Полоска маны / ресурса снизу",
     CK_UF_TGT_CAST = "Кастбар цели под фреймом цели",
-    CK_UF_TGT_AURAS = "Доты и баффы над фреймом цели",
+    CK_UF_TGT_AURAS = "Доты, дебаффы и баффы над Целью",
+    CK_UF_PLAYER_DEBUFFS = "Дебаффы над фреймом Игрока",
+    CK_UF_PARTY_DEBUFFS = "Дебаффы и диспел-рамка на Группе",
+    CK_UF_BOSS_AURAS = "Доты и дебаффы на Боссах и Фокусе",
     CK_UF_TOT = "Цель цели (ToT)",
     CK_UF_FOCUS = "Фокус (+ Кастбар фокуса)",
     CK_UF_PET = "Фрейм питомца (Pet)",
@@ -651,30 +654,113 @@ local function CreateSpArcUnitFrame(frameName, unitToken, portraitSide, isCompac
     f.portrait = port
   end
 
-  -- Aura Icons Row (for Target Frame)
+  -- Dispellable Debuff Border Highlight (for Player & Party 1..4)
+  if unitToken == "player" or unitToken:find("^party") then
+    local dispBorder = CreateFrame("Frame", nil, barContainer, "BackdropTemplate")
+    dispBorder:SetPoint("TOPLEFT", barContainer, "TOPLEFT", -2, 2)
+    dispBorder:SetPoint("BOTTOMRIGHT", barContainer, "BOTTOMRIGHT", 2, -2)
+    dispBorder:SetFrameLevel(barContainer:GetFrameLevel() + 8)
+    dispBorder:SetBackdrop({
+      edgeFile = FLAT_TEX,
+      edgeSize = 2,
+    })
+    dispBorder:SetBackdropBorderColor(0.20, 0.62, 1.00, 0.95)
+    dispBorder:Hide()
+    f.dispellableBorder = dispBorder
+  end
+
+  -- Aura / DoT / Debuff Icon Pool (Target, Player, Focus, Party 1..4, Boss 1..5)
+  local auraMode, auraCount, auraSize = nil, 0, 22
   if unitToken == "target" then
+    auraMode, auraCount, auraSize = "TARGET", 12, 22
+  elseif unitToken == "player" then
+    auraMode, auraCount, auraSize = "PLAYER", 8, 22
+  elseif unitToken == "focus" then
+    auraMode, auraCount, auraSize = "FOCUS", 6, 18
+  elseif unitToken:find("^boss") then
+    auraMode, auraCount, auraSize = "BOSS", 6, 20
+  elseif unitToken:find("^party") then
+    auraMode, auraCount, auraSize = "PARTY", 5, 20
+  end
+
+  if auraMode and auraCount > 0 then
+    f.auraMode = auraMode
+    f.auraIconSize = auraSize
     f.auraIcons = {}
-    for i = 1, 8 do
+    for i = 1, auraCount do
       local aBox = CreateFrame("Frame", nil, f, "BackdropTemplate")
-      aBox:SetSize(22, 22)
-      aBox:SetPoint("BOTTOMLEFT", barContainer, "TOPLEFT", (i - 1) * 24, 18)
+      aBox:SetSize(auraSize, auraSize)
+      aBox:SetFrameLevel(barContainer:GetFrameLevel() + 7)
+      aBox:EnableMouse(true)
       aBox:SetBackdrop({
         bgFile = FLAT_TEX,
         edgeFile = FLAT_TEX,
         edgeSize = 1,
       })
       aBox:SetBackdropColor(0.05, 0.05, 0.08, 0.95)
-      aBox:SetBackdropBorderColor(0.15, 0.15, 0.22, 1.0)
+      aBox:SetBackdropBorderColor(0.18, 0.18, 0.26, 1.0)
+
       local tex = aBox:CreateTexture(nil, "ARTWORK")
       tex:SetPoint("TOPLEFT", 1, -1)
       tex:SetPoint("BOTTOMRIGHT", -1, 1)
       tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
       aBox.icon = tex
-      local cnt = aBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-      ApplyCyrFont(cnt, 9)
-      cnt:SetPoint("BOTTOMRIGHT", aBox, "BOTTOMRIGHT", -1, 1)
-      cnt:SetTextColor(1, 0.92, 0.25, 1)
+
+      local cd = CreateFrame("Cooldown", nil, aBox, "CooldownFrameTemplate")
+      cd:SetPoint("TOPLEFT", 1, -1)
+      cd:SetPoint("BOTTOMRIGHT", -1, 1)
+      cd:EnableMouse(false)
+      if cd.SetDrawEdge then cd:SetDrawEdge(false) end
+      if cd.SetDrawSwipe then cd:SetDrawSwipe(true) end
+      if cd.SetReverse then cd:SetReverse(true) end
+      if cd.SetHideCountdownNumbers then cd:SetHideCountdownNumbers(true) end
+      aBox.cd = cd
+
+      local txtLayer = CreateFrame("Frame", nil, aBox)
+      txtLayer:SetAllPoints(aBox)
+      txtLayer:SetFrameLevel(cd:GetFrameLevel() + 2)
+      txtLayer:EnableMouse(false)
+
+      local tTxt = txtLayer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+      ApplyCyrFont(tTxt, auraSize >= 21 and 9 or 8)
+      tTxt:SetPoint("TOP", txtLayer, "TOP", 0, -1)
+      tTxt:SetTextColor(1.0, 0.98, 0.92, 1.0)
+      aBox.timeText = tTxt
+
+      local cnt = txtLayer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+      ApplyCyrFont(cnt, auraSize >= 21 and 9 or 8)
+      cnt:SetPoint("BOTTOMRIGHT", txtLayer, "BOTTOMRIGHT", -1, 1)
+      cnt:SetTextColor(1.0, 0.92, 0.25, 1.0)
       aBox.count = cnt
+
+      aBox:SetScript("OnEnter", function(self)
+        local tip = SpArc.GetAuraTooltip and SpArc.GetAuraTooltip()
+        if not tip then return end
+        tip:SetOwner(self, "ANCHOR_TOP")
+        local shownTip = false
+        local uTok = self._unit
+        local instID = self._auraInstanceID
+        if uTok and instID and not IsSecret(instID) and SafeBool(UnitExists, uTok) then
+          if self._isHelpful and tip.SetUnitBuffByAuraInstanceID then
+            shownTip = pcall(tip.SetUnitBuffByAuraInstanceID, tip, uTok, instID)
+          elseif not self._isHelpful and tip.SetUnitDebuffByAuraInstanceID then
+            shownTip = pcall(tip.SetUnitDebuffByAuraInstanceID, tip, uTok, instID)
+          end
+        end
+        if not shownTip and self._spellID and not IsSecret(self._spellID) and tip.SetSpellByID then
+          shownTip = pcall(tip.SetSpellByID, tip, self._spellID)
+        end
+        if shownTip then
+          tip:Show()
+        else
+          tip:Hide()
+        end
+      end)
+      aBox:SetScript("OnLeave", function()
+        local tip = SpArc.GetAuraTooltip and SpArc.GetAuraTooltip()
+        if tip then tip:Hide() end
+      end)
+
       aBox:Hide()
       f.auraIcons[i] = aBox
     end
@@ -845,165 +931,258 @@ local function UpdatePortraitForUnitFrame(f, unit, r, g, b, isDemo)
   end
 end
 
-local function UpdateTargetAuras(f, isDemo)
-  if not f or not f.auraIcons then return end
+local reusableSeenInstIDs = {}
+local reusableSeenSpellIDs = {}
+
+local function PositionUnitAuraIcon(f, box, idx)
+  local bar = f.barContainer
+  local sz = f.auraIconSize or 22
+  local step = sz + 2
+  local barW = (bar and bar:GetWidth()) or 176
+  if barW < 80 then barW = 176 end
+  local perRow = math.max(4, math.floor((barW + 2) / step))
+  local mode = f.auraMode
+
+  box:ClearAllPoints()
+  if mode == "TARGET" then
+    local col = (idx - 1) % perRow
+    local row = math.floor((idx - 1) / perRow)
+    box:SetPoint("BOTTOMLEFT", bar, "TOPLEFT", col * step, 18 + row * step)
+  elseif mode == "PLAYER" then
+    local col = (idx - 1) % perRow
+    local row = math.floor((idx - 1) / perRow)
+    box:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", -(col * step), 18 + row * step)
+  elseif mode == "FOCUS" then
+    box:SetPoint("BOTTOMLEFT", bar, "TOPLEFT", (idx - 1) * step, 3)
+  elseif mode == "BOSS" then
+    box:SetPoint("RIGHT", bar, "LEFT", -5 - (idx - 1) * step, 0)
+  elseif mode == "PARTY" then
+    box:SetPoint("LEFT", bar, "RIGHT", 5 + (idx - 1) * step, 0)
+  end
+end
+
+local function GetDebuffDispelColor(aura)
+  local dName = aura and not IsSecret(aura.dispelName) and type(aura.dispelName) == "string" and aura.dispelName or nil
+  if dName and DISPEL_COLORS and DISPEL_COLORS[dName] then
+    local dc = DISPEL_COLORS[dName]
+    return dc.r, dc.g, dc.b, true
+  end
+  local defC = (DISPEL_COLORS and DISPEL_COLORS.None) or { r = 0.76, g = 0.20, b = 0.24 }
+  return defC.r, defC.g, defC.b, false
+end
+
+local function ApplyAuraToBox(f, box, idx, unit, aura, isHelpful, br, bg, bb, now, isOwnDoT)
+  PositionUnitAuraIcon(f, box, idx)
+  box._unit = unit
+  box._isHelpful = isHelpful and true or false
+  box._auraInstanceID = aura and aura.auraInstanceID or nil
+  box._spellID = aura and aura.spellId or nil
+  pcall(box.icon.SetTexture, box.icon, (aura and aura.icon) or 136243)
+
+  if aura and not IsSecret(aura.applications) and type(aura.applications) == "number" and aura.applications > 1 then
+    box.count:SetText(tostring(aura.applications))
+  else
+    box.count:SetText("")
+  end
+
+  local rem = SpArc.ApplyAuraCooldownWidget(box.cd, box.timeText, unit, aura, now)
+  if isOwnDoT and rem and rem > 0 and rem < 4.5 then
+    box:SetBackdropBorderColor(1.00, 0.36, 0.20, 1.0)
+  else
+    box:SetBackdropBorderColor(br, bg, bb, 1.0)
+  end
+  box:Show()
+end
+
+local function HideAllFrameAuras(f)
+  if f.dispellableBorder and f.dispellableBorder:IsShown() then
+    f.dispellableBorder:Hide()
+  end
+  if f.auraIcons then
+    for i = 1, #f.auraIcons do
+      if f.auraIcons[i]:IsShown() then
+        f.auraIcons[i]:Hide()
+      end
+    end
+  end
+end
+
+local function UpdateUnitFrameAuras(f, now, isDemo)
+  if not f or not f.auraIcons or not f.auraMode then return end
   local db = SpArc:EnsureDB()
   local v = db.visual or DEFAULT_VISUAL
-  if v.ufShowTargetAuras == false then
-    for i = 1, #f.auraIcons do f.auraIcons[i]:Hide() end
+  local mode = f.auraMode
+  local unit = f.unit
+
+  if (mode == "TARGET" and v.ufShowTargetAuras == false)
+      or (mode == "PLAYER" and v.ufShowPlayerDebuffs == false)
+      or (mode == "PARTY" and v.ufShowPartyDebuffs == false)
+      or ((mode == "BOSS" or mode == "FOCUS") and v.ufShowBossAuras == false) then
+    HideAllFrameAuras(f)
     return
   end
 
-  if isDemo and not SafeBool(UnitExists, "target") then
-    local demoIcons = { 34914, 589, 335467 }
+  now = now or GetTime()
+  local exists = SafeBool(UnitExists, unit)
+
+  -- Rich Demo Preview (when Test Mode or Edit HUD is active and the unit isn't targeted)
+  if isDemo and not exists then
+    local demoList = nil
+    if mode == "TARGET" then
+      demoList = {
+        { icon = 136214, spellId = 34914,  dur = 21, rem = 17.4, r = 0.74, g = 0.34, b = 1.00, own = true },
+        { icon = 136207, spellId = 589,    dur = 16, rem = 11.8, r = 0.74, g = 0.34, b = 1.00, own = true },
+        { icon = 252997, spellId = 335467, dur = 6,  rem = 3.6,  r = 1.00, g = 0.36, b = 0.20, own = true },
+        { icon = 135932, spellId = 17,     dur = 15, rem = 9.0,  r = 0.24, g = 0.94, b = 1.00, help = true },
+      }
+    elseif mode == "FOCUS" or mode == "BOSS" then
+      demoList = {
+        { icon = 136214, spellId = 34914, dur = 21, rem = 15.2, r = 0.74, g = 0.34, b = 1.00, own = true },
+        { icon = 136207, spellId = 589,   dur = 16, rem = 8.4,  r = 0.74, g = 0.34, b = 1.00, own = true },
+      }
+    elseif mode == "PLAYER" then
+      demoList = {
+        { icon = 135846, spellId = 589, dur = 12, rem = 7.5, r = 0.20, g = 0.62, b = 1.00 },
+        { icon = 136128, spellId = 589, dur = 18, rem = 13.0, r = 0.86, g = 0.52, b = 0.14 },
+      }
+    elseif mode == "PARTY" then
+      demoList = {
+        { icon = 135846, spellId = 589, dur = 10, rem = 6.2, r = 0.20, g = 0.62, b = 1.00 },
+      }
+    end
+
+    local dCount = demoList and #demoList or 0
     for i = 1, #f.auraIcons do
       local box = f.auraIcons[i]
-      if demoIcons[i] then
-        local tex = (i == 1 and 136208) or (i == 2 and 136207) or 252997
-        box.icon:SetTexture(tex)
+      local d = demoList and demoList[i]
+      if d then
+        PositionUnitAuraIcon(f, box, i)
+        box._unit = nil
+        box._auraInstanceID = nil
+        box._spellID = d.spellId
+        box._isHelpful = d.help or false
+        box.icon:SetTexture(d.icon)
         box.count:SetText("")
-        box:SetBackdropBorderColor(0.68, 0.32, 1.0, 1.0)
+        SpArc.ApplyAuraCooldownWidget(box.cd, box.timeText, nil, nil, now, now - (d.dur - d.rem), d.dur)
+        box:SetBackdropBorderColor(d.r, d.g, d.b, 1.0)
         box:Show()
       else
         box:Hide()
       end
     end
+    if f.dispellableBorder then
+      if mode == "PARTY" and f.partyIndex == 1 then
+        f.dispellableBorder:SetBackdropBorderColor(0.20, 0.62, 1.00, 0.95)
+        f.dispellableBorder:Show()
+      else
+        f.dispellableBorder:Hide()
+      end
+    end
     return
   end
 
-  if not SafeBool(UnitExists, "target") or not (C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex) then
-    for i = 1, #f.auraIcons do f.auraIcons[i]:Hide() end
+  if not exists or not (C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex) then
+    HideAllFrameAuras(f)
     return
   end
 
   local shown = 0
-  -- 1. Player's own debuffs on target first
-  for idx = 1, 16 do
-    if shown >= #f.auraIcons then break end
-    local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, "target", idx, "PLAYER")
-    if not ok or type(aura) ~= "table" then break end
-    shown = shown + 1
-    local box = f.auraIcons[shown]
-    pcall(box.icon.SetTexture, box.icon, aura.icon or 136243)
-    if not IsSecret(aura.applications) and type(aura.applications) == "number" and aura.applications > 1 then
-      box.count:SetText(tostring(aura.applications))
-    else
-      box.count:SetText("")
-    end
-    box:SetBackdropBorderColor(0.72, 0.35, 1.0, 1.0)
-    box:Show()
-  end
+  local maxIcons = #f.auraIcons
 
-  -- 2. Target buffs (if room remains)
-  if C_UnitAuras.GetBuffDataByIndex and shown < #f.auraIcons then
-    for idx = 1, 8 do
-      if shown >= #f.auraIcons then break end
-      local ok, aura = pcall(C_UnitAuras.GetBuffDataByIndex, "target", idx)
+  -- Friendly Defensive Mode (`player` & `party1..4`): show HARMFUL debuffs colored by Dispel Type + Dispel Border
+  if mode == "PLAYER" or mode == "PARTY" then
+    local dispR, dispG, dispB = nil, nil, nil
+    for idx = 1, 16 do
+      if shown >= maxIcons then break end
+      local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, unit, idx, "HARMFUL")
       if not ok or type(aura) ~= "table" then break end
       shown = shown + 1
-      local box = f.auraIcons[shown]
-      pcall(box.icon.SetTexture, box.icon, aura.icon or 136243)
-      if not IsSecret(aura.applications) and type(aura.applications) == "number" and aura.applications > 1 then
-        box.count:SetText(tostring(aura.applications))
-      else
-        box.count:SetText("")
+      local dr, dg, dbCol, isTypedDispel = GetDebuffDispelColor(aura)
+      if isTypedDispel and not dispR then
+        dispR, dispG, dispB = dr, dg, dbCol
       end
-      box:SetBackdropBorderColor(0.28, 0.65, 0.95, 0.95)
-      box:Show()
+      ApplyAuraToBox(f, f.auraIcons[shown], shown, unit, aura, false, dr, dg, dbCol, now, false)
+    end
+    if f.dispellableBorder then
+      if dispR then
+        f.dispellableBorder:SetBackdropBorderColor(dispR, dispG, dispB, 0.95)
+        f.dispellableBorder:Show()
+      else
+        f.dispellableBorder:Hide()
+      end
+    end
+    for i = shown + 1, maxIcons do
+      f.auraIcons[i]:Hide()
+    end
+    return
+  end
+
+  -- Offensive / Mixed Mode (`target`, `focus`, `boss1..5`):
+  --   1. Player's own DoTs & debuffs (`HARMFUL|PLAYER`) — vibrant Void-Purple / Pandemic highlight
+  --   2. Other `HARMFUL` debuffs (deduplicated)
+  --   3. Target / Focus `HELPFUL` buffs (with glowing Cyan-Gold border on Purgeable / Stealable Magic!)
+  for k in pairs(reusableSeenInstIDs) do reusableSeenInstIDs[k] = nil end
+  for k in pairs(reusableSeenSpellIDs) do reusableSeenSpellIDs[k] = nil end
+
+  for idx = 1, 16 do
+    if shown >= maxIcons then break end
+    local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, unit, idx, "HARMFUL|PLAYER")
+    if not ok or type(aura) ~= "table" then break end
+    if aura.auraInstanceID and not IsSecret(aura.auraInstanceID) then
+      reusableSeenInstIDs[aura.auraInstanceID] = true
+    elseif aura.spellId and not IsSecret(aura.spellId) then
+      reusableSeenSpellIDs[aura.spellId] = true
+    end
+    shown = shown + 1
+    ApplyAuraToBox(f, f.auraIcons[shown], shown, unit, aura, false, 0.74, 0.34, 1.00, now, true)
+  end
+
+  if shown < maxIcons then
+    for idx = 1, 16 do
+      if shown >= maxIcons then break end
+      local ok, aura = pcall(C_UnitAuras.GetDebuffDataByIndex, unit, idx, "HARMFUL")
+      if not ok or type(aura) ~= "table" then break end
+      local alreadyShown = false
+      if aura.auraInstanceID and not IsSecret(aura.auraInstanceID) and reusableSeenInstIDs[aura.auraInstanceID] then
+        alreadyShown = true
+      elseif not IsSecret(aura.sourceUnit) and (aura.sourceUnit == "player" or aura.sourceUnit == "pet") then
+        alreadyShown = true
+      elseif aura.spellId and not IsSecret(aura.spellId) and reusableSeenSpellIDs[aura.spellId] then
+        alreadyShown = true
+      end
+      if not alreadyShown then
+        shown = shown + 1
+        local dr, dg, dbCol = GetDebuffDispelColor(aura)
+        ApplyAuraToBox(f, f.auraIcons[shown], shown, unit, aura, false, dr * 0.85, dg * 0.85, dbCol * 0.85, now, false)
+      end
     end
   end
 
-  for i = shown + 1, #f.auraIcons do
+  if (mode == "TARGET" or mode == "FOCUS") and C_UnitAuras.GetBuffDataByIndex and shown < maxIcons then
+    local canAttack = SafeBool(UnitCanAttack, "player", unit)
+    for idx = 1, 12 do
+      if shown >= maxIcons then break end
+      local ok, aura = pcall(C_UnitAuras.GetBuffDataByIndex, unit, idx, "HELPFUL")
+      if not ok or type(aura) ~= "table" then break end
+      shown = shown + 1
+      local isPurgeable = (not IsSecret(aura.isStealable) and aura.isStealable == true)
+        or (canAttack and not IsSecret(aura.dispelName) and aura.dispelName == "Magic")
+      if isPurgeable then
+        ApplyAuraToBox(f, f.auraIcons[shown], shown, unit, aura, true, 0.22, 0.95, 1.00, now, false)
+      else
+        ApplyAuraToBox(f, f.auraIcons[shown], shown, unit, aura, true, 0.28, 0.58, 0.90, now, false)
+      end
+    end
+  end
+
+  for i = shown + 1, maxIcons do
     f.auraIcons[i]:Hide()
   end
 end
 
 local function UpdateSingleCastbarWidget(cbCont, unit, now, isDemo)
   if not cbCont then return end
-  local db = SpArc:EnsureDB()
-  local v = db.visual or DEFAULT_VISUAL
-  if cbCont.isTargetCastbar and v.ufShowTargetCastbar == false then
-    cbCont:Hide()
-    return
-  end
-
-  local isCasting, isInterruptible, isChannel, spellName, spellIcon, remSec, durSec, _, rawNotInterruptible =
-    SpArc:GetUnitCastInterruptState(unit, now)
-
-  if not isCasting and isDemo then
-    local cycle = now % 4.0
-    isCasting = true
-    isInterruptible = true
-    isChannel = false
-    spellName = "Arcane Salvo"
-    spellIcon = 135734
-    durSec = 2.5
-    remSec = math.max(0.1, 2.5 - (cycle % 2.5))
-  end
-
-  if not isCasting then
-    if cbCont:IsShown() then cbCont:Hide() end
-    return
-  end
-
-  cbCont.iconBox.icon:SetTexture(spellIcon or 136243)
-  pcall(cbCont.spellText.SetText, cbCont.spellText, spellName or "Cast")
-
-  local usedTimerDuration = false
-  if not isDemo and cbCont.bar.SetTimerDuration then
-    local durObj = nil
-    if isChannel and UnitChannelDuration then
-      local okD, d = pcall(UnitChannelDuration, unit)
-      if okD and d then durObj = d end
-    elseif not isChannel and UnitCastingDuration then
-      local okD, d = pcall(UnitCastingDuration, unit)
-      if okD and d then durObj = d end
-    end
-    if durObj and _G.Enum and _G.Enum.StatusBarTimerDirection and _G.Enum.StatusBarInterpolation then
-      local dir = isChannel and _G.Enum.StatusBarTimerDirection.RemainingTime or _G.Enum.StatusBarTimerDirection.ElapsedTime
-      local okTD = pcall(cbCont.bar.SetTimerDuration, cbCont.bar, durObj, _G.Enum.StatusBarInterpolation.Immediate, dir)
-      if okTD then usedTimerDuration = true end
-    end
-  end
-
-  if not usedTimerDuration then
-    local total = math.max(0.1, durSec or 1.5)
-    local val = isChannel and math.max(0, remSec or 0) or math.max(0, total - (remSec or 0))
-    cbCont.bar:SetMinMaxValues(0, total)
-    cbCont.bar:SetValue(val)
-  end
-
-  if remSec and remSec > 0 and remSec < 60 then
-    cbCont.timeText:SetText(string.format("%.1f", remSec))
-  else
-    cbCont.timeText:SetText("")
-  end
-
-  if rawNotInterruptible ~= nil and IsSecret(rawNotInterruptible) then
-    if _G.C_CurveUtil and _G.C_CurveUtil.EvaluateColorValueFromBoolean then
-      local okR, cR = pcall(_G.C_CurveUtil.EvaluateColorValueFromBoolean, rawNotInterruptible, COLOR_CAST_GREY.r, COLOR_CAST_GOLD.r)
-      local okG, cG = pcall(_G.C_CurveUtil.EvaluateColorValueFromBoolean, rawNotInterruptible, COLOR_CAST_GREY.g, COLOR_CAST_GOLD.g)
-      local okB, cB = pcall(_G.C_CurveUtil.EvaluateColorValueFromBoolean, rawNotInterruptible, COLOR_CAST_GREY.b, COLOR_CAST_GOLD.b)
-      if okR and okG and okB then
-        pcall(cbCont.bar.SetStatusBarColor, cbCont.bar, cR, cG, cB, 1.0)
-      end
-    end
-    cbCont.glow:Show()
-    if cbCont.glow.SetAlphaFromBoolean then
-      pcall(cbCont.glow.SetAlphaFromBoolean, cbCont.glow, rawNotInterruptible, 0, 1)
-    end
-  elseif isInterruptible then
-    cbCont.bar:SetStatusBarColor(COLOR_CAST_GOLD.r, COLOR_CAST_GOLD.g, COLOR_CAST_GOLD.b, 1.0)
-    cbCont.glow:SetAlpha(1.0)
-    cbCont.glow:Show()
-  else
-    cbCont.bar:SetStatusBarColor(COLOR_CAST_GREY.r, COLOR_CAST_GREY.g, COLOR_CAST_GREY.b, 1.0)
-    cbCont.glow:Hide()
-  end
-
-  if not cbCont:IsShown() then
-    cbCont:Show()
-  end
+  SpArc.UpdateSecretSafeCastbar(cbCont, unit, now, isDemo)
 end
 
 local function UpdateSingleUnitFrame(f, now, isDemo)
@@ -1137,8 +1316,8 @@ local function UpdateSingleUnitFrame(f, now, isDemo)
   end
   f:SetAlpha(targetAlpha)
 
-  if unit == "target" then
-    UpdateTargetAuras(f, isDemo)
+  if f.auraIcons then
+    UpdateUnitFrameAuras(f, now, isDemo)
   end
   if f.attachedCastbar then
     UpdateSingleCastbarWidget(f.attachedCastbar, unit, now, isDemo and unit == "focus")
@@ -1513,8 +1692,10 @@ ufDriver:SetScript("OnEvent", function(_, event, arg1)
   elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" or event == "INSTANCE_ENCOUNTER_ENGAGE_UNIT"
       or event == "PARTY_LEADER_CHANGED" or event == "PLAYER_ROLES_ASSIGNED" or event == "UNIT_CONNECTION" or event == "UNIT_PHASE" then
     SpArc:UpdateUnitFrames(GetTime())
-  elseif event == "UNIT_AURA" and (arg1 == "target" or arg1 == "focus") then
-    SpArc:UpdateUnitFrames(GetTime())
+  elseif event == "UNIT_AURA" and arg1 and not IsSecret(arg1) and type(arg1) == "string" then
+    if arg1 == "player" or arg1 == "target" or arg1 == "focus" or arg1:find("^party") or arg1:find("^boss") then
+      SpArc:UpdateUnitFrames(GetTime())
+    end
   end
 end)
 
@@ -1578,7 +1759,7 @@ function SpArc:BuildUnitFramesPage(page, ui, helpers)
   end)
 
   -- Group 1: Portrait Style, Color Mode & Frame Toggles
-  local grpStyle = RegisterGroupBox(page, "M12_GRP_STYLE", 0, -56, 640, 174)
+  local grpStyle = RegisterGroupBox(page, "M12_GRP_STYLE", 0, -56, 640, 200)
 
   ui.m12PortLbl = grpStyle:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   ApplyCyrFont(ui.m12PortLbl, 11)
@@ -1645,12 +1826,16 @@ function SpArc:BuildUnitFramesPage(page, ui, helpers)
   AddUFCheck("CK_UF_FOCUS",     "ufShowFocus",         282, -94, 255)
   AddUFCheck("CK_UF_PET",       "ufShowPet",           548, -94, 255)
 
-  AddUFCheck("CK_UF_PARTY",     "ufShowParty",         16,  -120, 255)
-  AddUFCheck("CK_UF_BOSS",      "ufShowBoss",          282, -120, 255)
-  AddUFCheck("CK_UF_HIDE_BLIZZ","ufHideBlizzard",      548, -120, 255)
+  AddUFCheck("CK_UF_PARTY",          "ufShowParty",         16,  -120, 255)
+  AddUFCheck("CK_UF_BOSS",           "ufShowBoss",          282, -120, 255)
+  AddUFCheck("CK_UF_HIDE_BLIZZ",     "ufHideBlizzard",      548, -120, 255)
+
+  AddUFCheck("CK_UF_PLAYER_DEBUFFS", "ufShowPlayerDebuffs", 16,  -146, 255)
+  AddUFCheck("CK_UF_PARTY_DEBUFFS",  "ufShowPartyDebuffs",  282, -146, 255)
+  AddUFCheck("CK_UF_BOSS_AURAS",     "ufShowBossAuras",     548, -146, 255)
 
   -- Group 2: Geometry & Typography Sliders
-  local grpGeo = RegisterGroupBox(page, "M12_GRP_GEO", 0, -242, 640, 186)
+  local grpGeo = RegisterGroupBox(page, "M12_GRP_GEO", 0, -266, 640, 186)
   CreateElvSlider(grpGeo, "SL_UF_WIDTH",     "ufWidth",            120, 280, 2, 16,  -12, 190, function() SpArc:ApplyUnitFramesSettings() end)
   CreateElvSlider(grpGeo, "SL_UF_HEIGHT",    "ufHeight",           18,  48,  1, 224, -12, 190, function() SpArc:ApplyUnitFramesSettings() end)
   CreateElvSlider(grpGeo, "SL_UF_PORT_SIZE", "ufPortraitSize",     32,  76,  2, 432, -12, 190, function() SpArc:ApplyUnitFramesSettings() end)
@@ -1660,7 +1845,7 @@ function SpArc:BuildUnitFramesPage(page, ui, helpers)
   CreateElvSlider(grpGeo, "SL_UF_OOC_ALPHA", "ufOocAlpha",         0.20, 1.00, 0.05, 432, -72, 190, function() SpArc:ApplyUnitFramesSettings() end)
 
   -- Group 3: Coordinates Sliders
-  local grpPos = RegisterGroupBox(page, "M12_GRP_POS", 0, -440, 640, 186)
+  local grpPos = RegisterGroupBox(page, "M12_GRP_POS", 0, -462, 640, 180)
   CreateElvSlider(grpPos, "SL_UF_PLAYER_X", "ufPlayerX",     -800, 800, 2, 16,  -12, 190, function() SpArc:ApplyUnitFramesSettings() end)
   CreateElvSlider(grpPos, "SL_UF_PLAYER_Y", "ufPlayerY",     -500, 500, 2, 224, -12, 190, function() SpArc:ApplyUnitFramesSettings() end)
   CreateElvSlider(grpPos, "SL_UF_TCAST_X",  "ufTargetCastX", -800, 800, 2, 432, -12, 190, function() SpArc:ApplyUnitFramesSettings() end)

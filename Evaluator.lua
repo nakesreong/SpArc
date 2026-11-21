@@ -319,53 +319,34 @@ local function GetSimAura(simCtx, u, k)
 end
 
 local STATIC_CLAUSES = {
-  [""]                               = { op = "ALWAYS" },
-  ["ALWAYS"]                         = { op = "ALWAYS" },
-  ["target.has_dots"]                = { op = "HAS_DOTS", inv = false },
-  ["NOT target.has_dots"]            = { op = "HAS_DOTS", inv = true },
-  ["player.in_burst"]                = { op = "BURST", inv = false },
-  ["BURST"]                          = { op = "BURST", inv = false },
-  ["NOT player.in_burst"]            = { op = "BURST", inv = true },
-  ["NOT BURST"]                      = { op = "BURST", inv = true },
-  ["player.stealthed"]               = { op = "CTX_BOOL", field = "stealthed", inv = false },
-  ["STEALTH"]                        = { op = "CTX_BOOL", field = "stealthed", inv = false },
-  ["NOT player.stealthed"]           = { op = "CTX_BOOL", field = "stealthed", inv = true },
-  ["NOT STEALTH"]                    = { op = "CTX_BOOL", field = "stealthed", inv = true },
-  ["player.in_combat"]               = { op = "CTX_BOOL", field = "inCombat", inv = false },
-  ["COMBAT"]                         = { op = "CTX_BOOL", field = "inCombat", inv = false },
-  ["NOT player.in_combat"]           = { op = "CTX_BOOL", field = "inCombat", inv = true },
-  ["NOT COMBAT"]                     = { op = "CTX_BOOL", field = "inCombat", inv = true },
-  ["target.can_pick_pocket"]         = { op = "CTX_BOOL", field = "canPickPocket", inv = false },
-  ["PICK_POCKET_READY"]              = { op = "CTX_BOOL", field = "canPickPocket", inv = false },
-  ["NOT target.can_pick_pocket"]     = { op = "CTX_BOOL", field = "canPickPocket", inv = true },
-  ["AOE"]                            = { op = "CTX_NUM", field = "enemies", cmp = ">=", val = 3, def = 1 },
-  ["NOT AOE"]                        = { op = "CTX_NUM", field = "enemies", cmp = "<",  val = 3, def = 1 },
-  ["CLEAVE"]                         = { op = "CTX_NUM", field = "enemies", cmp = ">=", val = 2, def = 1 },
-  ["SINGLE_TARGET"]                  = { op = "CTX_NUM", field = "enemies", cmp = "<=", val = 1, def = 1 },
-  ["BOSS"]                           = { op = "CTX_BOOL", field = "bossMode", inv = false },
-  ["player.boss_mode"]               = { op = "CTX_BOOL", field = "bossMode", inv = false },
-  ["BURST_MODE"]                     = { op = "CTX_BOOL", field = "bossMode", inv = false },
-  ["NOT BOSS"]                       = { op = "CTX_BOOL", field = "bossMode", inv = true },
-  ["NOT player.boss_mode"]           = { op = "CTX_BOOL", field = "bossMode", inv = true },
-  ["NOT BURST_MODE"]                 = { op = "CTX_BOOL", field = "bossMode", inv = true },
-  ["PVP"]                            = { op = "CTX_BOOL", field = "pvpMode", inv = false },
-  ["player.pvp_mode"]                = { op = "CTX_BOOL", field = "pvpMode", inv = false },
-  ["PVP_MODE"]                       = { op = "CTX_BOOL", field = "pvpMode", inv = false },
-  ["NOT PVP"]                        = { op = "CTX_BOOL", field = "pvpMode", inv = true },
-  ["NOT player.pvp_mode"]            = { op = "CTX_BOOL", field = "pvpMode", inv = true },
-  ["NOT PVP_MODE"]                   = { op = "CTX_BOOL", field = "pvpMode", inv = true },
-  ["target.casting_interruptible"]   = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = false },
-  ["target.interruptible"]           = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = false },
-  ["INTERRUPTIBLE"]                  = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = false },
-  ["NOT target.casting_interruptible"] = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = true },
-  ["NOT target.interruptible"]       = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = true },
-  ["NOT INTERRUPTIBLE"]              = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = true },
-  ["target.casting_uninterruptible"] = { op = "UNINTERRUPTIBLE" },
-  ["UNINTERRUPTIBLE"]                = { op = "UNINTERRUPTIBLE" },
-  ["target.is_casting"]              = { op = "CTX_BOOL", field = "targetIsCasting", inv = false },
-  ["target.casting"]                 = { op = "CTX_BOOL", field = "targetIsCasting", inv = false },
-  ["NOT target.is_casting"]          = { op = "CTX_BOOL", field = "targetIsCasting", inv = true },
-  ["NOT target.casting"]             = { op = "CTX_BOOL", field = "targetIsCasting", inv = true },
+  [""]                                 = { op = "ALWAYS" },
+  ["ALWAYS"]                           = { op = "ALWAYS" },
+  ["target.has_dots"]                  = { op = "HAS_DOTS", inv = false },
+  ["player.in_burst"]                  = { op = "BURST", inv = false },
+  ["BURST"]                            = { op = "BURST", inv = false },
+  ["player.stealthed"]                 = { op = "CTX_BOOL", field = "stealthed", inv = false },
+  ["STEALTH"]                          = { op = "CTX_BOOL", field = "stealthed", inv = false },
+  ["player.in_combat"]                 = { op = "CTX_BOOL", field = "inCombat", inv = false },
+  ["COMBAT"]                           = { op = "CTX_BOOL", field = "inCombat", inv = false },
+  ["target.can_pick_pocket"]           = { op = "CTX_BOOL", field = "canPickPocket", inv = false },
+  ["PICK_POCKET_READY"]                = { op = "CTX_BOOL", field = "canPickPocket", inv = false },
+  ["AOE"]                              = { op = "CTX_NUM", field = "enemies", cmp = ">=", val = 3, def = 1 },
+  ["NOT AOE"]                          = { op = "CTX_NUM", field = "enemies", cmp = "<",  val = 3, def = 1 },
+  ["CLEAVE"]                           = { op = "CTX_NUM", field = "enemies", cmp = ">=", val = 2, def = 1 },
+  ["SINGLE_TARGET"]                    = { op = "CTX_NUM", field = "enemies", cmp = "<=", val = 1, def = 1 },
+  ["BOSS"]                             = { op = "CTX_BOOL", field = "bossMode", inv = false },
+  ["player.boss_mode"]                 = { op = "CTX_BOOL", field = "bossMode", inv = false },
+  ["BURST_MODE"]                       = { op = "CTX_BOOL", field = "bossMode", inv = false },
+  ["PVP"]                              = { op = "CTX_BOOL", field = "pvpMode", inv = false },
+  ["player.pvp_mode"]                  = { op = "CTX_BOOL", field = "pvpMode", inv = false },
+  ["PVP_MODE"]                         = { op = "CTX_BOOL", field = "pvpMode", inv = false },
+  ["target.casting_interruptible"]     = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = false },
+  ["target.interruptible"]             = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = false },
+  ["INTERRUPTIBLE"]                    = { op = "CTX_BOOL", field = "targetCastingInterruptible", inv = false },
+  ["target.casting_uninterruptible"]   = { op = "UNINTERRUPTIBLE" },
+  ["UNINTERRUPTIBLE"]                  = { op = "UNINTERRUPTIBLE" },
+  ["target.is_casting"]                = { op = "CTX_BOOL", field = "targetIsCasting", inv = false },
+  ["target.casting"]                   = { op = "CTX_BOOL", field = "targetIsCasting", inv = false },
 }
 
 local CTX_NUM_FIELDS = {
@@ -400,12 +381,28 @@ local CTX_NUM_FIELDS = {
 }
 
 local function CompileAtomicClause(c)
-  local staticDef = STATIC_CLAUSES[c]
-  if staticDef then
-    return staticDef
+  local directStatic = STATIC_CLAUSES[c]
+  if directStatic then
+    return directStatic
   end
 
-  local aUnit, aKey, aProp, aOp, aVal = c:match("^([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)%.([a-zA-Z_]+)%s*([><=]+)%s*([%d%.]+)$")
+  local isInv = false
+  local expr = c
+  local strippedNot = c:match("^NOT%s+(.+)$")
+  if strippedNot then
+    isInv = true
+    expr = strippedNot
+    local baseStatic = STATIC_CLAUSES[expr]
+    if baseStatic and baseStatic.op ~= "ALWAYS" and baseStatic.op ~= "CTX_NUM" and baseStatic.op ~= "UNINTERRUPTIBLE" then
+      return {
+        op = baseStatic.op,
+        field = baseStatic.field,
+        inv = not baseStatic.inv,
+      }
+    end
+  end
+
+  local aUnit, aKey, aProp, aOp, aVal = expr:match("^([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)%.([a-zA-Z_]+)%s*([><=]+)%s*([%d%.]+)$")
   if aUnit and aKey and aProp and aOp and aVal then
     local propLow = aProp:lower()
     return {
@@ -418,17 +415,17 @@ local function CompileAtomicClause(c)
     }
   end
 
-  local invAura, bUnit, bKey = c:match("^(NOT%s+)?([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)$")
+  local bUnit, bKey = expr:match("^([a-zA-Z]+)%.aura%(([A-Za-z0-9_]+)%)$")
   if bUnit and bKey then
     return {
       op = "AURA_BOOL",
       u = (bUnit:lower() == "player") and "player" or "target",
       k = bKey:upper(),
-      inv = (invAura ~= nil and invAura ~= ""),
+      inv = isInv,
     }
   end
 
-  local chSp, chOp, chVal = c:match("^CHARGES%(([A-Z0-9_]+)%)%s*([><=]+)%s*(%d+)$")
+  local chSp, chOp, chVal = expr:match("^CHARGES%(([A-Z0-9_]+)%)%s*([><=]+)%s*(%d+)$")
   if chSp and chOp and chVal then
     return {
       op = "CHARGES",
@@ -438,9 +435,8 @@ local function CompileAtomicClause(c)
     }
   end
 
-  local invFn, fnName, fnArg = c:match("^(NOT%s+)?([A-Z]+)%(([A-Z0-9_]+)%)$")
+  local fnName, fnArg = expr:match("^([A-Z]+)%(([A-Z0-9_]+)%)$")
   if fnName and fnArg then
-    local isInv = (invFn ~= nil and invFn ~= "")
     if fnName == "PROC" and fnArg == "VOID_BLAST" then
       fnArg = "MIND_BLAST"
     end
@@ -451,7 +447,7 @@ local function CompileAtomicClause(c)
     }
   end
 
-  local lhs, numOp, numVal = c:match("^([A-Za-z0-9_%.]+)%s*([><=]+)%s*([%d%.]+)$")
+  local lhs, numOp, numVal = expr:match("^([A-Za-z0-9_%.]+)%s*([><=]+)%s*([%d%.]+)$")
   if lhs and numOp and numVal then
     local meta = CTX_NUM_FIELDS[lhs]
     if meta then
@@ -821,6 +817,13 @@ function SpArc:BuildRotationQueue(maxSlots)
         return false
       end
       if states[spKey] and states[spKey].isOutOfRange then
+        return false
+      end
+    end
+    -- Permanent stances/forms (Shadowform, Moonkin, Cat, Bear) should never be suggested when already active or in lookahead slots
+    if d.auraUnit == "player" and (d.auraDuration or 0) >= 600 then
+      local formRem = (simCtx.auraRem and simCtx.auraRem.player and simCtx.auraRem.player[spKey]) or 0
+      if formRem > 0 or (stepIdx and stepIdx >= 2) then
         return false
       end
     end
@@ -1668,7 +1671,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, arg2, arg3, arg4)
       SpArc:TriggerSpellPress(defKey, nil, nil)
     end
     if SpArc.SnapshotNameplateCastTarget then
-      SpArc:SnapshotNameplateCastTarget(spellID, defKey, false, nowSent)
+      SpArc:SnapshotNameplateCastTarget(spellID, defKey, false, nowSent, arg2)
     end
     return
   end

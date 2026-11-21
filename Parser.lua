@@ -499,12 +499,44 @@ function SpArc:ParseMarkdownFSM(mdText)
   end
 
   local SINGLE_DOT_PALETTE = {
-    { r = 0.16, g = 0.52, b = 1.00 }, -- #2985FF Blue (1st DoT)
-    { r = 1.00, g = 0.58, b = 0.12 }, -- #FF941F Orange (2nd DoT)
-    { r = 0.20, g = 0.88, b = 0.45 }, -- #33E073 Green (3rd DoT)
+    { r = 0.16, g = 0.52, b = 1.00 }, -- #2985FF Blue (1st DoT, e.g. Vampiric Touch)
+    { r = 1.00, g = 0.58, b = 0.12 }, -- #FF941F Orange (2nd DoT, e.g. Shadow Word: Pain)
+    { r = 0.20, g = 0.88, b = 0.45 }, -- #33E073 Emerald Green (3rd DoT, e.g. Devouring Plague)
     { r = 0.18, g = 0.85, b = 0.95 }, -- #2ED9F2 Cyan (4th DoT)
   }
-  if #parsed.trackedDots >= 2 then
+  if #parsed.trackedDots >= 3 then
+    local d1 = tostring(parsed.trackedDots[1].primaryID)
+    local d2 = tostring(parsed.trackedDots[2].primaryID)
+    local d3 = tostring(parsed.trackedDots[3].primaryID)
+    -- 3-DoT Full Burst Combo (e.g. VT + SW:P + Devouring Plague) -> Neon Void Magenta (#FF38B8)
+    parsed.mdAuraRules[#parsed.mdAuraRules + 1] = {
+      enabled = true,
+      ids = d1 .. ", " .. d2 .. ", " .. d3,
+      r = 1.00, g = 0.22, b = 0.72,
+      fromMD = true,
+    }
+    -- 1st + 2nd DoT (e.g. VT + SW:P) -> Shadow Purple (#9E38FF)
+    parsed.mdAuraRules[#parsed.mdAuraRules + 1] = {
+      enabled = true,
+      ids = d1 .. ", " .. d2,
+      r = 0.62, g = 0.22, b = 1.00,
+      fromMD = true,
+    }
+    -- 1st + 3rd DoT (e.g. VT + Devouring Plague) -> Electric Cyan (#14CFFF)
+    parsed.mdAuraRules[#parsed.mdAuraRules + 1] = {
+      enabled = true,
+      ids = d1 .. ", " .. d3,
+      r = 0.08, g = 0.81, b = 1.00,
+      fromMD = true,
+    }
+    -- 2nd + 3rd DoT (e.g. SW:P + Devouring Plague) -> Crimson Rose (#FF5470)
+    parsed.mdAuraRules[#parsed.mdAuraRules + 1] = {
+      enabled = true,
+      ids = d2 .. ", " .. d3,
+      r = 1.00, g = 0.33, b = 0.44,
+      fromMD = true,
+    }
+  elseif #parsed.trackedDots >= 2 then
     parsed.mdAuraRules[#parsed.mdAuraRules + 1] = {
       enabled = true,
       ids = tostring(parsed.trackedDots[1].primaryID) .. ", " .. tostring(parsed.trackedDots[2].primaryID),

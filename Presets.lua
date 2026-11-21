@@ -181,6 +181,7 @@ local STRINGS = {
     M10_CYCLE_PREV_BTN = "Cycle Preview Color",
     M10_GRP_AURAS = "Dynamic Aura / DoT Color Rules (Auto-synced from .MD Pseudocode)",
     CK_NP_AUTO_MD = "Pull tracked DoTs automatically from active .MD rotation preset",
+    CK_NP_AURA_ICONS = "Show mini DoT icons with timers above enemy nameplates",
     M10_AURA_HINT = "DoT IDs are pulled automatically from your active .MD preset (or add custom Wowhead IDs; comma = AND combo, e.g. |cffffd100164812, 164815|r).",
     M10_ADD_RULE_BTN = "+ Add Aura Rule",
     M10_RESET_RULES_BTN = "Sync from .MD",
@@ -498,6 +499,7 @@ local STRINGS = {
     M10_CYCLE_PREV_BTN = "Сменить цвет превью",
     M10_GRP_AURAS = "Цвета по аурам и дотам (Авто-подтягивание из .MD псевдокода ротации)",
     CK_NP_AUTO_MD = "Тянуть ID дотов автоматически из активного .MD пресета ротации",
+    CK_NP_AURA_ICONS = "Мини-иконки твоих дот с таймерами над неймплейтами",
     M10_AURA_HINT = "ID дотов автоматически подтягиваются из активного .MD пресета (можно менять цвета или добавлять свои ID через запятую для условия «И», напр. |cffffd100164812, 164815|r).",
     M10_ADD_RULE_BTN = "+ Добавить ауру",
     M10_RESET_RULES_BTN = "Из .MD пресета",
@@ -890,7 +892,7 @@ function SpArc:GetPresetDisplayTitle(pr)
   return pr.title or pr.id or ""
 end
 
-SpArc.PROFILE_SCHEMA_VERSION = 41
+SpArc.PROFILE_SCHEMA_VERSION = 42
 
 ---------------------------------------------------------------------------------------
 --      7 ACTIVE BUILT-IN PRESETS (PRIEST, MAGE, ROGUE, WARRIOR, DRUID, SHAMAN)      --

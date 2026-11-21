@@ -21,8 +21,8 @@ _G.SparkArc = SpArc
 _G.SpArcLoaded = true
 _G.SparkArcLoaded = true
 
-SpArc.VERSION = "2.9.9"
-SpArc.PROFILE_SCHEMA_VERSION = 41
+SpArc.VERSION = "2.9.10"
+SpArc.PROFILE_SCHEMA_VERSION = 42
 if SpArc.testMode == nil then
   SpArc.testMode = false
 end
@@ -231,9 +231,6 @@ function SpArc.SafeGetCVar(cvar)
   if C_CVar and C_CVar.GetCVar then
     local ok, v = pcall(C_CVar.GetCVar, cvar)
     if ok and not SpArc.IsSecret(v) then return v end
-  elseif _G.GetCVar then
-    local ok, v = pcall(_G.GetCVar, cvar)
-    if ok and not SpArc.IsSecret(v) then return v end
   end
   return nil
 end
@@ -245,9 +242,227 @@ function SpArc.SafeSetCVar(cvar, val)
   end
   if C_CVar and C_CVar.SetCVar then
     pcall(C_CVar.SetCVar, cvar, sVal)
-  elseif _G.SetCVar then
-    pcall(_G.SetCVar, cvar, sVal)
   end
+end
+
+function SpArc.GetSpellNameAndIconSafe(spellID)
+  if not spellID or type(spellID) ~= "number" or spellID <= 0 then
+    return nil, nil
+  end
+  if _G.C_Spell and _G.C_Spell.GetSpellInfo then
+    local ok, info = pcall(_G.C_Spell.GetSpellInfo, spellID)
+    if ok and type(info) == "table" then
+      local nm = (not SpArc.IsSecret(info.name) and type(info.name) == "string" and info.name ~= "") and info.name or nil
+      local ic = (not SpArc.IsSecret(info.iconID) and info.iconID) or nil
+      return nm, ic
+    end
+  end
+  return nil, nil
+end
+
+SpArc.DISPEL_COLORS = {
+  Magic   = { r = 0.20, g = 0.62, b = 1.00 }, -- #339EFF Blue
+  Disease = { r = 0.86, g = 0.52, b = 0.14 }, -- #DC8524 Amber/Disease (Priest Dispel!)
+  Curse   = { r = 0.68, g = 0.24, b = 1.00 }, -- #AD3DFF Purple
+  Poison  = { r = 0.14, g = 0.84, b = 0.30 }, -- #24D64D Green
+  Bleed   = { r = 0.96, g = 0.24, b = 0.24 }, -- #F53D3D Bleed Red
+  Enrage  = { r = 1.00, g = 0.44, b = 0.12 }, -- #FF701F Enrage Orange
+  None    = { r = 0.78, g = 0.18, b = 0.22 }, -- #C72E38 Default Hostile Debuff
+}
+
+local privateAuraTooltip = nil
+function SpArc.GetAuraTooltip()
+  if not privateAuraTooltip and _G.CreateFrame and _G.UIParent then
+    privateAuraTooltip = _G.CreateFrame("GameTooltip", "SpArcAuraTooltip", _G.UIParent, "GameTooltipTemplate")
+    privateAuraTooltip:SetFrameStrata("TOOLTIP")
+  end
+  return privateAuraTooltip
+end
+
+function SpArc.ApplyAuraCooldownWidget(cdFrame, timeText, unit, aura, now, fallbackStart, fallbackDur)
+  now = now or (_G.GetTime and _G.GetTime() or 0)
+  local rem = nil
+  local usedNativeSecretCD = false
+  local dur = aura and aura.duration
+  local exp = aura and aura.expirationTime
+
+  if dur ~= nil and exp ~= nil and not SpArc.IsSecret(dur) and not SpArc.IsSecret(exp)
+      and type(dur) == "number" and type(exp) == "number" then
+    if dur > 0 and exp > now then
+      rem = exp - now
+      if cdFrame then
+        if cdFrame.SetHideCountdownNumbers then pcall(cdFrame.SetHideCountdownNumbers, cdFrame, timeText ~= nil) end
+        pcall(cdFrame.SetCooldown, cdFrame, exp - dur, dur)
+        cdFrame:Show()
+      end
+    else
+      if cdFrame then
+        if cdFrame.Clear then pcall(cdFrame.Clear, cdFrame) end
+        cdFrame:Hide()
+      end
+    end
+  elseif aura and aura.auraInstanceID and not SpArc.IsSecret(aura.auraInstanceID)
+      and unit and _G.C_UnitAuras and _G.C_UnitAuras.GetAuraDuration
+      and cdFrame and cdFrame.SetCooldownFromDurationObject then
+    local okD, durObj = pcall(_G.C_UnitAuras.GetAuraDuration, unit, aura.auraInstanceID)
+    if okD and durObj then
+      usedNativeSecretCD = true
+      if cdFrame.SetHideCountdownNumbers then pcall(cdFrame.SetHideCountdownNumbers, cdFrame, false) end
+      pcall(cdFrame.SetCooldownFromDurationObject, cdFrame, durObj)
+      cdFrame:Show()
+    elseif cdFrame then
+      if cdFrame.Clear then pcall(cdFrame.Clear, cdFrame) end
+      cdFrame:Hide()
+    end
+  elseif fallbackDur and fallbackDur > 0 and fallbackStart and fallbackStart > 0 and (fallbackStart + fallbackDur) > now then
+    rem = (fallbackStart + fallbackDur) - now
+    if cdFrame then
+      if cdFrame.SetHideCountdownNumbers then pcall(cdFrame.SetHideCountdownNumbers, cdFrame, timeText ~= nil) end
+      pcall(cdFrame.SetCooldown, cdFrame, fallbackStart, fallbackDur)
+      cdFrame:Show()
+    end
+  elseif cdFrame then
+    if cdFrame.Clear then pcall(cdFrame.Clear, cdFrame) end
+    cdFrame:Hide()
+  end
+
+  if timeText then
+    if not usedNativeSecretCD and rem and rem > 0 and rem < 600 then
+      if rem < 4.5 then
+        timeText:SetTextColor(1.00, 0.36, 0.22, 1.0)
+        timeText:SetText(string.format("%.1f", rem))
+      elseif rem < 60 then
+        timeText:SetTextColor(1.00, 0.98, 0.92, 1.0)
+        timeText:SetText(tostring(math.ceil(rem)))
+      else
+        timeText:SetTextColor(0.84, 0.88, 0.96, 1.0)
+        timeText:SetText(string.format("%dm", math.floor(rem / 60 + 0.5)))
+      end
+    else
+      timeText:SetText("")
+    end
+  end
+  return rem
+end
+
+function SpArc.UpdateSecretSafeCastbar(cbCont, unit, now, isDemo)
+  if not cbCont then return false end
+  local db = SpArc:EnsureDB()
+  local v = (db and db.visual) or SpArc.DEFAULT_VISUAL
+  if cbCont.isTargetCastbar and v and v.ufShowTargetCastbar == false then
+    if cbCont:IsShown() then cbCont:Hide() end
+    return false
+  end
+
+  now = now or (_G.GetTime and _G.GetTime() or 0)
+  local isCasting, isInterruptible, isChannel, spellName, spellIcon, remSec, durSec, _, rawNotInterruptible = false, false, false, nil, nil, 0, 0, nil, nil
+  if unit and SpArc.GetUnitCastInterruptState then
+    isCasting, isInterruptible, isChannel, spellName, spellIcon, remSec, durSec, _, rawNotInterruptible =
+      SpArc:GetUnitCastInterruptState(unit, now)
+  end
+
+  if not isCasting and isDemo then
+    local cycle = now % 4.0
+    isCasting = true
+    isInterruptible = true
+    isChannel = false
+    spellName = "Arcane Salvo"
+    spellIcon = 135734
+    durSec = 2.5
+    remSec = math.max(0.1, 2.5 - (cycle % 2.5))
+  end
+
+  if not isCasting then
+    if cbCont:IsShown() then cbCont:Hide() end
+    return false
+  end
+
+  if cbCont.iconBox and cbCont.iconBox.icon then
+    cbCont.iconBox.icon:SetTexture(spellIcon or 136243)
+  end
+  if cbCont.spellText then
+    pcall(cbCont.spellText.SetText, cbCont.spellText, spellName or "Cast")
+  end
+
+  local usedTimerDuration = false
+  if not isDemo and unit and cbCont.bar and cbCont.bar.SetTimerDuration then
+    local durObj = nil
+    if isChannel and _G.UnitChannelDuration then
+      local okD, d = pcall(_G.UnitChannelDuration, unit)
+      if okD and d then durObj = d end
+    elseif not isChannel and _G.UnitCastingDuration then
+      local okD, d = pcall(_G.UnitCastingDuration, unit)
+      if okD and d then durObj = d end
+    end
+    if durObj and _G.Enum and _G.Enum.StatusBarTimerDirection and _G.Enum.StatusBarInterpolation then
+      local dir = isChannel and _G.Enum.StatusBarTimerDirection.RemainingTime or _G.Enum.StatusBarTimerDirection.ElapsedTime
+      local okTD = pcall(cbCont.bar.SetTimerDuration, cbCont.bar, durObj, _G.Enum.StatusBarInterpolation.Immediate, dir)
+      if okTD then usedTimerDuration = true end
+    end
+  end
+
+  if not usedTimerDuration and cbCont.bar then
+    local total = math.max(0.1, durSec or 1.5)
+    local val = isChannel and math.max(0, remSec or 0) or math.max(0, total - (remSec or 0))
+    cbCont.bar:SetMinMaxValues(0, total)
+    cbCont.bar:SetValue(val)
+  end
+
+  if cbCont.timeText then
+    if remSec and remSec > 0 and remSec < 60 then
+      cbCont.timeText:SetText(string.format("%.1f", remSec))
+    else
+      cbCont.timeText:SetText("")
+    end
+  end
+
+  local cGold = SpArc.METRO_COLORS.CAST_GOLD
+  local cGrey = SpArc.METRO_COLORS.CAST_GREY
+  local pulse = 0.72 + 0.28 * math.abs(math.sin(now * 6.5))
+
+  if rawNotInterruptible ~= nil and SpArc.IsSecret(rawNotInterruptible) then
+    if _G.C_CurveUtil and _G.C_CurveUtil.EvaluateColorValueFromBoolean then
+      local okR, cR = pcall(_G.C_CurveUtil.EvaluateColorValueFromBoolean, rawNotInterruptible, cGrey.r, cGold.r)
+      local okG, cG = pcall(_G.C_CurveUtil.EvaluateColorValueFromBoolean, rawNotInterruptible, cGrey.g, cGold.g)
+      local okB, cB = pcall(_G.C_CurveUtil.EvaluateColorValueFromBoolean, rawNotInterruptible, cGrey.b, cGold.b)
+      if okR and okG and okB then
+        pcall(cbCont.bar.SetStatusBarColor, cbCont.bar, cR, cG, cB, 1.0)
+      end
+    else
+      cbCont.bar:SetStatusBarColor(cGold.r, cGold.g, cGold.b, 1.0)
+    end
+    if cbCont.border then cbCont.border:SetBackdropBorderColor(0.05, 0.05, 0.08, 1.0) end
+    if cbCont.glow then
+      cbCont.glow:SetBackdropBorderColor(1.00, 0.86, 0.20, pulse)
+      if cbCont.glow.outerGlow then
+        cbCont.glow.outerGlow:SetColorTexture(1.00, 0.82, 0.15, 0.18 + 0.18 * pulse)
+      end
+      cbCont.glow:Show()
+      if cbCont.glow.SetAlphaFromBoolean then
+        pcall(cbCont.glow.SetAlphaFromBoolean, cbCont.glow, rawNotInterruptible, 0, 1)
+      end
+    end
+  elseif isInterruptible then
+    cbCont.bar:SetStatusBarColor(cGold.r, cGold.g, cGold.b, 1.0)
+    if cbCont.border then cbCont.border:SetBackdropBorderColor(1.00, 0.85, 0.20, 1.0) end
+    if cbCont.glow then
+      cbCont.glow:SetBackdropBorderColor(1.00, 0.86, 0.20, pulse)
+      if cbCont.glow.outerGlow then
+        cbCont.glow.outerGlow:SetColorTexture(1.00, 0.82, 0.15, 0.18 + 0.18 * pulse)
+      end
+      cbCont.glow:SetAlpha(1.0)
+      cbCont.glow:Show()
+    end
+  else
+    cbCont.bar:SetStatusBarColor(cGrey.r, cGrey.g, cGrey.b, 1.0)
+    if cbCont.border then cbCont.border:SetBackdropBorderColor(0.05, 0.05, 0.08, 1.0) end
+    if cbCont.glow then cbCont.glow:Hide() end
+  end
+
+  if not cbCont:IsShown() then
+    cbCont:Show()
+  end
+  return true
 end
 
 SpArc.FLAT_TEX = "Interface\\Buttons\\WHITE8x8"
@@ -506,6 +721,7 @@ SpArc.DEFAULT_VISUAL = {
   npShowNeutralNPCs = true,
   npShowFriendlyPlayers = true,
   npShowHostileClassIcon = true,
+  npShowAuraIcons = true,
   npAutoAurasFromMD = true,
   npMaxDistance = 40,
   npDistanceFade = true,
@@ -543,6 +759,9 @@ SpArc.DEFAULT_VISUAL = {
   ufShowPowerBar = true,
   ufShowTargetCastbar = true,
   ufShowTargetAuras = true,
+  ufShowPlayerDebuffs = true,
+  ufShowPartyDebuffs = true,
+  ufShowBossAuras = true,
   ufShowToT = true,
   ufShowFocus = true,
   ufShowPet = true,
@@ -1100,6 +1319,55 @@ function SpArc:EnsureDB(forceReinit)
   if type(activeProf.npAuraRules) ~= "table" or #activeProf.npAuraRules == 0 then
     activeProf.npAuraRules = CloneAuraRulesTable(nil, InferProfileDefaultPresetID(activeProfName, activeProf), db)
   end
+
+  -- V4 Migration: Upgrade auto-generated MD DoT combo rules (e.g. 3-DoT & 2-DoT Shadow Priest combos)
+  -- across all profiles while preserving custom user rules and user-customized colors.
+  if not db._npAuraRulesFromMDV4 then
+    for pName, pObj in pairs(db.profiles or {}) do
+      if type(pObj) == "table" and (not pObj.visual or pObj.visual.npAutoAurasFromMD ~= false) then
+        local targetPID = pObj.activePresetID or InferProfileDefaultPresetID(pName, pObj)
+        local mdRules = SpArc:GetMDAuraRulesForPreset(targetPID, db)
+        if type(mdRules) == "table" and #mdRules > 0 then
+          local existingByIDs = {}
+          local customRules = {}
+          for _, r in ipairs(pObj.npAuraRules or {}) do
+            if type(r) == "table" and type(r.ids) == "string" and r.ids ~= "" then
+              existingByIDs[r.ids] = r
+              if r.isCustomUserRule then
+                customRules[#customRules + 1] = r
+              end
+            end
+          end
+          local merged = {}
+          local seen = {}
+          for _, mr in ipairs(mdRules) do
+            local idStr = tostring(mr.ids or "")
+            if idStr ~= "" then
+              seen[idStr] = true
+              local old = existingByIDs[idStr]
+              merged[#merged + 1] = {
+                enabled = (old and old.enabled ~= nil) and old.enabled or true,
+                ids = idStr,
+                r = (old and tonumber(old.r)) or tonumber(mr.r) or 0.2,
+                g = (old and tonumber(old.g)) or tonumber(mr.g) or 0.6,
+                b = (old and tonumber(old.b)) or tonumber(mr.b) or 1.0,
+                fromMD = true,
+                isCustomUserRule = false,
+              }
+            end
+          end
+          for _, cr in ipairs(customRules) do
+            if not seen[cr.ids] then
+              merged[#merged + 1] = cr
+            end
+          end
+          pObj.npAuraRules = merged
+        end
+      end
+    end
+    db._npAuraRulesFromMDV4 = true
+  end
+
   db.npAuraRules = activeProf.npAuraRules
 
   db.telemetryLog = db.telemetryLog or {}

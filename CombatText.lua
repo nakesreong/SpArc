@@ -53,7 +53,7 @@ local function ApplyMSBTFont(fs, size, outline)
   local flags = outline or "OUTLINE"
   if not fs:SetFont(CYR_FONT, size, flags) then
     if not fs:SetFont(STD_FONT, size, flags) then
-      fs:SetFont(STANDARD_TEXT_FONT or STD_FONT, size, flags)
+      fs:SetFont(_G.STANDARD_TEXT_FONT or STD_FONT, size, flags)
     end
   end
 end

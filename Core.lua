@@ -62,6 +62,7 @@ SpArc.FONT_SHORT_LABELS = {
   BLIZZARD         = "WoW Default",
 }
 
+local setmetatable = _G.setmetatable
 local registeredFontStrings = setmetatable({}, { __mode = "k" })
 local originalGlobalFontSpecs = {}
 

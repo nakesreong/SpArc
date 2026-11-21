@@ -70,12 +70,14 @@ local FLAT_TEX = SpArc.FLAT_TEX
 local PORTRAIT_MASK_TEX = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local CLASS_ICONS_TEX = SpArc.CLASS_ICONS_TEX
 
--- Shared Metro Reaction Colors (from Core.lua)
+-- Shared Metro Reaction & Cast Colors (from Core.lua)
 local METRO_COLORS = SpArc.METRO_COLORS
 local COLOR_HOSTILE_RED    = METRO_COLORS.HOSTILE_RED
 local COLOR_NEUTRAL_YELLOW = METRO_COLORS.NEUTRAL_YELLOW
 local COLOR_FRIENDLY_GREEN = METRO_COLORS.FRIENDLY_GREEN
 local COLOR_OBSIDIAN_DARK  = METRO_COLORS.OBSIDIAN_DARK
+local COLOR_CAST_GOLD      = METRO_COLORS.CAST_GOLD
+local COLOR_CAST_GREY      = METRO_COLORS.CAST_GREY
 
 local POWER_COLORS = {
   [0]  = { r = 0.12, g = 0.52, b = 0.98 }, -- Mana
@@ -722,8 +724,8 @@ local function CreateSpArcUnitFrame(frameName, unitToken, portraitSide, isCompac
       txtLayer:EnableMouse(false)
 
       local tTxt = txtLayer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-      ApplyCyrFont(tTxt, auraSize >= 21 and 9 or 8)
-      tTxt:SetPoint("TOP", txtLayer, "TOP", 0, -1)
+      ApplyCyrFont(tTxt, auraSize >= 21 and 10 or 9)
+      tTxt:SetPoint("CENTER", txtLayer, "CENTER", 0, 0)
       tTxt:SetTextColor(1.0, 0.98, 0.92, 1.0)
       aBox.timeText = tTxt
 
